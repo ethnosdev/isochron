@@ -1,15 +1,17 @@
 name: isochron_cli
-description: A sample command-line application.
-version: 1.0.0
-# repository: https://github.com/my_org/my_repo
+description: A synthesis-based forced aligner CLI.
+version: 0.0.1
+# repository: https://github.com/your_username/isochron
 
 environment:
-  sdk: ^3.10.7
+  sdk: ^3.0.0
 
-# Add regular dependencies here.
 dependencies:
+  args: ^2.4.2
   path: ^1.9.0
+  # Fast Fourier Transform (FFT) implementation
+  fftea: ^1.4.0
 
 dev_dependencies:
   lints: ^6.0.0
-  test: ^1.25.6
+  test: ^1.24.0
