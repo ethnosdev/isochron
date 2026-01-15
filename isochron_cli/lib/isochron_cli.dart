@@ -11,6 +11,7 @@ export 'src/core/text_parser.dart';
 export 'src/math/dsp_utils.dart';
 export 'src/math/mfcc_extractor.dart';
 export 'src/math/dtw_aligner.dart';
+export 'src/math/vector_utils.dart';
 
 // Audio & Synthesis
 export 'src/audio/ffmpeg_processor.dart';
