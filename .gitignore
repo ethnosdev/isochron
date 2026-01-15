@@ -1,0 +1,88 @@
+# ----------------------
+# OS & System Files
+# ----------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ----------------------
+# IDE & Editors
+# ----------------------
+# VS Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# IntelliJ / Android Studio
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# ----------------------
+# Dart & Flutter (Global Safeguards)
+# ----------------------
+# While subfolders have their own gitignores, 
+# these prevent accidental commits of build artifacts 
+# if commands are run from the root.
+**/build/
+**/.dart_tool/
+**/.packages
+**/.pub/
+**/doc/api/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# ----------------------
+# Project Specific: Isochron Data
+# (Based on Design Doc)
+# ----------------------
+
+# 1. Audio Assets (User & Synthetic)
+# Prevent committing large raw audio files
+*.wav
+*.mp3
+*.m4a
+*.flac
+*.ogg
+*.pcm
+*.raw
+
+# 2. Temporary Synthesis Artifacts
+# The design doc mentions generating fragment wavs 
+# and concatenated anchor files.
+temp/
+tmp/
+fragments/
+anchor_*.wav
+synthesis_cache/
+
+# 3. External Binaries
+# If you place ffmpeg or espeak-ng binaries locally 
+# instead of installing them globally.
+/bin/
+/tools/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 4. Logs & Debugging
+*.log
+isochron_debug.txt
+
+# ----------------------
+# Testing & alignment outputs
+# ----------------------
+# You likely want to keep test text files, 
+# but ignore the alignment result files.
+*.json_output
+*.srt_output
