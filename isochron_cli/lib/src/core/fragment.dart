@@ -5,6 +5,9 @@ class Fragment {
   /// The actual text content to be spoken
   final String text;
 
+  /// Transliterated text if original text uses non-latin alphabet
+  String? spokenText;
+
   // --- Anchor Timings (The "Map") ---
   // When this fragment starts/ends in the synthetic (TTS) audio.
   // Calculated in Phase 2.
@@ -20,6 +23,7 @@ class Fragment {
   Fragment({
     required this.index,
     required this.text,
+    this.spokenText,
   });
 
   /// Helper to update real timing after alignment

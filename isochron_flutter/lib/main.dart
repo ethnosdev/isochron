@@ -41,6 +41,7 @@ class _MainScreenState extends State<MainScreen> {
   List<Fragment> _results = [];
   bool _isProcessing = false;
   String _status = "Select files to begin.";
+  bool _useTransliteration = false;
 
   // Settings
   final TextEditingController _ffmpegController = TextEditingController(
@@ -105,6 +106,7 @@ class _MainScreenState extends State<MainScreen> {
         'audioPath': _audioPath!,
         'ffmpeg': _ffmpegController.text,
         'espeak': _espeakController.text,
+        'transliterate': _useTransliteration.toString(),
       };
 
       // Run in background thread so UI doesn't freeze
@@ -128,6 +130,7 @@ class _MainScreenState extends State<MainScreen> {
     try {
       final textFile = File(args['textPath']!);
       final text = await textFile.readAsString();
+      final useTransliteration = args['transliterate'] == 'true';
 
       return await IsochronProcessor.process(
         text: text,
@@ -135,6 +138,7 @@ class _MainScreenState extends State<MainScreen> {
         workDir: workDir,
         ffmpegPath: args['ffmpeg']!,
         espeakPath: args['espeak']!,
+        useTransliteration: useTransliteration,
       );
     } finally {
       workDir.deleteSync(recursive: true);
@@ -261,6 +265,16 @@ class _MainScreenState extends State<MainScreen> {
                         onPressed: () => _pickFile(true),
                         child: const Text("Browse"),
                       ),
+                    ),
+                    const Divider(),
+                    SwitchListTile(
+                      title: const Text("Transliterate Text"),
+                      subtitle: const Text(
+                        "Convert non-Latin characters to Latin (helps eSpeak pronunciation)",
+                      ),
+                      value: _useTransliteration,
+                      onChanged: (val) =>
+                          setState(() => _useTransliteration = val),
                     ),
                   ],
                 ),

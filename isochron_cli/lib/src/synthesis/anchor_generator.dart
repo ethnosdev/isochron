@@ -19,12 +19,15 @@ class AnchorGenerator {
       final rawWavPath = p.join(workDir.path, 'frag_raw_${frag.index}.wav');
       final cleanWavPath = p.join(workDir.path, 'frag_${frag.index}.wav');
 
+      // Use spokenText if available, otherwise default text
+      final textToSpeak = frag.spokenText ?? frag.text;
+
       // A. Call eSpeak-ng
       // -w: Write to file
       await Process.run(binaryPath, [
         '-w',
         rawWavPath,
-        frag.text,
+        textToSpeak,
       ]);
 
       // B. Normalize using FFmpeg (Essential for correct duration math)

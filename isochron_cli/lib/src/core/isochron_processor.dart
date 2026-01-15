@@ -8,6 +8,7 @@ import '../synthesis/anchor_generator.dart';
 import '../audio/wav_utils.dart';
 import '../math/mfcc_extractor.dart';
 import '../math/dtw_aligner.dart';
+import 'transliterator.dart';
 
 class IsochronProcessor {
   /// Runs the full alignment pipeline.
@@ -21,10 +22,18 @@ class IsochronProcessor {
     required Directory workDir,
     String ffmpegPath = 'ffmpeg',
     String espeakPath = 'espeak-ng',
+    bool useTransliteration = false,
   }) async {
     // 1. Parse Text
     final fragments = TextParser.parse(text);
     if (fragments.isEmpty) throw Exception("No text found in file.");
+
+    // 1.5 Optional Transliteration
+    if (useTransliteration) {
+      for (final frag in fragments) {
+        frag.spokenText = Transliterator.convert(frag.text);
+      }
+    }
 
     // 2. Generate Anchor (Pass custom binary path)
     final anchorGen = AnchorGenerator(binaryPath: espeakPath);
