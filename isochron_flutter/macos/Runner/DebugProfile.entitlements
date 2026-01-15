@@ -2,11 +2,22 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>com.apple.security.app-sandbox</key>
-	<true/>
+	<!-- <key>com.apple.security.app-sandbox</key>
+	<true/> -->
 	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
 	<key>com.apple.security.network.server</key>
 	<true/>
+	<!-- Allow reading/writing user selected files -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    <!-- Allow launching other apps/processes -->
+    <key>com.apple.security.app-sandbox.read-write</key>
+    <true/>
+    <key>com.apple.security.process-inheritance</key>
+    <true/>
+    <!-- Optional: Allow network if you later add auto-downloading -->
+    <key>com.apple.security.network.client</key>
+    <true/>
 </dict>
 </plist>
