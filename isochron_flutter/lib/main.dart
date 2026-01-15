@@ -41,7 +41,7 @@ class _MainScreenState extends State<MainScreen> {
   List<Fragment> _results = [];
   bool _isProcessing = false;
   String _status = "Select files to begin.";
-  bool _useTransliteration = false;
+  String? _dictPath;
 
   // Settings
   final TextEditingController _ffmpegController = TextEditingController(
@@ -89,6 +89,16 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  Future<void> _pickDict() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+    if (result != null) {
+      setState(() => _dictPath = result.files.single.path);
+    }
+  }
+
   // The Heavy Lifting
   Future<void> _runAlignment() async {
     if (_textPath == null || _audioPath == null) return;
@@ -100,13 +110,23 @@ class _MainScreenState extends State<MainScreen> {
     });
 
     try {
+      // Read and Parse JSON Rule file (if exists)
+      Map<String, String>? rules;
+      if (_dictPath != null) {
+        final content = await File(_dictPath!).readAsString();
+        final rawMap = jsonDecode(content) as Map<String, dynamic>;
+        rules = rawMap.map((key, value) => MapEntry(key, value.toString()));
+      }
+
       // Prepare arguments for the Isolate
       final args = {
         'textPath': _textPath!,
         'audioPath': _audioPath!,
         'ffmpeg': _ffmpegController.text,
         'espeak': _espeakController.text,
-        'transliterate': _useTransliteration.toString(),
+        'rulesJson': _dictPath != null
+            ? await File(_dictPath!).readAsString()
+            : null, // Pass Raw JSON content
       };
 
       // Run in background thread so UI doesn't freeze
@@ -125,20 +145,27 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   // Isolate Entry Point (Must be static/top-level)
-  static Future<List<Fragment>> _isolateEntry(Map<String, String> args) async {
+  static Future<List<Fragment>> _isolateEntry(Map<String, dynamic> args) async {
     final workDir = Directory.systemTemp.createTempSync('iso_gui_');
+
+    // Parse Rules
+    Map<String, String>? rules;
+    if (args['rulesJson'] != null) {
+      final rawMap = jsonDecode(args['rulesJson']) as Map<String, dynamic>;
+      rules = rawMap.map((key, value) => MapEntry(key, value.toString()));
+    }
+
     try {
-      final textFile = File(args['textPath']!);
+      final textFile = File(args['textPath']);
       final text = await textFile.readAsString();
-      final useTransliteration = args['transliterate'] == 'true';
 
       return await IsochronProcessor.process(
         text: text,
-        audioPath: args['audioPath']!,
+        audioPath: args['audioPath'],
         workDir: workDir,
-        ffmpegPath: args['ffmpeg']!,
-        espeakPath: args['espeak']!,
-        useTransliteration: useTransliteration,
+        ffmpegPath: args['ffmpeg'],
+        espeakPath: args['espeak'],
+        transliterationRules: rules, // <--- Pass Map
       );
     } finally {
       workDir.deleteSync(recursive: true);
@@ -267,14 +294,25 @@ class _MainScreenState extends State<MainScreen> {
                       ),
                     ),
                     const Divider(),
-                    SwitchListTile(
-                      title: const Text("Transliterate Text"),
-                      subtitle: const Text(
-                        "Convert non-Latin characters to Latin (helps eSpeak pronunciation)",
+                    ListTile(
+                      leading: const Icon(Icons.translate),
+                      title: Text(
+                        _dictPath != null
+                            ? p.basename(_dictPath!)
+                            : "Optional: Select Transliteration JSON",
                       ),
-                      value: _useTransliteration,
-                      onChanged: (val) =>
-                          setState(() => _useTransliteration = val),
+                      subtitle: const Text(
+                        "Map characters (e.g. Cyrillic) to Latin for eSpeak",
+                      ),
+                      trailing: _dictPath == null
+                          ? ElevatedButton(
+                              onPressed: _pickDict,
+                              child: const Text("Browse"),
+                            )
+                          : IconButton(
+                              onPressed: () => setState(() => _dictPath = null),
+                              icon: const Icon(Icons.clear),
+                            ),
                     ),
                   ],
                 ),

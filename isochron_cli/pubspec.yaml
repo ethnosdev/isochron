@@ -11,6 +11,7 @@ dependencies:
   path: ^1.9.0
   # Fast Fourier Transform (FFT) implementation
   fftea: ^1.4.0
+  unorm_dart: ^0.3.2
 
 dev_dependencies:
   lints: ^6.0.0
