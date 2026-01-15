@@ -1,137 +1,161 @@
 import 'dart:math';
+import 'dart:typed_data';
 import 'vector_utils.dart';
 
-/// Represents a single point of alignment between the two files.
-class AlignmentPoint {
-  final int realIndex;
-  final int anchorIndex;
-
-  AlignmentPoint(this.realIndex, this.anchorIndex);
-
-  @override
-  String toString() => '($realIndex, $anchorIndex)';
-}
+// Directions for backtracking
+const int _dirNone = 0;
+const int _dirDiag = 1; // Match (i-1, j-1)
+const int _dirUp = 2; // Insertion (i-1, j)
+const int _dirLeft = 3; // Deletion (i, j-1)
 
 typedef ProgressCallback = void Function(String status, double percentage);
 
+class AlignmentPoint {
+  final int realIndex;
+  final int anchorIndex;
+  AlignmentPoint(this.realIndex, this.anchorIndex);
+}
+
 class DtwAligner {
-  /// Aligns two sequences of feature vectors.
-  ///
-  /// [radius]: The Sakoe-Chiba band radius.
-  /// Only searches `i - radius < j < i + radius`.
-  /// Defaults to -1 (Auto-calculate ~10% of length).
+  /// Optimized DTW using a sliding window for costs and a flat Uint8List for path history.
+  /// Drastically reduces memory usage from O(N*M) to O(N*Radius).
   static List<AlignmentPoint> align(
-      List<List<double>> realSeq, List<List<double>> anchorSeq,
-      {int radius = -1, ProgressCallback? onProgress}) {
+    List<List<double>> realSeq,
+    List<List<double>> anchorSeq, {
+    int radius = 500, // Default fixed radius: 500 frames ~= 5 seconds
+    ProgressCallback? onProgress,
+  }) {
     final int N = realSeq.length;
     final int M = anchorSeq.length;
 
-    // 1. Determine Radius
-    // If not set, use 10% of the longer sequence, or at least 50 frames.
-    int r = radius;
-    if (r < 0) {
-      r = (max(N, M) * 0.1).ceil();
-      if (r < 50) r = 50;
-    }
-    // Absolute minimum to ensure corners (0,0) and (N,M) are reachable
-    r = max(r, (N - M).abs() + 5);
+    // 1. Validate Radius
+    // A 5-second window is usually plenty.
+    // Ensure radius is at least enough to cover the difference in lengths.
+    final int lengthDiff = (N - M).abs();
+    final int r = max(radius, lengthDiff + 10);
 
-    // 2. The Cost Matrix (Sparse)
-    // We use a Map<int, Map<int, double>> to store accumulated costs.
-    // Key: realIndex -> { anchorIndex: cost }
-    final Map<int, Map<int, double>> accumulatedCost = {};
+    // The "Band Width" determines our memory block size.
+    // We map the diagonal band into a flat rectangle of width (2*r + 1).
+    final int width = 2 * r + 1;
 
-    // Helper to get cost safely (returns Infinity if not in band)
-    double getCost(int i, int j) {
-      if (i < 0 || j < 0) return double.infinity;
-      return accumulatedCost[i]?[j] ?? double.infinity;
-    }
+    // 2. Memory Allocation
+    // Backtrack Matrix: Stores directions (1 byte per cell).
+    // Size: ~36MB for 6 mins audio vs 30GB with Maps.
+    final backtrack = Uint8List(N * width);
 
-    // Helper to set cost
-    void setCost(int i, int j, double val) {
-      if (!accumulatedCost.containsKey(i)) {
-        accumulatedCost[i] = {};
-      }
-      accumulatedCost[i]![j] = val;
-    }
+    // Cost Rows: We only keep two rows in memory (Previous and Current).
+    // Using Float64List for speed.
+    var prevCost = Float64List(M)..fillRange(0, M, double.infinity);
+    var currCost = Float64List(M)..fillRange(0, M, double.infinity);
 
-    // 3. Forward Pass: Calculate Costs
-    setCost(0, 0, VectorUtils.euclideanDistance(realSeq[0], anchorSeq[0]));
+    // Initialize (0,0)
+    final startDist = VectorUtils.euclideanDistance(realSeq[0], anchorSeq[0]);
+    prevCost[0] = startDist;
 
-    int reportStep = (N / 100).ceil();
+    final int reportStep = max(1, (N / 100).ceil());
 
-    for (int i = 0; i < N; i++) {
+    // 3. Forward Pass (Calculate Costs)
+    for (int i = 1; i < N; i++) {
+      // Progress Report
       if (onProgress != null && i % reportStep == 0) {
-        // Map 0..N to 0.0..1.0 range
-        onProgress('Aligning Matrices...', i / N);
+        onProgress('Aligning...', i / N);
       }
 
-      // Define Band Limits for this row
-      // We want j to be roughly around (i * M / N)
-      // strictly enforcing |i - j| < radius is valid for equal lengths,
-      // but for N != M, we align along the diagonal slope.
-      //
-      // Slope formula: j_center = i * (M / N)
-      final int jCenter = (i * (M / N)).round();
-      final int jStart = max(0, jCenter - r);
-      final int jEnd = min(M, jCenter + r);
+      // Calculate the "Center" of the band for this row (slope)
+      final int jCenter = (i * M / N).round();
+      final int jStart = max(1, jCenter - r);
+      final int jEnd = min(M - 1, jCenter + r);
 
-      for (int j = jStart; j < jEnd; j++) {
-        // Skip (0,0) as it's already set
-        if (i == 0 && j == 0) continue;
+      // Reset current row to infinity for bounds we don't calculate
+      // (Optimization: only clear the part we might touch + margins, but filling all is safer/simpler)
+      currCost.fillRange(0, M, double.infinity);
 
+      bool hasPath = false;
+
+      for (int j = jStart; j <= jEnd; j++) {
         final double dist =
             VectorUtils.euclideanDistance(realSeq[i], anchorSeq[j]);
 
-        // Predecessors:
-        // (i-1, j)   -> Insertion
-        // (i, j-1)   -> Deletion
-        // (i-1, j-1) -> Match
-        final double costIm1j = getCost(i - 1, j);
-        final double costIj1 = getCost(i, j - 1);
-        final double costIm1j1 = getCost(i - 1, j - 1);
+        // Predecessors
+        final double diag = prevCost[j - 1];
+        final double up = prevCost[j];
+        final double left = currCost[j - 1];
 
-        final double minPrev = min(costIm1j, min(costIj1, costIm1j1));
-
-        if (minPrev.isInfinite) {
-          // If all predecessors are infinite, this cell is unreachable
-          continue;
+        if (diag == double.infinity &&
+            up == double.infinity &&
+            left == double.infinity) {
+          continue; // No valid path to here
         }
 
-        setCost(i, j, dist + minPrev);
+        hasPath = true;
+
+        // Find min cost and direction
+        double minVal = diag;
+        int direction = _dirDiag;
+
+        if (up < minVal) {
+          minVal = up;
+          direction = _dirUp;
+        }
+        if (left < minVal) {
+          minVal = left;
+          direction = _dirLeft;
+        }
+
+        currCost[j] = dist + minVal;
+
+        // Store direction in compact matrix
+        // Mapping: index = i * width + (j - jCenter + r)
+        // This maps the slanted band into a straight vertical column in memory.
+        final int storageCol = j - jCenter + r;
+        if (storageCol >= 0 && storageCol < width) {
+          backtrack[i * width + storageCol] = direction;
+        }
       }
+
+      // Swap buffers (curr becomes prev for next iteration)
+      final temp = prevCost;
+      prevCost = currCost;
+      currCost = temp;
     }
 
-    // Ensure we report 100% at the end
-    if (onProgress != null) onProgress('Backtracking path...', 1.0);
+    if (onProgress != null) onProgress('Backtracking...', 1.0);
 
-    // 4. Backward Pass: Trace Path
-    // Start from (N-1, M-1)
+    // 4. Backward Pass (Trace Path)
     final List<AlignmentPoint> path = [];
     int i = N - 1;
     int j = M - 1;
 
     path.add(AlignmentPoint(i, j));
 
-    while (i > 0 || j > 0) {
-      // Check neighbors
-      final double diag = getCost(i - 1, j - 1); // Prefer diagonal usually
-      final double up = getCost(i - 1, j);
-      final double left = getCost(i, j - 1);
+    while (i > 0 && j > 0) {
+      // Re-calculate the storage index for this coordinate
+      final int jCenter = (i * M / N).round();
+      final int storageCol = j - jCenter + r;
 
-      // Greedy logic: pick lowest cost neighbor
-      if (diag <= up && diag <= left) {
+      // If we drift out of the calculated band, force a diagonal step (safety)
+      int direction = _dirDiag;
+
+      if (storageCol >= 0 && storageCol < width) {
+        direction = backtrack[i * width + storageCol];
+      }
+
+      if (direction == _dirDiag) {
         i--;
         j--;
-      } else if (up <= left) {
+      } else if (direction == _dirUp) {
         i--;
+      } else if (direction == _dirLeft) {
+        j--;
       } else {
+        // Should not happen if logic is correct, but safe fallback
+        i--;
         j--;
       }
+
       path.add(AlignmentPoint(i, j));
     }
 
-    // 5. Reverse to get chronological order
     return path.reversed.toList();
   }
 }
