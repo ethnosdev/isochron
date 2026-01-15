@@ -4,6 +4,9 @@ import '../core/fragment.dart';
 import '../audio/wav_utils.dart';
 
 class AnchorGenerator {
+  final String binaryPath;
+  AnchorGenerator({this.binaryPath = 'espeak-ng'});
+
   /// Generates the "Anchor" audio file (Synthetic TTS).
   /// Updates the [fragments] with the precise start/end times of the synthetic speech.
   /// Returns the path to the fully concatenated anchor file.
@@ -18,7 +21,7 @@ class AnchorGenerator {
 
       // A. Call eSpeak-ng
       // -w: Write to file
-      await Process.run('espeak-ng', [
+      await Process.run(binaryPath, [
         '-w',
         rawWavPath,
         frag.text,

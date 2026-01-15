@@ -7,6 +7,7 @@ export 'src/core/config.dart';
 export 'src/core/fragment.dart';
 export 'src/core/text_parser.dart';
 export 'src/core/time_projector.dart';
+export 'src/core/isochron_processor.dart';
 
 // Math
 export 'src/math/dsp_utils.dart';
