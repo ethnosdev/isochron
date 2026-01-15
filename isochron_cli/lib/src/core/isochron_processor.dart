@@ -22,16 +22,17 @@ class IsochronProcessor {
     required Directory workDir,
     String ffmpegPath = 'ffmpeg',
     String espeakPath = 'espeak-ng',
-    bool useTransliteration = false,
+    Map<String, String>? transliterationRules,
   }) async {
     // 1. Parse Text
     final fragments = TextParser.parse(text);
     if (fragments.isEmpty) throw Exception("No text found in file.");
 
-    // 1.5 Optional Transliteration
-    if (useTransliteration) {
+    // Apply rules if they exist
+    if (transliterationRules != null && transliterationRules.isNotEmpty) {
       for (final frag in fragments) {
-        frag.spokenText = Transliterator.convert(frag.text);
+        frag.spokenText =
+            Transliterator.convert(frag.text, transliterationRules);
       }
     }
 

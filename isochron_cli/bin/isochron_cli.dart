@@ -81,7 +81,7 @@ void main(List<String> arguments) async {
         workDir: workDir,
         ffmpegPath: ffmpegPath,
         espeakPath: espeakPath,
-        useTransliteration: transliterate,
+        transliterationRules: rules,
       );
       // ---------------------
 
