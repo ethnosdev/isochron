@@ -1,0 +1,14 @@
+[
+    {
+        "id": 0,
+        "text": "Hello world.",
+        "start": 0.0,
+        "end": 2.37
+    },
+    {
+        "id": 1,
+        "text": "This is a test of the Isochron aligner.",
+        "start": 2.37,
+        "end": 6.06
+    }
+]
