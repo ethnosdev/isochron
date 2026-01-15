@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -42,6 +43,7 @@ class _MainScreenState extends State<MainScreen> {
   bool _isProcessing = false;
   String _status = "Select files to begin.";
   String? _dictPath;
+  double _progressValue = 0.0;
 
   // Settings
   final TextEditingController _ffmpegController = TextEditingController(
@@ -105,39 +107,57 @@ class _MainScreenState extends State<MainScreen> {
 
     setState(() {
       _isProcessing = true;
-      _status = "Processing... (This runs in background)";
+      _progressValue = 0.0; // Reset
+      _status = "Starting...";
       _results = [];
     });
 
-    try {
-      // Read and Parse JSON Rule file (if exists)
-      Map<String, String>? rules;
-      if (_dictPath != null) {
-        final content = await File(_dictPath!).readAsString();
-        final rawMap = jsonDecode(content) as Map<String, dynamic>;
-        rules = rawMap.map((key, value) => MapEntry(key, value.toString()));
-      }
+    // Create a ReceivePort to get messages from the background thread
+    final receivePort = ReceivePort();
 
-      // Prepare arguments for the Isolate
+    try {
+      // Prepare args
       final args = {
+        'sendPort': receivePort.sendPort, // Pass the port!
         'textPath': _textPath!,
         'audioPath': _audioPath!,
         'ffmpeg': _ffmpegController.text,
         'espeak': _espeakController.text,
         'rulesJson': _dictPath != null
             ? await File(_dictPath!).readAsString()
-            : null, // Pass Raw JSON content
+            : null,
       };
 
-      // Run in background thread so UI doesn't freeze
-      final fragments = await compute(_isolateEntry, args);
+      // Spawn the isolate
+      await Isolate.spawn(_isolateEntry, args);
 
-      setState(() {
-        _results = fragments;
-        _status = "Success! Aligned ${_results.length} fragments.";
-      });
+      // Listen for messages
+      await for (final message in receivePort) {
+        if (message is Map) {
+          final type = message['type'];
+
+          if (type == 'progress') {
+            setState(() {
+              _status = message['status'];
+              _progressValue = message['value'];
+            });
+          } else if (type == 'result') {
+            setState(() {
+              _results = message['data'];
+              _status = "Done!";
+              _progressValue = 1.0;
+              _isProcessing = false;
+            });
+            receivePort.close(); // Stop listening
+            break;
+          } else if (type == 'error') {
+            throw message['error'];
+          }
+        }
+      }
     } catch (e) {
       setState(() => _status = "Error: $e");
+      receivePort.close();
       _showErrorDialog(e.toString());
     } finally {
       setState(() => _isProcessing = false);
@@ -145,7 +165,8 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   // Isolate Entry Point (Must be static/top-level)
-  static Future<List<Fragment>> _isolateEntry(Map<String, dynamic> args) async {
+  static Future<void> _isolateEntry(Map<String, dynamic> args) async {
+    final SendPort sendPort = args['sendPort'];
     final workDir = Directory.systemTemp.createTempSync('iso_gui_');
 
     // Parse Rules
@@ -159,14 +180,28 @@ class _MainScreenState extends State<MainScreen> {
       final textFile = File(args['textPath']);
       final text = await textFile.readAsString();
 
-      return await IsochronProcessor.process(
+      final fragments = await IsochronProcessor.process(
         text: text,
         audioPath: args['audioPath'],
         workDir: workDir,
         ffmpegPath: args['ffmpeg'],
         espeakPath: args['espeak'],
-        transliterationRules: rules, // <--- Pass Map
+        transliterationRules: rules,
+        // Hook up the callback to the SendPort
+        onProgress: (status, percent) {
+          sendPort.send({
+            'type': 'progress',
+            'status': status,
+            'value': percent,
+          });
+        },
       );
+
+      // Send Success
+      sendPort.send({'type': 'result', 'data': fragments});
+    } catch (e) {
+      // Send Error
+      sendPort.send({'type': 'error', 'error': e.toString()});
     } finally {
       workDir.deleteSync(recursive: true);
     }
@@ -262,7 +297,7 @@ class _MainScreenState extends State<MainScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Input Area
+            // --- 1. Input Area (Keep this as is) ---
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -299,10 +334,10 @@ class _MainScreenState extends State<MainScreen> {
                       title: Text(
                         _dictPath != null
                             ? p.basename(_dictPath!)
-                            : "Optional: Select Transliteration JSON",
+                            : "Optional: Transliteration JSON",
                       ),
                       subtitle: const Text(
-                        "Map characters (e.g. Cyrillic) to Latin for eSpeak",
+                        "Map characters to Latin for eSpeak",
                       ),
                       trailing: _dictPath == null
                           ? ElevatedButton(
@@ -318,32 +353,49 @@ class _MainScreenState extends State<MainScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
-            // Action Button
-            ElevatedButton(
-              onPressed:
-                  (_isProcessing || _textPath == null || _audioPath == null)
-                  ? null
-                  : _runAlignment,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.all(16),
+            // --- 2. ACTION SECTION (REPLACE THIS BLOCK) ---
+            if (_isProcessing) ...[
+              // SHOW PROGRESS BAR
+              LinearProgressIndicator(value: _progressValue, minHeight: 8),
+              const SizedBox(height: 12),
+              Center(
+                child: Text(
+                  "${(_progressValue * 100).toInt()}% - $_status",
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
-              child: _isProcessing
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text("ALIGN TEXT & AUDIO"),
-            ),
-            const SizedBox(height: 8),
-            Center(
-              child: Text(_status, style: const TextStyle(color: Colors.grey)),
-            ),
+            ] else ...[
+              // SHOW BUTTON
+              ElevatedButton(
+                onPressed: (_textPath != null && _audioPath != null)
+                    ? _runAlignment
+                    : null,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.all(16),
+                  backgroundColor: Theme.of(
+                    context,
+                  ).colorScheme.primaryContainer,
+                ),
+                child: const Text(
+                  "ALIGN TEXT & AUDIO",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Center(
+                child: Text(
+                  _status,
+                  style: const TextStyle(color: Colors.grey),
+                ),
+              ),
+            ],
+
+            // ----------------------------------------------
             const SizedBox(height: 16),
 
-            // Results List
+            // --- 3. Results List (Keep this as is) ---
             Expanded(
               child: _results.isEmpty
                   ? const Center(child: Text("Results will appear here."))
@@ -368,8 +420,8 @@ class _MainScreenState extends State<MainScreen> {
                     ),
             ),
 
-            // Save Button
-            if (_results.isNotEmpty)
+            // --- 4. Save Button (Keep this as is) ---
+            if (_results.isNotEmpty && !_isProcessing)
               Padding(
                 padding: const EdgeInsets.only(top: 16),
                 child: OutlinedButton.icon(

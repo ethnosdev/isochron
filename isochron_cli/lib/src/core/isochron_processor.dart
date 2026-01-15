@@ -23,8 +23,9 @@ class IsochronProcessor {
     String ffmpegPath = 'ffmpeg',
     String espeakPath = 'espeak-ng',
     Map<String, String>? transliterationRules,
+    ProgressCallback? onProgress,
   }) async {
-    // 1. Parse Text
+    onProgress?.call("Parsing Text...", 0.05);
     final fragments = TextParser.parse(text);
     if (fragments.isEmpty) throw Exception("No text found in file.");
 
@@ -37,10 +38,12 @@ class IsochronProcessor {
     }
 
     // 2. Generate Anchor (Pass custom binary path)
+    onProgress?.call("Generating Anchor Audio...", 0.1);
     final anchorGen = AnchorGenerator(binaryPath: espeakPath);
     final anchorFile = await anchorGen.generate(fragments, workDir);
 
     // 3. Normalize User Audio (Pass custom binary path)
+    onProgress?.call("Processing User Audio...", 0.2);
     final userAudioWav = File(p.join(workDir.path, 'user_mono_16k.wav'));
 
     // We execute FFmpeg manually here to ensure we use the dynamic path
@@ -64,14 +67,36 @@ class IsochronProcessor {
     }
 
     // 4. Feature Extraction
-    final anchorMfcc = MfccExtractor.extract(_readWavData(anchorFile));
-    final userMfcc = MfccExtractor.extract(_readWavData(userAudioWav));
+    onProgress?.call("Extracting Anchor Features...", 0.25);
+    final anchorMfcc = MfccExtractor.extract(
+      _readWavData(anchorFile),
+      onProgress: (pct) {
+        // Map 0.0-1.0 to 0.25-0.35
+        onProgress?.call("Extracting Anchor Features...", 0.25 + (pct * 0.10));
+      },
+    );
+
+    onProgress?.call("Extracting User Features...", 0.35);
+    final userMfcc = MfccExtractor.extract(
+      _readWavData(userAudioWav),
+      onProgress: (pct) {
+        // Map 0.0-1.0 to 0.35-0.45
+        onProgress?.call("Extracting User Features...", 0.35 + (pct * 0.10));
+      },
+    );
 
     // 5. Alignment
-    final path = DtwAligner.align(userMfcc, anchorMfcc);
+    final path =
+        DtwAligner.align(userMfcc, anchorMfcc, onProgress: (status, pct) {
+      // Map 0.0-1.0 to 0.45-0.95
+      final overall = 0.45 + (pct * 0.50);
+      onProgress?.call(status, overall);
+    });
 
     // 6. Projection
+    onProgress?.call("Finalizing...", 0.95);
     TimeProjector.project(fragments, path);
+    onProgress?.call("Done", 1.0);
 
     return fragments;
   }

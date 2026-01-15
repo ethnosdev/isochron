@@ -14,7 +14,8 @@ class MfccExtractor {
 
   /// Takes raw audio samples and returns a sequence of feature vectors.
   /// Result: List of Frames, where each Frame is a List<double> of size 13.
-  static List<List<double>> extract(Float64List audioData) {
+  static List<List<double>> extract(Float64List audioData,
+      {Function(double)? onProgress}) {
     final int frameLenSamples = (frameDuration * sampleRate).round(); // 320
     final int strideSamples = (frameStride * sampleRate).round(); // 160
 
@@ -31,10 +32,18 @@ class MfccExtractor {
 
     final List<List<double>> mfccFrames = [];
 
+    // PROGRESS LOGIC: Report roughly every 1% of processing
+    // audioData.length is total samples.
+    final int reportInterval = (audioData.length / 100).ceil();
+
     // 2. Framing Loop
     for (int i = 0;
         i + frameLenSamples <= audioData.length;
         i += strideSamples) {
+      if (onProgress != null && (i % reportInterval) < strideSamples) {
+        onProgress(i / audioData.length);
+      }
+
       // A. Extract Frame & Apply Window
       final frame = Float64List(fftSize); // Zero-padded to 512
       for (int j = 0; j < frameLenSamples; j++) {
@@ -81,6 +90,8 @@ class MfccExtractor {
       final features = dctCoeffs.sublist(0, numCepstra);
       mfccFrames.add(features);
     }
+
+    onProgress?.call(1.0);
 
     return mfccFrames;
   }

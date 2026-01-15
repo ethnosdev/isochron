@@ -12,6 +12,8 @@ class AlignmentPoint {
   String toString() => '($realIndex, $anchorIndex)';
 }
 
+typedef ProgressCallback = void Function(String status, double percentage);
+
 class DtwAligner {
   /// Aligns two sequences of feature vectors.
   ///
@@ -20,7 +22,7 @@ class DtwAligner {
   /// Defaults to -1 (Auto-calculate ~10% of length).
   static List<AlignmentPoint> align(
       List<List<double>> realSeq, List<List<double>> anchorSeq,
-      {int radius = -1}) {
+      {int radius = -1, ProgressCallback? onProgress}) {
     final int N = realSeq.length;
     final int M = anchorSeq.length;
 
@@ -56,7 +58,14 @@ class DtwAligner {
     // 3. Forward Pass: Calculate Costs
     setCost(0, 0, VectorUtils.euclideanDistance(realSeq[0], anchorSeq[0]));
 
+    int reportStep = (N / 100).ceil();
+
     for (int i = 0; i < N; i++) {
+      if (onProgress != null && i % reportStep == 0) {
+        // Map 0..N to 0.0..1.0 range
+        onProgress('Aligning Matrices...', i / N);
+      }
+
       // Define Band Limits for this row
       // We want j to be roughly around (i * M / N)
       // strictly enforcing |i - j| < radius is valid for equal lengths,
@@ -92,6 +101,9 @@ class DtwAligner {
         setCost(i, j, dist + minPrev);
       }
     }
+
+    // Ensure we report 100% at the end
+    if (onProgress != null) onProgress('Backtracking path...', 1.0);
 
     // 4. Backward Pass: Trace Path
     // Start from (N-1, M-1)
