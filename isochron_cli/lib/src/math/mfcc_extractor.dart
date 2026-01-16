@@ -4,7 +4,6 @@ import 'package:fftea/fftea.dart'; // The FFT library
 import 'dsp_utils.dart';
 
 class MfccExtractor {
-  // Configuration
   static const int sampleRate = 16000;
   static const double frameDuration = 0.020; // 20ms
   static const double frameStride = 0.010; // 10ms

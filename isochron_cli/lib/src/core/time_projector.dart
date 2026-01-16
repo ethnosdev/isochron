@@ -13,7 +13,6 @@ class TimeProjector {
     int pathIndex = 0;
 
     for (final frag in fragments) {
-      // --- Calculate Start ---
       final anchorStartFrame = (frag.anchorStart / frameStride).round();
 
       // Find the first point in path where anchorIndex >= anchorStartFrame
@@ -21,15 +20,12 @@ class TimeProjector {
           path[pathIndex].anchorIndex < anchorStartFrame) {
         pathIndex++;
       }
-      // Safety check
       if (pathIndex >= path.length) {
         pathIndex = path.length - 1;
       }
 
       final startPoint = path[pathIndex];
       final realStart = startPoint.realIndex * frameStride;
-
-      // --- Calculate End ---
       final anchorEndFrame = (frag.anchorEnd / frameStride).round();
 
       // Find the point corresponding to end.
@@ -47,7 +43,6 @@ class TimeProjector {
       final endPoint = path[endPathIndex];
       final realEnd = endPoint.realIndex * frameStride;
 
-      // Update Fragment
       frag.setRealTiming(start: realStart, end: realEnd);
     }
   }

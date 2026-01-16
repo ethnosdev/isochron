@@ -14,7 +14,6 @@ class TextParser {
     for (var line in lines) {
       final cleanLine = line.trim();
 
-      // Skip empty lines
       if (cleanLine.isEmpty) {
         continue;
       }

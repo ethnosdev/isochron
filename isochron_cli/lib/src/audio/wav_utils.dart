@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 class WavUtils {
   /// Calculates the duration of a WAV file in seconds.

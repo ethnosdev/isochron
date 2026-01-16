@@ -1,6 +1,6 @@
 import 'dart:typed_data';
+import 'package:isochron_cli/isochron_cli.dart';
 import 'package:test/test.dart';
-import 'package:isochron_cli/src/math/mfcc_extractor.dart'; // We will create this
 
 void main() {
   group('MFCC Extractor', () {

@@ -5,7 +5,6 @@ import '../core/fragment.dart';
 import '../core/text_parser.dart';
 import '../core/time_projector.dart';
 import '../synthesis/anchor_generator.dart';
-import '../audio/wav_utils.dart';
 import '../math/mfcc_extractor.dart';
 import '../math/dtw_aligner.dart';
 import 'transliterator.dart';
@@ -37,12 +36,12 @@ class IsochronProcessor {
       }
     }
 
-    // 2. Generate Anchor (Pass custom binary path)
+    // Generate Anchor (Pass custom binary path)
     onProgress?.call("Generating Anchor Audio...", 0.1);
     final anchorGen = AnchorGenerator(binaryPath: espeakPath);
     final anchorFile = await anchorGen.generate(fragments, workDir);
 
-    // 3. Normalize User Audio (Pass custom binary path)
+    // Normalize User Audio (Pass custom binary path)
     onProgress?.call("Processing User Audio...", 0.2);
     final userAudioWav = File(p.join(workDir.path, 'user_mono_16k.wav'));
 
@@ -66,7 +65,7 @@ class IsochronProcessor {
       throw Exception('FFmpeg failed: ${result.stderr}');
     }
 
-    // 4. Feature Extraction
+    // Feature Extraction
     onProgress?.call("Extracting Anchor Features...", 0.25);
     final anchorMfcc = MfccExtractor.extract(
       _readWavData(anchorFile),
@@ -85,7 +84,7 @@ class IsochronProcessor {
       },
     );
 
-    // 5. Alignment
+    // Alignment
     final path =
         DtwAligner.align(userMfcc, anchorMfcc, onProgress: (status, pct) {
       // Map 0.0-1.0 to 0.45-0.95
@@ -93,7 +92,7 @@ class IsochronProcessor {
       onProgress?.call(status, overall);
     });
 
-    // 6. Projection
+    // Projection
     onProgress?.call("Finalizing...", 0.95);
     TimeProjector.project(fragments, path);
     onProgress?.call("Done", 1.0);

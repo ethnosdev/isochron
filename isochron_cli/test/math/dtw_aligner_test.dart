@@ -1,5 +1,5 @@
+import 'package:isochron_cli/isochron_cli.dart';
 import 'package:test/test.dart';
-import 'package:isochron_cli/src/math/dtw_aligner.dart'; // To be created
 
 void main() {
   group('DTW Aligner', () {

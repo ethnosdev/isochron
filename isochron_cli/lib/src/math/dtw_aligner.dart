@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'vector_utils.dart';
 
 // Directions for backtracking
-const int _dirNone = 0;
 const int _dirDiag = 1; // Match (i-1, j-1)
 const int _dirUp = 2; // Insertion (i-1, j)
 const int _dirLeft = 3; // Deletion (i, j-1)
@@ -70,8 +69,6 @@ class DtwAligner {
       // (Optimization: only clear the part we might touch + margins, but filling all is safer/simpler)
       currCost.fillRange(0, M, double.infinity);
 
-      bool hasPath = false;
-
       for (int j = jStart; j <= jEnd; j++) {
         final double dist =
             VectorUtils.euclideanDistance(realSeq[i], anchorSeq[j]);
@@ -86,8 +83,6 @@ class DtwAligner {
             left == double.infinity) {
           continue; // No valid path to here
         }
-
-        hasPath = true;
 
         // Find min cost and direction
         double minVal = diag;

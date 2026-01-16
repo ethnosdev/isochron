@@ -1,6 +1,5 @@
-import 'dart:math';
+import 'package:isochron_cli/isochron_cli.dart';
 import 'package:test/test.dart';
-import 'package:isochron_cli/src/math/vector_utils.dart'; // We will create this
 
 void main() {
   group('Vector Utils', () {

@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -82,10 +81,11 @@ class _MainScreenState extends State<MainScreen> {
     );
     if (result != null && result.files.single.path != null) {
       setState(() {
-        if (isAudio)
+        if (isAudio) {
           _audioPath = result.files.single.path;
-        else
+        } else {
           _textPath = result.files.single.path;
+        }
         _status = "Ready to align.";
       });
     }
@@ -148,7 +148,7 @@ class _MainScreenState extends State<MainScreen> {
               _progressValue = 1.0;
               _isProcessing = false;
             });
-            receivePort.close(); // Stop listening
+            receivePort.close();
             break;
           } else if (type == 'error') {
             throw message['error'];
@@ -297,7 +297,6 @@ class _MainScreenState extends State<MainScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // --- 1. Input Area (Keep this as is) ---
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -355,7 +354,6 @@ class _MainScreenState extends State<MainScreen> {
             ),
             const SizedBox(height: 24),
 
-            // --- 2. ACTION SECTION (REPLACE THIS BLOCK) ---
             if (_isProcessing) ...[
               // SHOW PROGRESS BAR
               LinearProgressIndicator(value: _progressValue, minHeight: 8),
@@ -392,10 +390,8 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ],
 
-            // ----------------------------------------------
             const SizedBox(height: 16),
 
-            // --- 3. Results List (Keep this as is) ---
             Expanded(
               child: _results.isEmpty
                   ? const Center(child: Text("Results will appear here."))
@@ -420,7 +416,6 @@ class _MainScreenState extends State<MainScreen> {
                     ),
             ),
 
-            // --- 4. Save Button (Keep this as is) ---
             if (_results.isNotEmpty && !_isProcessing)
               Padding(
                 padding: const EdgeInsets.only(top: 16),

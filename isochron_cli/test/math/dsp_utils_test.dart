@@ -1,7 +1,6 @@
-import 'dart:math';
 import 'dart:typed_data';
+import 'package:isochron_cli/isochron_cli.dart';
 import 'package:test/test.dart';
-import 'package:isochron_cli/src/math/dsp_utils.dart'; // We will create this
 
 void main() {
   group('DSP Utils', () {
