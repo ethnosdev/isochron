@@ -1,18 +1,19 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:isochron_cli/isochron_cli.dart';
+import 'dart:typed_data';
 import '../controllers/alignment_controller.dart';
 import '../models/app_state.dart';
 
 class WaveformEditor extends StatefulWidget {
   final AlignmentController controller;
   final AppState state;
+  final ScrollController scrollController; // Passed from parent
 
   const WaveformEditor({
     super.key,
     required this.controller,
     required this.state,
+    required this.scrollController,
   });
 
   @override
@@ -20,61 +21,77 @@ class WaveformEditor extends StatefulWidget {
 }
 
 class _WaveformEditorState extends State<WaveformEditor> {
-  // To handle dragging
   int? _draggingFragmentIndex;
-  bool _draggingStart = true; // true = start handle, false = end handle
+  bool _draggingStart = true;
 
   @override
   Widget build(BuildContext context) {
     if (widget.state.waveformData == null) {
-      return Container(
-        height: 200,
-        color: Colors.grey[200],
-        child: const Center(child: Text("Waveform not available")),
-      );
+      return const Center(child: Text("Waveform not available"));
     }
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final height = 200.0;
-        final totalSeconds = widget.state.audioDuration.inMilliseconds / 1000.0;
+        final visibleWidth = constraints.maxWidth;
+        // Calculate total scrollable width based on zoom
+        final contentWidth = visibleWidth * widget.state.zoomLevel;
+        final height = constraints.maxHeight;
 
-        // Avoid division by zero
+        final totalSeconds = widget.state.audioDuration.inMilliseconds / 1000.0;
         if (totalSeconds == 0) return const SizedBox();
 
-        return SizedBox(
-          height: height,
-          width: width,
-          child: GestureDetector(
-            // 1. Handle clicks to seek
-            onTapUp: (details) {
-              final pct = details.localPosition.dx / width;
-              final ms = (pct * widget.state.audioDuration.inMilliseconds)
-                  .toInt();
-              widget.controller.seekTo(Duration(milliseconds: ms));
-            },
-            // 2. Handle dragging handles
-            onHorizontalDragStart: (details) {
-              _detectHandle(details.localPosition.dx, width, totalSeconds);
-            },
-            onHorizontalDragUpdate: (details) {
-              _updateHandle(details.localPosition.dx, width, totalSeconds);
-            },
-            onHorizontalDragEnd: (_) {
-              setState(() {
-                _draggingFragmentIndex = null;
-              });
-            },
-            child: CustomPaint(
-              painter: _WaveformPainter(
-                waveformData: widget.state.waveformData!,
-                fragments: widget.state.fragments,
-                playbackPos:
-                    widget.state.currentPlaybackPosition.inMilliseconds /
-                    1000.0,
-                totalSeconds: totalSeconds,
-                accentColor: Theme.of(context).primaryColor,
+        return SingleChildScrollView(
+          controller: widget.scrollController,
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: contentWidth,
+            height: height,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+
+              // 1. Seek on Tap
+              onTapUp: (details) {
+                final pct = details.localPosition.dx / contentWidth;
+                final ms = (pct * widget.state.audioDuration.inMilliseconds)
+                    .toInt();
+                widget.controller.seekTo(Duration(milliseconds: ms));
+              },
+
+              // 2. Detect Handle
+              onHorizontalDragStart: (details) {
+                _detectHandle(
+                  details.localPosition.dx,
+                  contentWidth,
+                  totalSeconds,
+                );
+              },
+
+              // 3. Move Handle
+              onHorizontalDragUpdate: (details) {
+                _updateHandle(
+                  details.localPosition.dx,
+                  contentWidth,
+                  totalSeconds,
+                );
+              },
+
+              // 4. End Drag
+              onHorizontalDragEnd: (_) {
+                setState(() => _draggingFragmentIndex = null);
+              },
+
+              // The Painter
+              child: CustomPaint(
+                size: Size(contentWidth, height),
+                painter: _WaveformPainter(
+                  waveformData: widget.state.waveformData!,
+                  fragments: widget.state.fragments,
+                  playbackPos:
+                      widget.state.currentPlaybackPosition.inMilliseconds /
+                      1000.0,
+                  totalSeconds: totalSeconds,
+                  accentColor: Theme.of(context).primaryColor,
+                ),
               ),
             ),
           ),
@@ -84,24 +101,29 @@ class _WaveformEditorState extends State<WaveformEditor> {
   }
 
   void _detectHandle(double x, double width, double totalDuration) {
-    // Find if user clicked near a start or end line
     final secondsPerPixel = totalDuration / width;
     final clickTime = x * secondsPerPixel;
-    const threshold = 0.5; // Detection threshold in seconds
+
+    // Detection threshold is tighter when zoomed out, wider when zoomed in?
+    // Actually fixed pixel threshold is best.
+    // 10 pixels converted to seconds:
+    final thresholdSec = 10.0 * secondsPerPixel;
 
     for (var frag in widget.state.fragments) {
-      if ((frag.realStart - clickTime).abs() < threshold) {
+      if ((frag.realStart - clickTime).abs() < thresholdSec) {
         setState(() {
           _draggingFragmentIndex = frag.index;
           _draggingStart = true;
         });
+        widget.controller.setDragMode(true);
         return;
       }
-      if ((frag.realEnd - clickTime).abs() < threshold) {
+      if ((frag.realEnd - clickTime).abs() < thresholdSec) {
         setState(() {
           _draggingFragmentIndex = frag.index;
           _draggingStart = false;
         });
+        widget.controller.setDragMode(false);
         return;
       }
     }
@@ -117,25 +139,15 @@ class _WaveformEditorState extends State<WaveformEditor> {
       (f) => f.index == _draggingFragmentIndex,
     );
 
-    // Update via controller
+    // Call controller which now handles collision logic
     if (_draggingStart) {
-      // Ensure start doesn't pass end
-      if (newTime < frag.realEnd) {
-        widget.controller.updateFragmentTiming(
-          frag.index,
-          newTime,
-          frag.realEnd,
-        );
-      }
+      widget.controller.updateFragmentTiming(frag.index, newTime, frag.realEnd);
     } else {
-      // Ensure end doesn't go before start
-      if (newTime > frag.realStart) {
-        widget.controller.updateFragmentTiming(
-          frag.index,
-          frag.realStart,
-          newTime,
-        );
-      }
+      widget.controller.updateFragmentTiming(
+        frag.index,
+        frag.realStart,
+        newTime,
+      );
     }
   }
 }
@@ -143,7 +155,7 @@ class _WaveformEditorState extends State<WaveformEditor> {
 class _WaveformPainter extends CustomPainter {
   final Float64List waveformData;
   final List<Fragment> fragments;
-  final double playbackPos; // in seconds
+  final double playbackPos;
   final double totalSeconds;
   final Color accentColor;
 
@@ -158,54 +170,59 @@ class _WaveformPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final midY = size.height / 2;
+
+    // 1. Draw Waveform
     final paintWave = Paint()
-      ..color = Colors.blueGrey.withOpacity(0.5)
+      ..color = Colors.blueGrey.withOpacity(0.3)
       ..strokeWidth = 1.0
       ..style = PaintingStyle.stroke;
 
-    // 1. Draw Waveform
-    // Simple algorithm: Draw lines between points mapped to width
     final path = Path();
     final stepX = size.width / waveformData.length;
 
     path.moveTo(0, midY);
     for (int i = 0; i < waveformData.length; i++) {
-      final x = i * stepX;
-      final y = midY + (waveformData[i] * (size.height / 2));
-      path.lineTo(x, y);
+      path.lineTo(i * stepX, midY + (waveformData[i] * (size.height / 2)));
     }
     canvas.drawPath(path, paintWave);
 
-    // 2. Draw Fragments Regions (Start/End lines)
+    // 2. Draw Fragments
     final paintLine = Paint()
       ..color = accentColor
       ..strokeWidth = 2.0;
+    final paintFill = Paint()..color = accentColor.withOpacity(0.1);
 
-    final paintText = TextPainter(textDirection: TextDirection.ltr);
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
 
     for (final frag in fragments) {
       final xStart = (frag.realStart / totalSeconds) * size.width;
       final xEnd = (frag.realEnd / totalSeconds) * size.width;
 
-      // Draw Start Line
+      // Draw background rect for the segment
+      canvas.drawRect(Rect.fromLTRB(xStart, 0, xEnd, size.height), paintFill);
+
+      // Draw Lines
       canvas.drawLine(
         Offset(xStart, 0),
         Offset(xStart, size.height),
         paintLine,
       );
-
-      // Draw End Line (Optional, or just connect them with a rect)
       canvas.drawLine(Offset(xEnd, 0), Offset(xEnd, size.height), paintLine);
 
-      // Draw Text Label overlay
-      if (xEnd - xStart > 20) {
-        // Only draw if wide enough
-        paintText.text = TextSpan(
-          text: frag.text,
-          style: const TextStyle(color: Colors.black87, fontSize: 10),
+      // Draw Index Label (No Verse Text)
+      // Only draw if there is space
+      if (xEnd - xStart > 15) {
+        textPainter.text = TextSpan(
+          text: "#${frag.index}",
+          style: TextStyle(
+            color: accentColor,
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+          ),
         );
-        paintText.layout(maxWidth: xEnd - xStart);
-        paintText.paint(canvas, Offset(xStart + 5, 10));
+        textPainter.layout();
+        // Center text in bar
+        textPainter.paint(canvas, Offset(xStart + 4, 4));
       }
     }
 
@@ -215,11 +232,11 @@ class _WaveformPainter extends CustomPainter {
       ..color = Colors.red
       ..strokeWidth = 2.0;
     canvas.drawLine(Offset(xPlay, 0), Offset(xPlay, size.height), paintPlay);
+
+    // Draw Playhead "Cap"
+    canvas.drawCircle(Offset(xPlay, 0), 5, paintPlay);
   }
 
   @override
-  bool shouldRepaint(covariant _WaveformPainter oldDelegate) {
-    return oldDelegate.playbackPos != playbackPos ||
-        oldDelegate.fragments != fragments;
-  }
+  bool shouldRepaint(covariant _WaveformPainter old) => true;
 }

@@ -17,6 +17,7 @@ class AppState {
   final Duration audioDuration;
   final Duration currentPlaybackPosition;
   final bool isPlaying;
+  final double zoomLevel;
 
   const AppState({
     this.isProcessing = false,
@@ -29,6 +30,7 @@ class AppState {
     this.audioDuration = Duration.zero,
     this.currentPlaybackPosition = Duration.zero,
     this.isPlaying = false,
+    this.zoomLevel = 1.0,
   });
 
   // Helper to copy state with updates
@@ -43,6 +45,7 @@ class AppState {
     Duration? audioDuration,
     Duration? currentPlaybackPosition,
     bool? isPlaying,
+    double? zoomLevel,
   }) {
     return AppState(
       isProcessing: isProcessing ?? this.isProcessing,
@@ -56,6 +59,7 @@ class AppState {
       currentPlaybackPosition:
           currentPlaybackPosition ?? this.currentPlaybackPosition,
       isPlaying: isPlaying ?? this.isPlaying,
+      zoomLevel: zoomLevel ?? this.zoomLevel,
     );
   }
 }

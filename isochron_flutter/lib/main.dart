@@ -10,7 +10,6 @@ void main() {
 
 class IsochronApp extends StatelessWidget {
   const IsochronApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -33,12 +32,11 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   final AlignmentController _controller = AlignmentController();
-  final TextEditingController _ffmpegCtrl = TextEditingController(
-    text: 'ffmpeg',
-  );
-  final TextEditingController _espeakCtrl = TextEditingController(
-    text: 'espeak-ng',
-  );
+  // We keep the ScrollController here to manipulate it from List/Buttons
+  final ScrollController _waveformScrollCtrl = ScrollController();
+
+  final TextEditingController _ffmpegCtrl = TextEditingController();
+  final TextEditingController _espeakCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -57,7 +55,31 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void dispose() {
     _controller.dispose();
+    _waveformScrollCtrl.dispose();
     super.dispose();
+  }
+
+  /// Handles clicking a list item
+  void _jumpToFragment(int index, AppState state, double viewportWidth) {
+    final frag = state.fragments[index];
+    final ms = (frag.realStart * 1000).toInt();
+
+    // 1. Seek Audio
+    _controller.seekTo(Duration(milliseconds: ms));
+
+    // 2. Center Waveform View
+    if (state.audioDuration.inMilliseconds > 0) {
+      final totalWidth = viewportWidth * state.zoomLevel;
+      final pct = ms / state.audioDuration.inMilliseconds;
+      final targetX = totalWidth * pct;
+      final centeredX = targetX - (viewportWidth / 2);
+
+      if (_waveformScrollCtrl.hasClients) {
+        _waveformScrollCtrl.jumpTo(
+          centeredX.clamp(0.0, _waveformScrollCtrl.position.maxScrollExtent),
+        );
+      }
+    }
   }
 
   @override
@@ -69,76 +91,143 @@ class _MainScreenState extends State<MainScreen> {
         builder: (context, state, _) {
           return Column(
             children: [
-              // 1. Toolbar (Files & Actions)
-              _buildToolbar(state),
-
+              // Toolbar
+              _buildFileToolbar(state),
               if (state.isProcessing)
                 LinearProgressIndicator(value: state.progress),
 
-              // 2. Waveform Editor (Only visible if we have data)
-              if (state.fragments.isNotEmpty && state.waveformData != null)
-                Expanded(
-                  flex: 1,
-                  child: Card(
-                    margin: const EdgeInsets.all(8),
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              IconButton(
-                                icon: Icon(
-                                  state.isPlaying
-                                      ? Icons.pause
-                                      : Icons.play_arrow,
-                                ),
-                                onPressed: _controller.togglePlay,
-                              ),
-                              const Text("Drag teal lines to adjust timing."),
-                            ],
-                          ),
-                          Expanded(
-                            child: WaveformEditor(
-                              controller: _controller,
-                              state: state,
-                            ),
-                          ),
-                        ],
+              // EDITOR AREA
+              if (state.fragments.isNotEmpty && state.waveformData != null) ...[
+                // Controls Bar (Zoom + Transport)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
+                  color: Colors.grey[100],
+                  child: Row(
+                    children: [
+                      // Transport
+                      IconButton(
+                        icon: const Icon(Icons.skip_previous),
+                        onPressed: _controller.skipToPrevious,
+                        tooltip: "Previous Segment",
                       ),
-                    ),
+                      IconButton(
+                        icon: Icon(
+                          state.isPlaying
+                              ? Icons.pause_circle
+                              : Icons.play_circle,
+                          size: 40,
+                          color: Colors.teal,
+                        ),
+                        onPressed: _controller.playPause,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.skip_next),
+                        onPressed: _controller.skipToNext,
+                        tooltip: "Next Segment",
+                      ),
+                      const SizedBox(width: 20),
+                      // Zoom
+                      const Icon(Icons.zoom_out, size: 20),
+                      Expanded(
+                        child: Slider(
+                          min: 1.0,
+                          max: 10.0,
+                          value: state.zoomLevel,
+                          label: "${state.zoomLevel.toStringAsFixed(1)}x",
+                          onChanged: (val) => _controller.setZoom(val),
+                        ),
+                      ),
+                      const Icon(Icons.zoom_in, size: 20),
+                    ],
                   ),
                 ),
 
-              // 3. Text List
+                // The Waveform Widget
+                Expanded(
+                  flex: 1, // 1/3 of remaining space
+                  child: LayoutBuilder(
+                    builder: (ctx, constraints) {
+                      return Container(
+                        decoration: BoxDecoration(
+                          border: Border.symmetric(
+                            horizontal: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          color: Colors.white,
+                        ),
+                        child: WaveformEditor(
+                          controller: _controller,
+                          state: state,
+                          scrollController: _waveformScrollCtrl,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+
+              // LIST AREA
               Expanded(
-                flex: 2,
+                flex: 2, // 2/3 of remaining space
                 child: state.fragments.isEmpty
                     ? Center(child: Text(state.statusMessage))
-                    : ListView.separated(
-                        itemCount: state.fragments.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (ctx, i) {
-                          final f = state.fragments[i];
-                          final isActive =
-                              state.currentPlaybackPosition.inMilliseconds >=
-                                  (f.realStart * 1000) &&
-                              state.currentPlaybackPosition.inMilliseconds <=
-                                  (f.realEnd * 1000);
+                    : LayoutBuilder(
+                        builder: (context, listConstraints) {
+                          return ListView.separated(
+                            itemCount: state.fragments.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
+                            itemBuilder: (ctx, i) {
+                              final f = state.fragments[i];
+                              // Check if active based on timestamp
+                              final cPos =
+                                  state.currentPlaybackPosition.inMilliseconds;
+                              final isActive =
+                                  cPos >= (f.realStart * 1000) &&
+                                  cPos <= (f.realEnd * 1000);
 
-                          return ListTile(
-                            selected: isActive,
-                            selectedTileColor: Colors.teal.withOpacity(0.1),
-                            leading: Text(f.index.toString()),
-                            title: Text(f.text),
-                            subtitle: Text(
-                              "${f.realStart.toStringAsFixed(2)}s - ${f.realEnd.toStringAsFixed(2)}s",
-                            ),
-                            onTap: () {
-                              _controller.seekTo(
-                                Duration(
-                                  milliseconds: (f.realStart * 1000).toInt(),
+                              return ListTile(
+                                dense: true,
+                                selected: isActive,
+                                selectedTileColor: Colors.teal.withOpacity(0.1),
+                                leading: CircleAvatar(
+                                  radius: 12,
+                                  backgroundColor: isActive
+                                      ? Colors.teal
+                                      : Colors.grey[300],
+                                  child: Text(
+                                    "${f.index}",
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.black,
+                                    ),
+                                  ),
                                 ),
+                                title: Text(
+                                  f.text,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Text(
+                                  "${f.realStart.toStringAsFixed(2)} - ${f.realEnd.toStringAsFixed(2)}",
+                                ),
+                                trailing: isActive
+                                    ? const Icon(Icons.volume_up, size: 16)
+                                    : null,
+                                onTap: () {
+                                  // The width of the waveform viewer is needed to center it
+                                  // We can estimate or use a GlobalKey.
+                                  // For now, we assume standard window width logic or just pass a fixed safe value.
+                                  // Better: Use LayoutBuilder above List to get width? No, we need Waveform width.
+                                  // Simplification: Just assume screen width or context size.
+                                  _jumpToFragment(
+                                    i,
+                                    state,
+                                    MediaQuery.of(context).size.width,
+                                  );
+                                },
                               );
                             },
                           );
@@ -152,23 +241,27 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  Widget _buildToolbar(AppState state) {
+  Widget _buildFileToolbar(AppState state) {
     return Padding(
       padding: const EdgeInsets.all(8.0),
       child: Row(
         children: [
-          ElevatedButton.icon(
+          OutlinedButton.icon(
             icon: const Icon(Icons.description),
-            label: Text(state.textPath == null ? "Pick Text" : "Text Loaded"),
+            label: const Text("Text"),
             onPressed: _controller.pickText,
+            style: state.textPath != null
+                ? OutlinedButton.styleFrom(foregroundColor: Colors.teal)
+                : null,
           ),
           const SizedBox(width: 8),
-          ElevatedButton.icon(
+          OutlinedButton.icon(
             icon: const Icon(Icons.audio_file),
-            label: Text(
-              state.audioPath == null ? "Pick Audio" : "Audio Loaded",
-            ),
+            label: const Text("Audio"),
             onPressed: _controller.pickAudio,
+            style: state.audioPath != null
+                ? OutlinedButton.styleFrom(foregroundColor: Colors.teal)
+                : null,
           ),
           const Spacer(),
           ElevatedButton(

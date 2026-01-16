@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
@@ -147,16 +148,43 @@ class AlignmentController extends ValueNotifier<AppState> {
 
   // --- Playback Controls ---
 
-  void togglePlay() {
-    if (value.isPlaying) {
+  void playPause() {
+    if (value.isPlaying)
       _player.pause();
-    } else {
+    else
       _player.play();
-    }
+  }
+
+  void skipToNext() {
+    final currentMs = value.currentPlaybackPosition.inMilliseconds;
+    // Find the first fragment that starts *after* current position
+    final nextFrag = value.fragments.firstWhere(
+      (f) => (f.realStart * 1000) > currentMs + 100, // +100ms buffer
+      orElse: () => value.fragments.last,
+    );
+    seekTo(Duration(milliseconds: (nextFrag.realStart * 1000).toInt()));
+  }
+
+  void skipToPrevious() {
+    final currentMs = value.currentPlaybackPosition.inMilliseconds;
+    // Find last fragment that started *before* current position
+    final prevFrag = value.fragments.lastWhere(
+      (f) => (f.realStart * 1000) < currentMs - 100,
+      orElse: () => value.fragments.first,
+    );
+    seekTo(Duration(milliseconds: (prevFrag.realStart * 1000).toInt()));
   }
 
   void seekTo(Duration position) {
     _player.seek(position);
+  }
+
+  // --- Zooming ---
+
+  void setZoom(double level) {
+    // Clamp zoom between 1.0 (fit) and 20.0 (super detailed)
+    final clamped = level.clamp(1.0, 20.0);
+    value = value.copyWith(zoomLevel: clamped);
   }
 
   // --- Editor Logic ---
@@ -164,12 +192,44 @@ class AlignmentController extends ValueNotifier<AppState> {
   /// Updates a fragment's timing and refreshes UI
   void updateFragmentTiming(int index, double newStart, double newEnd) {
     final currentList = List<Fragment>.from(value.fragments);
-    final frag = currentList[index];
 
-    // In Isochron CLI, setRealTiming is available
-    frag.setRealTiming(start: newStart, end: newEnd);
+    // 1. Get neighbors limits
+    double minAllowed = 0.0;
+    double maxAllowed = value.audioDuration.inMilliseconds / 1000.0;
 
+    if (index > 0) {
+      // Cannot start before previous segment ends
+      minAllowed = currentList[index - 1].realEnd;
+    }
+
+    if (index < currentList.length - 1) {
+      // Cannot end after next segment starts
+      maxAllowed = currentList[index + 1].realStart;
+    }
+
+    // 2. Clamp values
+    // Ensure start doesn't overlap previous
+    double safeStart = max(newStart, minAllowed);
+    // Ensure end doesn't overlap next
+    double safeEnd = min(newEnd, maxAllowed);
+
+    // Ensure start < end (minimum duration 100ms for sanity)
+    if (safeEnd - safeStart < 0.1) {
+      if (_draggingStart) {
+        safeStart = safeEnd - 0.1;
+      } else {
+        safeEnd = safeStart + 0.1;
+      }
+    }
+
+    currentList[index].setRealTiming(start: safeStart, end: safeEnd);
     value = value.copyWith(fragments: currentList);
+  }
+
+  // Helper for the UI to know which handle is active to apply specific logic
+  bool _draggingStart = true;
+  void setDragMode(bool isStart) {
+    _draggingStart = isStart;
   }
 
   static Future<void> _isolateEntry(Map<String, dynamic> args) async {
