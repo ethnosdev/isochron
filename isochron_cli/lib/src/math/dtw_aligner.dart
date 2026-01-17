@@ -21,7 +21,7 @@ class DtwAligner {
   static List<AlignmentPoint> align(
     List<List<double>> realSeq,
     List<List<double>> anchorSeq, {
-    int radius = 500, // Default fixed radius: 500 frames ~= 5 seconds
+    int radius = 500, // Default fixed radius: 500 frames ~= 15 seconds
     ProgressCallback? onProgress,
   }) {
     final int N = realSeq.length;

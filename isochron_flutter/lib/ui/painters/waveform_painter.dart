@@ -1,0 +1,103 @@
+import 'package:flutter/material.dart';
+import 'package:just_waveform/just_waveform.dart';
+import 'package:isochron_cli/isochron_cli.dart';
+
+class IsochronWaveformPainter extends CustomPainter {
+  final Waveform waveform;
+  final List<Fragment> fragments;
+  final double playbackPosSeconds;
+  final double totalSeconds;
+  final double zoomLevel;
+  final Color accentColor;
+
+  IsochronWaveformPainter({
+    required this.waveform,
+    required this.fragments,
+    required this.playbackPosSeconds,
+    required this.totalSeconds,
+    required this.zoomLevel,
+    required this.accentColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _drawWaveform(canvas, size);
+    _drawFragments(canvas, size);
+    _drawPlayhead(canvas, size);
+  }
+
+  void _drawWaveform(Canvas canvas, Size size) {
+    final wavePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0
+      ..color = Colors.blueGrey.withOpacity(0.6);
+
+    final totalSamples = waveform.length;
+    // Optimize: Skip pixels for performance
+    const double pixelStep = 1.0;
+
+    for (double x = 0; x < size.width; x += pixelStep) {
+      final sampleIdx = ((x / size.width) * totalSamples).toInt();
+      if (sampleIdx >= 0 && sampleIdx < totalSamples) {
+        final minY = _normalise(waveform.getPixelMin(sampleIdx), size.height);
+        final maxY = _normalise(waveform.getPixelMax(sampleIdx), size.height);
+        canvas.drawLine(Offset(x, minY), Offset(x, maxY), wavePaint);
+      }
+    }
+  }
+
+  void _drawFragments(Canvas canvas, Size size) {
+    final paintLine = Paint()
+      ..color = accentColor
+      ..strokeWidth = 2.0;
+    final paintFill = Paint()..color = accentColor.withOpacity(0.15);
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+
+    for (final frag in fragments) {
+      final xStart = (frag.realStart / totalSeconds) * size.width;
+      final xEnd = (frag.realEnd / totalSeconds) * size.width;
+
+      canvas.drawRect(Rect.fromLTRB(xStart, 0, xEnd, size.height), paintFill);
+      canvas.drawLine(
+        Offset(xStart, 0),
+        Offset(xStart, size.height),
+        paintLine,
+      );
+      canvas.drawLine(Offset(xEnd, 0), Offset(xEnd, size.height), paintLine);
+
+      if (xEnd - xStart > 25) {
+        textPainter.text = TextSpan(
+          text: "${frag.index}",
+          style: TextStyle(
+            color: accentColor,
+            fontWeight: FontWeight.bold,
+            fontSize: 10,
+          ),
+        );
+        textPainter.layout();
+        textPainter.paint(canvas, Offset(xStart + 4, 4));
+      }
+    }
+  }
+
+  void _drawPlayhead(Canvas canvas, Size size) {
+    final x = (playbackPosSeconds / totalSeconds) * size.width;
+    final paint = Paint()
+      ..color = Colors.red
+      ..strokeWidth = 2.0;
+    canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+  }
+
+  double _normalise(int s, double height) {
+    if (waveform.flags == 0) {
+      final y = 32768 + (s).clamp(-32768.0, 32767.0).toDouble();
+      return height - 1 - y * height / 65536;
+    } else {
+      final y = 128 + (s).clamp(-128.0, 127.0).toDouble();
+      return height - 1 - y * height / 256;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant IsochronWaveformPainter old) => true;
+}
