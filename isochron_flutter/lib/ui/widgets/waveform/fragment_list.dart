@@ -5,12 +5,14 @@ class FragmentList extends StatefulWidget {
   final List<Fragment> fragments;
   final Duration currentPos;
   final Function(int) onJumpTo;
+  final Function(int) onDoubleTap;
 
   const FragmentList({
     super.key,
     required this.fragments,
     required this.currentPos,
     required this.onJumpTo,
+    required this.onDoubleTap,
   });
 
   @override
@@ -99,40 +101,43 @@ class _FragmentListState extends State<FragmentList> {
             border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
             color: isActive ? Colors.teal.withOpacity(0.1) : null,
           ),
-          child: ListTile(
-            dense: true,
-            // Remove default content padding to fit the fixed height better if needed
-            visualDensity: VisualDensity.compact,
-            selected: isActive,
-            selectedTileColor: Colors.transparent, // Handled by Container
-            leading: CircleAvatar(
-              radius: 12,
-              backgroundColor: isActive ? Colors.teal : Colors.grey.shade300,
-              foregroundColor: isActive ? Colors.white : Colors.black87,
-              child: Text(
-                "${f.index}",
-                style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => widget.onJumpTo(i),
+            onDoubleTap: () => widget.onDoubleTap(i),
+            // 2. Disable ListTile's internal onTap so gestures bubble up
+            child: ListTile(
+              enabled: true,
+              onTap: null,
+              dense: true,
+              visualDensity: VisualDensity.compact,
+              leading: CircleAvatar(
+                radius: 12,
+                backgroundColor: isActive ? Colors.teal : Colors.grey.shade300,
+                foregroundColor: isActive ? Colors.white : Colors.black87,
+                child: Text(
+                  "${f.index}",
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-            ),
-            title: Text(
-              f.text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+              // Must style text manually since enabled=true but onTap=null looks disabled otherwise
+              title: Text(
+                f.text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.black87),
               ),
+              subtitle: Text(
+                "${f.realStart.toStringAsFixed(2)}s  ➝  ${f.realEnd.toStringAsFixed(2)}s",
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+              trailing: isActive
+                  ? const Icon(Icons.volume_up, size: 16, color: Colors.teal)
+                  : null,
             ),
-            subtitle: Text(
-              "${f.realStart.toStringAsFixed(2)}s  ➝  ${f.realEnd.toStringAsFixed(2)}s",
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-            ),
-            trailing: isActive
-                ? const Icon(Icons.volume_up, size: 16, color: Colors.teal)
-                : null,
-            onTap: () => widget.onJumpTo(i),
           ),
         );
       },

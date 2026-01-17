@@ -80,7 +80,15 @@ class _MainScreenState extends State<MainScreen> {
                 child: FragmentList(
                   fragments: state.fragments,
                   currentPos: state.currentPlaybackPosition,
-                  onJumpTo: (idx) => _jumpTo(idx, state),
+                  onJumpTo: (idx) {
+                    _controller
+                        .exitFocusMode(); // Clicking a new one exits focus
+                    _jumpTo(idx, state);
+                  },
+                  onDoubleTap: (idx) {
+                    _controller.enterFocusMode(idx);
+                    // No need to call _jumpTo here, enterFocusMode handles audio seeking
+                  },
                 ),
               ),
             ],

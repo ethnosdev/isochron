@@ -1,5 +1,5 @@
 import 'package:isochron_cli/isochron_cli.dart';
-import 'package:just_waveform/just_waveform.dart'; // From your CLI package
+import 'package:just_waveform/just_waveform.dart';
 
 class AppState {
   final bool isProcessing;
@@ -10,15 +10,16 @@ class AppState {
   final String? textPath;
   final String? dictPath;
 
-  // The alignment results
   final List<Fragment> fragments;
 
-  // Audio visualization data
   final Waveform? waveform;
   final Duration audioDuration;
   final Duration currentPlaybackPosition;
   final bool isPlaying;
   final double zoomLevel;
+
+  // NEW: Tracks which fragment is double-clicked
+  final int? focusedFragmentIndex;
 
   const AppState({
     this.isProcessing = false,
@@ -33,9 +34,9 @@ class AppState {
     this.currentPlaybackPosition = Duration.zero,
     this.isPlaying = false,
     this.zoomLevel = 1.0,
+    this.focusedFragmentIndex,
   });
 
-  // Helper to copy state with updates
   AppState copyWith({
     bool? isProcessing,
     String? statusMessage,
@@ -49,6 +50,8 @@ class AppState {
     Duration? currentPlaybackPosition,
     bool? isPlaying,
     double? zoomLevel,
+    int? focusedFragmentIndex,
+    bool clearFocus = false,
   }) {
     return AppState(
       isProcessing: isProcessing ?? this.isProcessing,
@@ -64,6 +67,9 @@ class AppState {
           currentPlaybackPosition ?? this.currentPlaybackPosition,
       isPlaying: isPlaying ?? this.isPlaying,
       zoomLevel: zoomLevel ?? this.zoomLevel,
+      focusedFragmentIndex: clearFocus
+          ? null
+          : (focusedFragmentIndex ?? this.focusedFragmentIndex),
     );
   }
 }

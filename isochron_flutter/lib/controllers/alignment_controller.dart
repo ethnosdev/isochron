@@ -135,6 +135,49 @@ class AlignmentController extends ValueNotifier<AppState> {
     seekTo(Duration(milliseconds: (prevFrag.realStart * 1000).toInt()));
   }
 
+  void enterFocusMode(int index) {
+    if (value.audioDuration.inMilliseconds == 0) return;
+
+    final totalSeconds = value.audioDuration.inMilliseconds / 1000.0;
+
+    // Calculate Zoom: We want exactly 2.0 seconds visible on screen.
+    // Logic: zoomLevel = TotalDuration / DesiredVisibleDuration
+    // We cap it at 500x to prevent memory/performance issues on extremely long files.
+    final targetZoom = (totalSeconds / 2.0).clamp(1.0, 500.0);
+
+    final startSeconds = value.fragments[index].realStart;
+    seekTo(Duration(milliseconds: (startSeconds * 1000).toInt()));
+
+    value = value.copyWith(zoomLevel: targetZoom, focusedFragmentIndex: index);
+  }
+
+  void exitFocusMode() {
+    // Reset focus. Optionally reset zoom to 1.0 if you prefer.
+    value = value.copyWith(
+      clearFocus: true,
+      // zoomLevel: 1.0, // Uncomment if you want to zoom out automatically
+    );
+  }
+
+  /// Specialized method: Updates start time and immediately plays from there.
+  void setFragmentStartAndPlay(int index, double newStartTime) {
+    final frag = value.fragments[index];
+
+    // Safety check: Start cannot be after End
+    if (newStartTime >= frag.realEnd) return;
+
+    // 1. Update the data
+    updateFragment(index, newStartTime, frag.realEnd);
+
+    // 2. Seek to new start
+    seekTo(Duration(milliseconds: (newStartTime * 1000).toInt()));
+
+    // 3. Ensure playing
+    if (!value.isPlaying) {
+      _audioService.play();
+    }
+  }
+
   // --- Waveform Logic ---
 
   Future<void> _generateWaveform(String audioPath) async {
@@ -165,7 +208,9 @@ class AlignmentController extends ValueNotifier<AppState> {
       value.isPlaying ? _audioService.pause() : _audioService.play();
   void seekTo(Duration d) => _audioService.seek(d);
 
-  void setZoom(double z) => value.copyWith(zoomLevel: z.clamp(1.0, 20.0));
+  void setZoom(double z) {
+    value = value.copyWith(zoomLevel: z.clamp(1.0, 500.0));
+  }
 
   void updateFragment(int index, double start, double end) {
     // Basic validation logic

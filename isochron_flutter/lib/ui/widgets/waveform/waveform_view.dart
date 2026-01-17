@@ -63,9 +63,59 @@ class _WaveformViewState extends State<WaveformView> {
     );
   }
 
+  // 1. REFACTOR: Handle Tap Up
+  void _handleTap(double x, double width, double duration) {
+    final clickedTime = (x / width) * duration;
+
+    // Check if we are in Focus Mode
+    if (widget.state.focusedFragmentIndex != null) {
+      _handleFocusClick(clickedTime);
+    } else {
+      // Standard Behavior: Seek
+      final ms = (clickedTime * 1000).toInt();
+      widget.controller.seekTo(Duration(milliseconds: ms));
+    }
+  }
+
+  // 2. NEW: Focus Logic
+  void _handleFocusClick(double newStartTime) {
+    final idx = widget.state.focusedFragmentIndex!;
+    final frag = widget.state.fragments[idx];
+
+    // Validation: Start cannot be after End
+    if (newStartTime >= frag.realEnd) return;
+
+    // Validation: Start cannot be before previous fragment's end (optional, but good for safety)
+    if (idx > 0) {
+      final prevEnd = widget.state.fragments[idx - 1].realEnd;
+      if (newStartTime <= prevEnd) return; // Or clamp it
+    }
+
+    // Update Timing
+    widget.controller.updateFragment(idx, newStartTime, frag.realEnd);
+
+    // Play immediately from the new start point
+    widget.controller.seekTo(
+      Duration(milliseconds: (newStartTime * 1000).toInt()),
+    );
+    // widget.controller.play();
+  }
+
   void _handleSeek(double x, double width, double duration) {
-    final ms = ((x / width) * duration * 1000).toInt();
-    widget.controller.seekTo(Duration(milliseconds: ms));
+    final clickedTime = (x / width) * duration;
+
+    // Check if we are in Focus Mode
+    if (widget.state.focusedFragmentIndex != null) {
+      // MODE: EDIT START + PLAY
+      widget.controller.setFragmentStartAndPlay(
+        widget.state.focusedFragmentIndex!,
+        clickedTime,
+      );
+    } else {
+      // MODE: STANDARD SEEK
+      final ms = (clickedTime * 1000).toInt();
+      widget.controller.seekTo(Duration(milliseconds: ms));
+    }
   }
 
   void _handleDragStart(double x, double width, double duration) {

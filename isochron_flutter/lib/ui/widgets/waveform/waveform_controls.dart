@@ -4,8 +4,8 @@ class WaveformControls extends StatelessWidget {
   final bool isPlaying;
   final double zoom;
   final VoidCallback onPlayPause;
-  final VoidCallback? onSkipNext; // Optional, if you want to wire these up
-  final VoidCallback? onSkipPrev; // Optional, if you want to wire these up
+  final VoidCallback? onSkipNext;
+  final VoidCallback? onSkipPrev;
   final ValueChanged<double> onZoom;
 
   const WaveformControls({
@@ -20,12 +20,16 @@ class WaveformControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Dynamic Max: If zoom is high (Focus Mode), expand the slider range.
+    // Otherwise, keep it at 20x for finer control during normal use.
+    final double sliderMax = (zoom > 20.0) ? zoom : 20.0;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       color: Colors.grey.shade100,
       child: Row(
         children: [
-          // --- Transport Controls ---
+          // --- Transport ---
           IconButton(
             icon: const Icon(Icons.skip_previous),
             onPressed: onSkipPrev,
@@ -50,13 +54,13 @@ class WaveformControls extends StatelessWidget {
           Container(width: 1, height: 24, color: Colors.grey.shade400),
           const SizedBox(width: 20),
 
-          // --- Zoom Controls ---
+          // --- Zoom ---
           const Icon(Icons.zoom_out, size: 18, color: Colors.grey),
           Expanded(
             child: Slider(
               min: 1.0,
-              max: 20.0, // Matching the controller limit
-              value: zoom,
+              max: sliderMax, // <--- FIXED HERE
+              value: zoom.clamp(1.0, sliderMax), // Double safety
               label: "${zoom.toStringAsFixed(1)}x",
               onChanged: onZoom,
               activeColor: Colors.teal,
