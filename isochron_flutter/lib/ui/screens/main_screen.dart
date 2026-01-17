@@ -58,8 +58,8 @@ class _MainScreenState extends State<MainScreen> {
                   isPlaying: state.isPlaying,
                   zoom: state.zoomLevel,
                   onPlayPause: _controller.togglePlay,
-                  onSkipNext: _controller.skipToNext,
-                  onSkipPrev: _controller.skipToPrevious,
+                  onSkipNext: () => _handleSkipNext(state),
+                  onSkipPrev: () => _handleSkipPrev(state),
                   onZoom: (z) => _controller.setZoom(z.toDouble()),
                 ),
                 Expanded(
@@ -80,14 +80,15 @@ class _MainScreenState extends State<MainScreen> {
                 child: FragmentList(
                   fragments: state.fragments,
                   currentPos: state.currentPlaybackPosition,
+                  // Use _jumpTo directly here
                   onJumpTo: (idx) {
-                    _controller
-                        .exitFocusMode(); // Clicking a new one exits focus
+                    _controller.exitFocusMode();
                     _jumpTo(idx, state);
                   },
                   onDoubleTap: (idx) {
                     _controller.enterFocusMode(idx);
-                    // No need to call _jumpTo here, enterFocusMode handles audio seeking
+                    // Also scroll to it immediately using _jumpTo logic logic (optional,
+                    // but enterFocusMode usually handles center, _jumpTo handles scroll)
                   },
                 ),
               ),
@@ -98,20 +99,67 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  void _handleSkipNext(AppState state) {
+    if (state.fragments.isEmpty) return;
+
+    final currentMs = state.currentPlaybackPosition.inMilliseconds;
+    // Find the first fragment that starts *after* current position (+ buffer)
+    final nextIndex = state.fragments.indexWhere(
+      (f) => (f.realStart * 1000) > currentMs + 100,
+    );
+
+    if (nextIndex != -1) {
+      _controller.exitFocusMode(); // Optional: Exit focus mode on skip
+      _jumpTo(nextIndex, state);
+    }
+  }
+
+  void _handleSkipPrev(AppState state) {
+    if (state.fragments.isEmpty) return;
+
+    final currentMs = state.currentPlaybackPosition.inMilliseconds;
+    // Find last fragment that started *before* current position (- buffer)
+    final prevIndex = state.fragments.lastIndexWhere(
+      (f) => (f.realStart * 1000) < currentMs - 100,
+    );
+
+    if (prevIndex != -1) {
+      _controller.exitFocusMode(); // Optional: Exit focus mode on skip
+      _jumpTo(prevIndex, state);
+    } else {
+      // If none found (at start), jump to 0
+      _jumpTo(0, state);
+    }
+  }
+
+  // --- EXISTING _jumpTo LOGIC (Updated for robust centering) ---
+
   void _jumpTo(int index, AppState state) {
     final frag = state.fragments[index];
     final ms = (frag.realStart * 1000).toInt();
+
+    // 1. Seek Audio
     _controller.seekTo(Duration(milliseconds: ms));
 
-    // Sync Scroll Logic
+    // 2. Center Waveform View
     if (state.audioDuration.inMilliseconds > 0 && _waveScroll.hasClients) {
-      final totalWidth =
-          _waveScroll.position.viewportDimension * state.zoomLevel;
-      final targetPx = (ms / state.audioDuration.inMilliseconds) * totalWidth;
-      final centerOffset =
-          targetPx - (_waveScroll.position.viewportDimension / 2);
+      final viewportWidth = _waveScroll.position.viewportDimension;
+
+      // Total width of the waveform at current zoom
+      // Note: We use the *current* viewport width to calculate content width
+      final totalContentWidth = viewportWidth * state.zoomLevel;
+
+      final totalMs = state.audioDuration.inMilliseconds;
+      final pct = ms / totalMs;
+
+      // The pixel X coordinate of the fragment start
+      final targetPixel = totalContentWidth * pct;
+
+      // Center it: Target - (Half Viewport)
+      final centeredScrollPos = targetPixel - (viewportWidth / 2);
+
       _waveScroll.jumpTo(
-        centerOffset.clamp(0.0, _waveScroll.position.maxScrollExtent),
+        centeredScrollPos.clamp(0.0, _waveScroll.position.maxScrollExtent),
       );
     }
   }
