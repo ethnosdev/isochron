@@ -15,10 +15,13 @@ class MfccExtractor {
   /// Result: List of Frames, where each Frame is a List<double> of size 13.
   static List<List<double>> extract(Float64List audioData,
       {Function(double)? onProgress}) {
+    final processedAudio = Float64List.fromList(audioData);
+    _applyPreEmphasis(processedAudio);
+
     final int frameLenSamples = (frameDuration * sampleRate).round(); // 320
     final int strideSamples = (frameStride * sampleRate).round(); // 160
 
-    // 1. Pre-calculate reusable tools
+    // Pre-calculate reusable tools
     final window = DspUtils.createHammingWindow(frameLenSamples);
     final fft = FFT(fftSize);
 
@@ -33,20 +36,20 @@ class MfccExtractor {
 
     // PROGRESS LOGIC: Report roughly every 1% of processing
     // audioData.length is total samples.
-    final int reportInterval = (audioData.length / 100).ceil();
+    final int reportInterval = (processedAudio.length / 100).ceil();
 
-    // 2. Framing Loop
+    // Framing Loop
     for (int i = 0;
-        i + frameLenSamples <= audioData.length;
+        i + frameLenSamples <= processedAudio.length;
         i += strideSamples) {
       if (onProgress != null && (i % reportInterval) < strideSamples) {
-        onProgress(i / audioData.length);
+        onProgress(i / processedAudio.length);
       }
 
       // A. Extract Frame & Apply Window
       final frame = Float64List(fftSize); // Zero-padded to 512
       for (int j = 0; j < frameLenSamples; j++) {
-        frame[j] = audioData[i + j] * window[j];
+        frame[j] = processedAudio[i + j] * window[j];
       }
 
       // B. Compute FFT (Power Spectrum)
@@ -93,6 +96,14 @@ class MfccExtractor {
     onProgress?.call(1.0);
 
     return mfccFrames;
+  }
+
+  /// Applies a pre-emphasis filter to flatten the signal spectrum.
+  /// y[n] = x[n] - alpha * x[n-1]
+  static void _applyPreEmphasis(Float64List signal, {double alpha = 0.97}) {
+    for (int i = signal.length - 1; i > 0; i--) {
+      signal[i] = signal[i] - alpha * signal[i - 1];
+    }
   }
 
   /// Private helper to generate triangular filters

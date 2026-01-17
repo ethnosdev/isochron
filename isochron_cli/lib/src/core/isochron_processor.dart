@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:isochron_cli/src/math/boundary_snapper.dart';
 import 'package:path/path.dart' as p;
 import '../core/fragment.dart';
 import '../core/text_parser.dart';
@@ -95,8 +96,12 @@ class IsochronProcessor {
     // Projection
     onProgress?.call("Finalizing...", 0.95);
     TimeProjector.project(fragments, path);
-    onProgress?.call("Done", 1.0);
 
+    onProgress?.call("Refining Timestamps...", 0.98);
+    final audioBytes = _readWavData(userAudioWav);
+    BoundarySnapper.snap(fragments, audioBytes, 16000);
+
+    onProgress?.call("Done", 1.0);
     return fragments;
   }
 
