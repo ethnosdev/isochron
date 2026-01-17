@@ -23,6 +23,7 @@ class WaveformView extends StatefulWidget {
 class _WaveformViewState extends State<WaveformView> {
   int? _dragIndex;
   bool _dragStart = true;
+  static const double _hPadding = 40.0;
 
   @override
   void didUpdateWidget(WaveformView oldWidget) {
@@ -101,22 +102,34 @@ class _WaveformViewState extends State<WaveformView> {
 
     return LayoutBuilder(
       builder: (ctx, constraints) {
-        final width = constraints.maxWidth * widget.state.zoomLevel;
         final totalSec = widget.state.audioDuration.inMilliseconds / 1000.0;
         if (totalSec <= 0) return const SizedBox();
+
+        final viewportWidth = constraints.maxWidth;
+
+        // The audio itself takes up this much space:
+        final contentWidth = viewportWidth * widget.state.zoomLevel;
+
+        // The actual widget size needs room for padding on both sides:
+        final fullPainterWidth = contentWidth + (_hPadding * 2);
 
         return SingleChildScrollView(
           controller: widget.scrollController,
           scrollDirection: Axis.horizontal,
+          physics: const ClampingScrollPhysics(),
           child: GestureDetector(
-            onTapUp: (d) => _handleSeek(d.localPosition.dx, width, totalSec),
+            // HitTestBehavior.opaque is vital so clicks in empty space/padding are caught
+            behavior: HitTestBehavior.opaque,
+            // Pass `contentWidth` to handlers, NOT fullPainterWidth
+            onTapUp: (d) =>
+                _handleSeek(d.localPosition.dx, contentWidth, totalSec),
             onHorizontalDragStart: (d) =>
-                _handleDragStart(d.localPosition.dx, width, totalSec),
+                _handleDragStart(d.localPosition.dx, contentWidth, totalSec),
             onHorizontalDragUpdate: (d) =>
-                _handleDragUpdate(d.localPosition.dx, width, totalSec),
+                _handleDragUpdate(d.localPosition.dx, contentWidth, totalSec),
             onHorizontalDragEnd: (_) => setState(() => _dragIndex = null),
             child: CustomPaint(
-              size: Size(width, constraints.maxHeight),
+              size: Size(fullPainterWidth, constraints.maxHeight),
               painter: IsochronWaveformPainter(
                 waveform: wf,
                 fragments: widget.state.fragments,
@@ -126,6 +139,9 @@ class _WaveformViewState extends State<WaveformView> {
                 totalSeconds: totalSec,
                 zoomLevel: widget.state.zoomLevel,
                 accentColor: Theme.of(context).primaryColor,
+                // NEW PARAMS
+                contentWidth: contentWidth,
+                padding: _hPadding,
               ),
             ),
           ),
@@ -134,66 +150,32 @@ class _WaveformViewState extends State<WaveformView> {
     );
   }
 
-  // 1. REFACTOR: Handle Tap Up
-  void _handleTap(double x, double width, double duration) {
-    final clickedTime = (x / width) * duration;
+  void _handleSeek(double x, double contentWidth, double totalSec) {
+    final clickedTime = _pxToSeconds(x, contentWidth, totalSec);
+    // Don't seek if we clicked in the padding area outside audio bounds
+    if (clickedTime < 0 || clickedTime > totalSec) return;
 
-    // Check if we are in Focus Mode
-    if (widget.state.focusedFragmentIndex != null) {
-      _handleFocusClick(clickedTime);
-    } else {
-      // Standard Behavior: Seek
-      final ms = (clickedTime * 1000).toInt();
-      widget.controller.seekTo(Duration(milliseconds: ms));
-    }
-  }
-
-  // 2. NEW: Focus Logic
-  void _handleFocusClick(double newStartTime) {
-    final idx = widget.state.focusedFragmentIndex!;
-    final frag = widget.state.fragments[idx];
-
-    // Validation: Start cannot be after End
-    if (newStartTime >= frag.realEnd) return;
-
-    // Validation: Start cannot be before previous fragment's end (optional, but good for safety)
-    if (idx > 0) {
-      final prevEnd = widget.state.fragments[idx - 1].realEnd;
-      if (newStartTime <= prevEnd) return; // Or clamp it
-    }
-
-    // Update Timing
-    widget.controller.updateFragment(idx, newStartTime, frag.realEnd);
-
-    // Play immediately from the new start point
-    widget.controller.seekTo(
-      Duration(milliseconds: (newStartTime * 1000).toInt()),
-    );
-    // widget.controller.play();
-  }
-
-  void _handleSeek(double x, double width, double duration) {
-    final clickedTime = (x / width) * duration;
-
-    // CHANGED: Always just seek the audio playhead.
-    // We no longer check for focusedFragmentIndex to move the start time.
     final ms = (clickedTime * 1000).toInt();
     widget.controller.seekTo(Duration(milliseconds: ms));
   }
 
-  void _handleDragStart(double x, double width, double duration) {
-    final time = (x / width) * duration;
-    final threshold = 15.0 * (duration / width); // ~15px tolerance
+  void _handleDragStart(double x, double contentWidth, double totalSec) {
+    final time = _pxToSeconds(x, contentWidth, totalSec);
+
+    // Pixels per second calculation needs to account for contentWidth
+    final pixelsPerSecond = contentWidth / totalSec;
+    // Threshold in seconds (e.g. 15 pixels worth of time)
+    final thresholdSec = 15.0 / pixelsPerSecond;
 
     for (var f in widget.state.fragments) {
-      if ((f.realStart - time).abs() < threshold) {
+      if ((f.realStart - time).abs() < thresholdSec) {
         setState(() {
           _dragIndex = f.index;
           _dragStart = true;
         });
         return;
       }
-      if ((f.realEnd - time).abs() < threshold) {
+      if ((f.realEnd - time).abs() < thresholdSec) {
         setState(() {
           _dragIndex = f.index;
           _dragStart = false;
@@ -203,9 +185,13 @@ class _WaveformViewState extends State<WaveformView> {
     }
   }
 
-  void _handleDragUpdate(double x, double width, double duration) {
+  void _handleDragUpdate(double x, double contentWidth, double totalSec) {
     if (_dragIndex == null) return;
-    final time = ((x / width) * duration).clamp(0.0, duration);
+
+    // Get time from x, but clamp it strictly to audio bounds
+    // (allows dragging into the padding area to snap to 0.0 or end)
+    final time = _pxToSeconds(x, contentWidth, totalSec).clamp(0.0, totalSec);
+
     final frag = widget.state.fragments.firstWhere(
       (f) => f.index == _dragIndex,
     );
@@ -215,5 +201,13 @@ class _WaveformViewState extends State<WaveformView> {
     } else {
       widget.controller.updateFragment(_dragIndex!, frag.realStart, time);
     }
+  }
+
+  // Helper: Convert X pixel coordinate to Time
+  // Formula: time = ((x - padding) / contentWidth) * duration
+  double _pxToSeconds(double x, double contentWidth, double totalSeconds) {
+    final effectiveX = x - _hPadding;
+    final pct = effectiveX / contentWidth;
+    return (pct * totalSeconds);
   }
 }

@@ -9,6 +9,8 @@ class IsochronWaveformPainter extends CustomPainter {
   final double totalSeconds;
   final double zoomLevel;
   final Color accentColor;
+  final double contentWidth;
+  final double padding;
 
   IsochronWaveformPainter({
     required this.waveform,
@@ -17,13 +19,23 @@ class IsochronWaveformPainter extends CustomPainter {
     required this.totalSeconds,
     required this.zoomLevel,
     required this.accentColor,
+    required this.contentWidth,
+    required this.padding,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    _drawWaveform(canvas, size);
-    _drawFragments(canvas, size);
-    _drawPlayhead(canvas, size);
+    // Shift the entire drawing system to the right by [padding]
+    canvas.save();
+    canvas.translate(padding, 0);
+
+    // Pass the calculated "audio width" (contentWidth) instead of size.width
+    // so the time-to-pixel math remains accurate.
+    _drawWaveform(canvas, Size(contentWidth, size.height));
+    _drawFragments(canvas, Size(contentWidth, size.height));
+    _drawPlayhead(canvas, Size(contentWidth, size.height));
+
+    canvas.restore();
   }
 
   void _drawWaveform(Canvas canvas, Size size) {
@@ -33,9 +45,9 @@ class IsochronWaveformPainter extends CustomPainter {
       ..color = Colors.blueGrey.withOpacity(0.6);
 
     final totalSamples = waveform.length;
-    // Optimize: Skip pixels for performance
     const double pixelStep = 1.0;
 
+    // We iterate 0 -> contentWidth
     for (double x = 0; x < size.width; x += pixelStep) {
       final sampleIdx = ((x / size.width) * totalSamples).toInt();
       if (sampleIdx >= 0 && sampleIdx < totalSamples) {
@@ -54,6 +66,7 @@ class IsochronWaveformPainter extends CustomPainter {
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
 
     for (final frag in fragments) {
+      // Map time -> pixels using contentWidth
       final xStart = (frag.realStart / totalSeconds) * size.width;
       final xEnd = (frag.realEnd / totalSeconds) * size.width;
 
@@ -86,6 +99,14 @@ class IsochronWaveformPainter extends CustomPainter {
       ..color = Colors.red
       ..strokeWidth = 2.0;
     canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+
+    // Triangle Cap
+    final pathHead = Path();
+    pathHead.moveTo(x - 6, 0);
+    pathHead.lineTo(x + 6, 0);
+    pathHead.lineTo(x, 8);
+    pathHead.close();
+    canvas.drawPath(pathHead, Paint()..color = Colors.red);
   }
 
   double _normalise(int s, double height) {
