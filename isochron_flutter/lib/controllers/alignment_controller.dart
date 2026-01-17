@@ -212,10 +212,60 @@ class AlignmentController extends ValueNotifier<AppState> {
     value = value.copyWith(zoomLevel: z.clamp(1.0, 500.0));
   }
 
-  void updateFragment(int index, double start, double end) {
-    // Basic validation logic
+  /// Updates a fragment's timing and automatically synchronizes neighbors
+  /// to ensure continuous alignment (no gaps, no overlaps).
+  void updateFragment(int index, double newStart, double newEnd) {
+    // 1. Get a shallow copy of the list (to pass as a new reference later)
     final frags = List<Fragment>.from(value.fragments);
-    frags[index].setRealTiming(start: start, end: end);
+    final duration = value.audioDuration.inMilliseconds / 1000.0;
+
+    // 2. Validate File Bounds
+    // Ensure we don't drag outside the file's duration.
+    double s = newStart.clamp(0.0, duration);
+    double e = newEnd.clamp(0.0, duration);
+
+    // 3. Validate Minimum Duration (e.g. 10ms)
+    // Prevents "inverting" a fragment (start > end).
+    if (e <= s + 0.01) {
+      // Decide which handle was moved by checking current state
+      if (s != frags[index].realStart) {
+        // Start was moved -> push Start back or limit it
+        s = e - 0.01;
+      } else {
+        // End was moved -> push End forward
+        e = s + 0.01;
+      }
+    }
+
+    // 4. Update Current Fragment
+    frags[index].setRealTiming(start: s, end: e);
+
+    // 5. Sync Previous Fragment (Magnetic Start)
+    // "Always update the end value of the previous fragment same as the start value of the current"
+    if (index > 0) {
+      final prev = frags[index - 1];
+
+      // Safety: If we dragged Start back so far it swallows the previous fragment,
+      // we collapse the previous fragment to its start point (0 duration effectively).
+      double prevStart = prev.realStart;
+      if (prevStart > s) prevStart = s;
+
+      prev.setRealTiming(start: prevStart, end: s);
+    }
+
+    // 6. Sync Next Fragment (Magnetic End)
+    // Standard contiguous logic: If we move the End, the Next Start should follow.
+    if (index < frags.length - 1) {
+      final next = frags[index + 1];
+
+      // Safety: If we dragged End forward so far it swallows the next fragment.
+      double nextEnd = next.realEnd;
+      if (nextEnd < e) nextEnd = e;
+
+      next.setRealTiming(start: e, end: nextEnd);
+    }
+
+    // 7. Trigger UI Update
     value = value.copyWith(fragments: frags);
   }
 

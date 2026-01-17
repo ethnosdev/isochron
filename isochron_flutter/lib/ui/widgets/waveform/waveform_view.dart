@@ -175,18 +175,10 @@ class _WaveformViewState extends State<WaveformView> {
   void _handleSeek(double x, double width, double duration) {
     final clickedTime = (x / width) * duration;
 
-    // Check if we are in Focus Mode
-    if (widget.state.focusedFragmentIndex != null) {
-      // MODE: EDIT START + PLAY
-      widget.controller.setFragmentStartAndPlay(
-        widget.state.focusedFragmentIndex!,
-        clickedTime,
-      );
-    } else {
-      // MODE: STANDARD SEEK
-      final ms = (clickedTime * 1000).toInt();
-      widget.controller.seekTo(Duration(milliseconds: ms));
-    }
+    // CHANGED: Always just seek the audio playhead.
+    // We no longer check for focusedFragmentIndex to move the start time.
+    final ms = (clickedTime * 1000).toInt();
+    widget.controller.seekTo(Duration(milliseconds: ms));
   }
 
   void _handleDragStart(double x, double width, double duration) {
