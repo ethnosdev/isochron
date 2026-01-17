@@ -1,5 +1,6 @@
 import 'dart:typed_data';
-import 'package:isochron_cli/isochron_cli.dart'; // From your CLI package
+import 'package:isochron_cli/isochron_cli.dart';
+import 'package:just_waveform/just_waveform.dart'; // From your CLI package
 
 class AppState {
   final bool isProcessing;
@@ -8,12 +9,13 @@ class AppState {
 
   final String? audioPath;
   final String? textPath;
+  final String? dictPath;
 
   // The alignment results
   final List<Fragment> fragments;
 
   // Audio visualization data
-  final Float64List? waveformData; // Normalized samples -1.0 to 1.0
+  final Waveform? waveform;
   final Duration audioDuration;
   final Duration currentPlaybackPosition;
   final bool isPlaying;
@@ -25,8 +27,9 @@ class AppState {
     this.progress = 0.0,
     this.audioPath,
     this.textPath,
+    this.dictPath,
     this.fragments = const [],
-    this.waveformData,
+    this.waveform,
     this.audioDuration = Duration.zero,
     this.currentPlaybackPosition = Duration.zero,
     this.isPlaying = false,
@@ -40,8 +43,9 @@ class AppState {
     double? progress,
     String? audioPath,
     String? textPath,
+    String? dictPath,
     List<Fragment>? fragments,
-    Float64List? waveformData,
+    Waveform? waveform,
     Duration? audioDuration,
     Duration? currentPlaybackPosition,
     bool? isPlaying,
@@ -53,8 +57,9 @@ class AppState {
       progress: progress ?? this.progress,
       audioPath: audioPath ?? this.audioPath,
       textPath: textPath ?? this.textPath,
+      dictPath: dictPath ?? this.dictPath,
       fragments: fragments ?? this.fragments,
-      waveformData: waveformData ?? this.waveformData,
+      waveform: waveform ?? this.waveform,
       audioDuration: audioDuration ?? this.audioDuration,
       currentPlaybackPosition:
           currentPlaybackPosition ?? this.currentPlaybackPosition,

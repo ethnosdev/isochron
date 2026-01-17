@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
@@ -6,10 +7,15 @@ import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:isochron_cli/isochron_cli.dart';
+import 'package:just_waveform/just_waveform.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/app_state.dart';
+import 'package:path/path.dart' as p;
 
 class AlignmentController extends ValueNotifier<AppState> {
   final AudioPlayer _player = AudioPlayer();
+  static const String _keyLastDir = 'last_picked_directory';
 
   AlignmentController() : super(const AppState()) {
     // Listen to audio player position updates
@@ -31,34 +37,79 @@ class AlignmentController extends ValueNotifier<AppState> {
   // --- File Picking ---
 
   Future<void> pickAudio() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.audio);
-    if (result != null) {
-      final path = result.files.single.path!;
+    final path = await _pickWithMemory(type: FileType.audio);
 
-      // Load audio into player to get duration
+    if (path != null) {
+      // Load duration for playback logic
       await _player.setFilePath(path);
       final duration = _player.duration ?? Duration.zero;
 
+      // Reset state (clear old fragments/waveform) but keep text if loaded
       value = value.copyWith(
         audioPath: path,
         audioDuration: duration,
-        statusMessage: "Audio loaded.",
-        waveformData: null, // Clear old waveform until processed
+        statusMessage: "Audio loaded: ${p.basename(path)}",
+        // Clear old results
+        fragments: [],
+        waveform: null,
       );
+
+      // OPTIONAL: Pre-calculate waveform now so it appears instantly after alignment
+      // We don't await this so it doesn't block the UI
+      _loadWaveform(path);
     }
   }
 
   Future<void> pickText() async {
-    final result = await FilePicker.platform.pickFiles(
+    final path = await _pickWithMemory(
       type: FileType.custom,
-      allowedExtensions: ['txt'],
+      extensions: ['txt'],
     );
-    if (result != null) {
+    if (path != null) {
       value = value.copyWith(
-        textPath: result.files.single.path,
-        statusMessage: "Text loaded.",
+        textPath: path,
+        statusMessage: "Text loaded: ${p.basename(path)}",
+        // We don't clear fragments here; user might want to swap text while keeping audio
       );
     }
+  }
+
+  // 4. Update pickDict
+  Future<void> pickDict() async {
+    final path = await _pickWithMemory(
+      type: FileType.custom,
+      extensions: ['json'],
+    );
+    if (path != null) {
+      value = value.copyWith(
+        dictPath: path,
+        statusMessage: "Dictionary loaded: ${p.basename(path)}",
+      );
+    }
+  }
+
+  Future<String?> _pickWithMemory({
+    required FileType type,
+    List<String>? extensions,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final initialDir = prefs.getString(_keyLastDir);
+
+    final result = await FilePicker.platform.pickFiles(
+      type: type,
+      allowedExtensions: extensions,
+      initialDirectory: initialDir,
+      lockParentWindow: true,
+    );
+
+    if (result != null && result.files.single.path != null) {
+      final path = result.files.single.path!;
+      // Save the directory for next time
+      final dir = File(path).parent.path;
+      await prefs.setString(_keyLastDir, dir);
+      return path;
+    }
+    return null;
   }
 
   // --- Processing ---
@@ -69,16 +120,31 @@ class AlignmentController extends ValueNotifier<AppState> {
     value = value.copyWith(
       isProcessing: true,
       progress: 0.0,
-      statusMessage: "Starting engine...",
+      statusMessage: "Reading files...",
     );
 
     final receivePort = ReceivePort();
+
+    // Read dictionary content if it exists
+    String? rulesJsonContent;
+    if (value.dictPath != null) {
+      try {
+        rulesJsonContent = await File(value.dictPath!).readAsString();
+      } catch (e) {
+        value = value.copyWith(
+          statusMessage: "Error reading dictionary: $e",
+          isProcessing: false,
+        );
+        return;
+      }
+    }
 
     try {
       await Isolate.spawn(_isolateEntry, {
         'sendPort': receivePort.sendPort,
         'textPath': value.textPath,
         'audioPath': value.audioPath,
+        'rulesJson': rulesJsonContent,
         'ffmpeg': ffmpegPath,
         'espeak': espeakPath,
       });
@@ -92,14 +158,11 @@ class AlignmentController extends ValueNotifier<AppState> {
         } else if (message['type'] == 'result') {
           final List<Fragment> results = message['data'];
 
-          // After alignment, let's load the waveform data for visualization
-          // We use the normalized 16k mono file created by the CLI in the temp dir
-          // NOTE: In a real app, pass the path back. Here we assume we reload user audio.
           await _loadWaveform(value.audioPath!);
 
           value = value.copyWith(
             fragments: results,
-            statusMessage: "Done!",
+            statusMessage: "Alignment Complete",
             progress: 1.0,
             isProcessing: false,
           );
@@ -117,33 +180,51 @@ class AlignmentController extends ValueNotifier<AppState> {
   // --- Waveform Loading ---
 
   /// Reads audio file bytes and downsamples them for visualization
-  Future<void> _loadWaveform(String path) async {
-    // For simplicity, we read the whole file.
-    // In production, use a library or FFI to read large files in chunks.
-    final file = File(path);
-    final bytes = await file.readAsBytes();
+  Future<void> _loadWaveform(String audioPath) async {
+    try {
+      // 1. Get the temp directory
+      final tempDir = await getTemporaryDirectory();
 
-    // Rudimentary WAV parsing (Skipping header, assuming 16-bit)
-    // Real implementation should parse header to find data chunk
-    const headerSize = 44;
-    if (bytes.length <= headerSize) return;
-
-    final int16Data = bytes.buffer.asInt16List(headerSize);
-
-    // Decimate to ~2000 points (enough for screen width) or more if zooming
-    const targetPoints = 4000;
-    final step = (int16Data.length / targetPoints).ceil();
-    final data = Float64List(targetPoints);
-
-    for (int i = 0; i < targetPoints; i++) {
-      final index = i * step;
-      if (index < int16Data.length) {
-        // Normalize 16-bit int to -1.0 -> 1.0
-        data[i] = int16Data[index] / 32768.0;
+      // FIX: Explicitly create the directory if it doesn't exist.
+      // errno = 2 often happens because this folder is missing.
+      if (!await tempDir.exists()) {
+        await tempDir.create(recursive: true);
       }
-    }
 
-    value = value.copyWith(waveformData: data);
+      // 2. Prepare paths
+      final waveFileName = '${p.basename(audioPath)}.wave';
+      final waveFile = File(p.join(tempDir.path, waveFileName));
+      final audioFile = File(audioPath);
+
+      // Check source existence just in case
+      if (!await audioFile.exists()) {
+        value = value.copyWith(statusMessage: "Source audio not found.");
+        return;
+      }
+
+      // 3. Start Extraction
+      JustWaveform.extract(
+        audioInFile: audioFile,
+        waveOutFile: waveFile,
+      ).listen(
+        (progressEvent) {
+          if (progressEvent.waveform != null) {
+            value = value.copyWith(
+              waveform: progressEvent.waveform,
+              statusMessage: "Waveform loaded.",
+            );
+          }
+        },
+        onError: (e) {
+          // It's helpful to print this to the debug console
+          debugPrint("Waveform extraction error: $e");
+          value = value.copyWith(statusMessage: "Waveform error: $e");
+        },
+      );
+    } catch (e) {
+      debugPrint("Waveform setup error: $e");
+      value = value.copyWith(statusMessage: "Failed to generate waveform: $e");
+    }
   }
 
   // --- Playback Controls ---
@@ -233,22 +314,30 @@ class AlignmentController extends ValueNotifier<AppState> {
   }
 
   static Future<void> _isolateEntry(Map<String, dynamic> args) async {
-    // ... (Copy existing Isolate logic from your previous main.dart here) ...
-    // ... Ensure you import IsochronProcessor ...
     final SendPort sendPort = args['sendPort'];
     final workDir = Directory.systemTemp.createTempSync('iso_bg_');
 
+    // Parse Rules
+    Map<String, String>? rules;
+    if (args['rulesJson'] != null) {
+      final rawMap = jsonDecode(args['rulesJson']) as Map<String, dynamic>;
+      rules = rawMap.map((key, value) => MapEntry(key, value.toString()));
+    }
+
     try {
       final text = await File(args['textPath']).readAsString();
+
       final frags = await IsochronProcessor.process(
         text: text,
         audioPath: args['audioPath'],
         workDir: workDir,
         ffmpegPath: args['ffmpeg'],
         espeakPath: args['espeak'],
+        transliterationRules: rules, // Pass rules here
         onProgress: (s, p) =>
             sendPort.send({'type': 'progress', 'status': s, 'value': p}),
       );
+
       sendPort.send({'type': 'result', 'data': frags});
     } catch (e) {
       sendPort.send({'type': 'error', 'error': e.toString()});

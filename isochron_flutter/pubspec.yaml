@@ -14,6 +14,8 @@ dependencies:
   shared_preferences: ^2.5.4
   path: ^1.9.1
   just_audio: ^0.10.5
+  just_waveform: ^0.0.7
+  rxdart: ^0.28.0
   
   # Our Local Engine
   isochron_cli:

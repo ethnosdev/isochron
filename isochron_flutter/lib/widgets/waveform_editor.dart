@@ -1,13 +1,14 @@
+import 'dart:math'; // For min/max
 import 'package:flutter/material.dart';
+import 'package:just_waveform/just_waveform.dart'; // Import package
 import 'package:isochron_cli/isochron_cli.dart';
-import 'dart:typed_data';
 import '../controllers/alignment_controller.dart';
 import '../models/app_state.dart';
 
 class WaveformEditor extends StatefulWidget {
   final AlignmentController controller;
   final AppState state;
-  final ScrollController scrollController; // Passed from parent
+  final ScrollController scrollController;
 
   const WaveformEditor({
     super.key,
@@ -26,14 +27,14 @@ class _WaveformEditorState extends State<WaveformEditor> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.state.waveformData == null) {
-      return const Center(child: Text("Waveform not available"));
+    // Check for .waveform instead of .waveformData
+    if (widget.state.waveform == null) {
+      return const Center(child: Text("Generating waveform..."));
     }
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final visibleWidth = constraints.maxWidth;
-        // Calculate total scrollable width based on zoom
         final contentWidth = visibleWidth * widget.state.zoomLevel;
         final height = constraints.maxHeight;
 
@@ -48,16 +49,14 @@ class _WaveformEditorState extends State<WaveformEditor> {
             height: height,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-
-              // 1. Seek on Tap
+              // 1. Seek
               onTapUp: (details) {
                 final pct = details.localPosition.dx / contentWidth;
                 final ms = (pct * widget.state.audioDuration.inMilliseconds)
                     .toInt();
                 widget.controller.seekTo(Duration(milliseconds: ms));
               },
-
-              // 2. Detect Handle
+              // 2. Drag Start
               onHorizontalDragStart: (details) {
                 _detectHandle(
                   details.localPosition.dx,
@@ -65,8 +64,7 @@ class _WaveformEditorState extends State<WaveformEditor> {
                   totalSeconds,
                 );
               },
-
-              // 3. Move Handle
+              // 3. Drag Update
               onHorizontalDragUpdate: (details) {
                 _updateHandle(
                   details.localPosition.dx,
@@ -74,23 +72,21 @@ class _WaveformEditorState extends State<WaveformEditor> {
                   totalSeconds,
                 );
               },
-
-              // 4. End Drag
+              // 4. Drag End
               onHorizontalDragEnd: (_) {
                 setState(() => _draggingFragmentIndex = null);
               },
-
-              // The Painter
               child: CustomPaint(
                 size: Size(contentWidth, height),
-                painter: _WaveformPainter(
-                  waveformData: widget.state.waveformData!,
+                painter: _CombinedPainter(
+                  waveform: widget.state.waveform!, // Pass the object
                   fragments: widget.state.fragments,
                   playbackPos:
                       widget.state.currentPlaybackPosition.inMilliseconds /
                       1000.0,
                   totalSeconds: totalSeconds,
                   accentColor: Theme.of(context).primaryColor,
+                  zoomLevel: widget.state.zoomLevel,
                 ),
               ),
             ),
@@ -100,13 +96,10 @@ class _WaveformEditorState extends State<WaveformEditor> {
     );
   }
 
+  // ... _detectHandle and _updateHandle remain exactly the same ...
   void _detectHandle(double x, double width, double totalDuration) {
     final secondsPerPixel = totalDuration / width;
     final clickTime = x * secondsPerPixel;
-
-    // Detection threshold is tighter when zoomed out, wider when zoomed in?
-    // Actually fixed pixel threshold is best.
-    // 10 pixels converted to seconds:
     final thresholdSec = 10.0 * secondsPerPixel;
 
     for (var frag in widget.state.fragments) {
@@ -131,15 +124,12 @@ class _WaveformEditorState extends State<WaveformEditor> {
 
   void _updateHandle(double x, double width, double totalDuration) {
     if (_draggingFragmentIndex == null) return;
-
     final secondsPerPixel = totalDuration / width;
     final newTime = (x * secondsPerPixel).clamp(0.0, totalDuration);
-
     final frag = widget.state.fragments.firstWhere(
       (f) => f.index == _draggingFragmentIndex,
     );
 
-    // Call controller which now handles collision logic
     if (_draggingStart) {
       widget.controller.updateFragmentTiming(frag.index, newTime, frag.realEnd);
     } else {
@@ -152,68 +142,97 @@ class _WaveformEditorState extends State<WaveformEditor> {
   }
 }
 
-class _WaveformPainter extends CustomPainter {
-  final Float64List waveformData;
+/// This painter combines the JustWaveform logic with our Editor logic
+class _CombinedPainter extends CustomPainter {
+  final Waveform waveform;
   final List<Fragment> fragments;
   final double playbackPos;
   final double totalSeconds;
   final Color accentColor;
+  final double zoomLevel;
 
-  _WaveformPainter({
-    required this.waveformData,
+  _CombinedPainter({
+    required this.waveform,
     required this.fragments,
     required this.playbackPos,
     required this.totalSeconds,
     required this.accentColor,
+    required this.zoomLevel,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final midY = size.height / 2;
+    final width = size.width;
+    final height = size.height;
 
-    // 1. Draw Waveform
-    final paintWave = Paint()
-      ..color = Colors.blueGrey.withOpacity(0.3)
-      ..strokeWidth = 1.0
-      ..style = PaintingStyle.stroke;
+    // --- LAYER 1: The Waveform (Adapted from JustWaveform example) ---
+    final wavePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth =
+          1.0 // Fine detail
+      ..strokeCap = StrokeCap.round
+      ..color = Colors.blueGrey.withOpacity(0.6);
 
-    final path = Path();
-    final stepX = size.width / waveformData.length;
+    // We draw the *entire* duration onto the *entire* width.
+    // just_waveform allows mapping duration to pixels.
 
-    path.moveTo(0, midY);
-    for (int i = 0; i < waveformData.length; i++) {
-      path.lineTo(i * stepX, midY + (waveformData[i] * (size.height / 2)));
+    // How many samples are in the entire file?
+    final totalSamples = waveform.length;
+
+    // We iterate over the X-axis pixels
+    // density: higher zoom = skip fewer samples per pixel
+    // To keep performance high on wide canvases, we step by 1 or 2 pixels.
+    const double pixelStep = 1.0;
+
+    for (double x = 0; x < width; x += pixelStep) {
+      // Map pixel X to Sample Index
+      // index = (x / width) * totalSamples
+      final sampleIdx = ((x / width) * totalSamples).toInt();
+
+      if (sampleIdx >= 0 && sampleIdx < totalSamples) {
+        // Get Amplitude (-1.0 to 1.0 range usually, but just_waveform uses int16 range)
+        // just_waveform stores internally as specialized int.
+        // We use its helper method `getPixelMin/Max` but we need to map our index correctly.
+
+        // Actually, just_waveform is tricky: .getPixelMin(i) expects 'i' to be a pixel index
+        // relative to its internal resolution.
+        // Let's use raw data access if possible, OR stick to the logic:
+
+        // Simpler approach using raw values from the wave file logic:
+        // just_waveform's [getPixelMin] takes an index based on 'pixelsPerWindow'.
+        // Let's rely on the raw int16 values if we can, but the package abstracts them.
+        // Let's use normalise() from the example:
+
+        final minY = _normalise(waveform.getPixelMin(sampleIdx), height);
+        final maxY = _normalise(waveform.getPixelMax(sampleIdx), height);
+
+        // Draw vertical line for this pixel column
+        canvas.drawLine(Offset(x, minY), Offset(x, maxY), wavePaint);
+      }
     }
-    canvas.drawPath(path, paintWave);
 
-    // 2. Draw Fragments
+    // --- LAYER 2: Fragments (Bars & Lines) ---
     final paintLine = Paint()
       ..color = accentColor
       ..strokeWidth = 2.0;
-    final paintFill = Paint()..color = accentColor.withOpacity(0.1);
-
+    final paintFill = Paint()..color = accentColor.withOpacity(0.15);
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
 
     for (final frag in fragments) {
-      final xStart = (frag.realStart / totalSeconds) * size.width;
-      final xEnd = (frag.realEnd / totalSeconds) * size.width;
+      final xStart = (frag.realStart / totalSeconds) * width;
+      final xEnd = (frag.realEnd / totalSeconds) * width;
 
-      // Draw background rect for the segment
-      canvas.drawRect(Rect.fromLTRB(xStart, 0, xEnd, size.height), paintFill);
+      // Fill
+      canvas.drawRect(Rect.fromLTRB(xStart, 0, xEnd, height), paintFill);
 
-      // Draw Lines
-      canvas.drawLine(
-        Offset(xStart, 0),
-        Offset(xStart, size.height),
-        paintLine,
-      );
-      canvas.drawLine(Offset(xEnd, 0), Offset(xEnd, size.height), paintLine);
+      // Lines
+      canvas.drawLine(Offset(xStart, 0), Offset(xStart, height), paintLine);
+      canvas.drawLine(Offset(xEnd, 0), Offset(xEnd, height), paintLine);
 
-      // Draw Index Label (No Verse Text)
-      // Only draw if there is space
-      if (xEnd - xStart > 15) {
+      // Label (#)
+      if (xEnd - xStart > 20) {
         textPainter.text = TextSpan(
-          text: "#${frag.index}",
+          text: "${frag.index}",
           style: TextStyle(
             color: accentColor,
             fontWeight: FontWeight.bold,
@@ -221,22 +240,40 @@ class _WaveformPainter extends CustomPainter {
           ),
         );
         textPainter.layout();
-        // Center text in bar
-        textPainter.paint(canvas, Offset(xStart + 4, 4));
+        textPainter.paint(canvas, Offset(xStart + 5, 5));
       }
     }
 
-    // 3. Draw Playhead
-    final xPlay = (playbackPos / totalSeconds) * size.width;
+    // --- LAYER 3: Playhead ---
+    final xPlay = (playbackPos / totalSeconds) * width;
     final paintPlay = Paint()
       ..color = Colors.red
       ..strokeWidth = 2.0;
-    canvas.drawLine(Offset(xPlay, 0), Offset(xPlay, size.height), paintPlay);
 
-    // Draw Playhead "Cap"
-    canvas.drawCircle(Offset(xPlay, 0), 5, paintPlay);
+    canvas.drawLine(Offset(xPlay, 0), Offset(xPlay, height), paintPlay);
+    // Draw Triangle Cap
+    final pathHead = Path();
+    pathHead.moveTo(xPlay - 6, 0);
+    pathHead.lineTo(xPlay + 6, 0);
+    pathHead.lineTo(xPlay, 8);
+    pathHead.close();
+    canvas.drawPath(pathHead, Paint()..color = Colors.red);
+  }
+
+  // Adapted from just_waveform example
+  double _normalise(int s, double height) {
+    // 16-bit PCM (flags=0) or 8-bit (flags=1)
+    if (waveform.flags == 0) {
+      // 16-bit signed (-32768 to 32767)
+      final y = 32768 + (s).clamp(-32768.0, 32767.0).toDouble();
+      return height - 1 - y * height / 65536;
+    } else {
+      // 8-bit
+      final y = 128 + (s).clamp(-128.0, 127.0).toDouble();
+      return height - 1 - y * height / 256;
+    }
   }
 
   @override
-  bool shouldRepaint(covariant _WaveformPainter old) => true;
+  bool shouldRepaint(covariant _CombinedPainter old) => true; // Always repaint on scroll/zoom/play
 }

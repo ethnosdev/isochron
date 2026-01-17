@@ -10,10 +10,11 @@ void main() {
 
 class IsochronApp extends StatelessWidget {
   const IsochronApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Isochron',
+      title: 'Isochron Studio',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
@@ -26,13 +27,15 @@ class IsochronApp extends StatelessWidget {
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
+
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> {
   final AlignmentController _controller = AlignmentController();
-  // We keep the ScrollController here to manipulate it from List/Buttons
+
+  // We keep the ScrollController here so the List can manipulate the Waveform view
   final ScrollController _waveformScrollCtrl = ScrollController();
 
   final TextEditingController _ffmpegCtrl = TextEditingController();
@@ -56,10 +59,12 @@ class _MainScreenState extends State<MainScreen> {
   void dispose() {
     _controller.dispose();
     _waveformScrollCtrl.dispose();
+    _ffmpegCtrl.dispose();
+    _espeakCtrl.dispose();
     super.dispose();
   }
 
-  /// Handles clicking a list item
+  /// Jumps the audio and the waveform view to the specific fragment
   void _jumpToFragment(int index, AppState state, double viewportWidth) {
     final frag = state.fragments[index];
     final ms = (frag.realStart * 1000).toInt();
@@ -69,14 +74,22 @@ class _MainScreenState extends State<MainScreen> {
 
     // 2. Center Waveform View
     if (state.audioDuration.inMilliseconds > 0) {
-      final totalWidth = viewportWidth * state.zoomLevel;
+      // Calculate total width of the waveform at current zoom
+      final totalContentWidth = viewportWidth * state.zoomLevel;
+
+      // Calculate where the start time is in pixels
       final pct = ms / state.audioDuration.inMilliseconds;
-      final targetX = totalWidth * pct;
-      final centeredX = targetX - (viewportWidth / 2);
+      final targetPixel = totalContentWidth * pct;
+
+      // Calculate scroll position to center that pixel
+      final centeredScrollPos = targetPixel - (viewportWidth / 2);
 
       if (_waveformScrollCtrl.hasClients) {
         _waveformScrollCtrl.jumpTo(
-          centeredX.clamp(0.0, _waveformScrollCtrl.position.maxScrollExtent),
+          centeredScrollPos.clamp(
+            0.0,
+            _waveformScrollCtrl.position.maxScrollExtent,
+          ),
         );
       }
     }
@@ -91,20 +104,21 @@ class _MainScreenState extends State<MainScreen> {
         builder: (context, state, _) {
           return Column(
             children: [
-              // Toolbar
+              // 1. Top Toolbar (File Selection)
               _buildFileToolbar(state),
+
               if (state.isProcessing)
                 LinearProgressIndicator(value: state.progress),
 
-              // EDITOR AREA
-              if (state.fragments.isNotEmpty && state.waveformData != null) ...[
-                // Controls Bar (Zoom + Transport)
+              // 2. Waveform Editor Area (Only visible if waveform loaded)
+              if (state.fragments.isNotEmpty && state.waveform != null) ...[
+                // A. Controls (Zoom & Transport)
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 4,
                   ),
-                  color: Colors.grey[100],
+                  color: Colors.grey.shade100,
                   child: Row(
                     children: [
                       // Transport
@@ -128,9 +142,13 @@ class _MainScreenState extends State<MainScreen> {
                         onPressed: _controller.skipToNext,
                         tooltip: "Next Segment",
                       ),
+
                       const SizedBox(width: 20),
-                      // Zoom
-                      const Icon(Icons.zoom_out, size: 20),
+                      Container(width: 1, height: 24, color: Colors.grey),
+                      const SizedBox(width: 20),
+
+                      // Zoom Controls
+                      const Icon(Icons.zoom_out, size: 18, color: Colors.grey),
                       Expanded(
                         child: Slider(
                           min: 1.0,
@@ -140,48 +158,59 @@ class _MainScreenState extends State<MainScreen> {
                           onChanged: (val) => _controller.setZoom(val),
                         ),
                       ),
-                      const Icon(Icons.zoom_in, size: 20),
+                      const Icon(Icons.zoom_in, size: 18, color: Colors.grey),
                     ],
                   ),
                 ),
 
-                // The Waveform Widget
+                // B. The Visualizer
                 Expanded(
-                  flex: 1, // 1/3 of remaining space
-                  child: LayoutBuilder(
-                    builder: (ctx, constraints) {
-                      return Container(
-                        decoration: BoxDecoration(
-                          border: Border.symmetric(
-                            horizontal: BorderSide(color: Colors.grey[300]!),
-                          ),
-                          color: Colors.white,
-                        ),
-                        child: WaveformEditor(
+                  flex: 1, // Takes 1/3 of available space
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.symmetric(
+                        horizontal: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      color: Colors.white,
+                    ),
+                    // LayoutBuilder needed to get the viewport width for scrolling logic
+                    child: LayoutBuilder(
+                      builder: (ctx, constraints) {
+                        return WaveformEditor(
                           controller: _controller,
                           state: state,
                           scrollController: _waveformScrollCtrl,
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
                 ),
               ],
 
-              // LIST AREA
+              // 3. Fragment List Area
               Expanded(
-                flex: 2, // 2/3 of remaining space
+                flex: 2, // Takes 2/3 of available space
                 child: state.fragments.isEmpty
-                    ? Center(child: Text(state.statusMessage))
+                    ? Center(
+                        child: Text(
+                          state.statusMessage,
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                      )
                     : LayoutBuilder(
                         builder: (context, listConstraints) {
+                          // We use viewport width from the list's context
+                          // (assuming list and waveform are same width)
+                          final width = listConstraints.maxWidth;
+
                           return ListView.separated(
                             itemCount: state.fragments.length,
                             separatorBuilder: (_, __) =>
                                 const Divider(height: 1),
                             itemBuilder: (ctx, i) {
                               final f = state.fragments[i];
-                              // Check if active based on timestamp
+
+                              // Determine if this row is "active" based on playback time
                               final cPos =
                                   state.currentPlaybackPosition.inMilliseconds;
                               final isActive =
@@ -193,15 +222,18 @@ class _MainScreenState extends State<MainScreen> {
                                 selected: isActive,
                                 selectedTileColor: Colors.teal.withOpacity(0.1),
                                 leading: CircleAvatar(
-                                  radius: 12,
+                                  radius: 14,
                                   backgroundColor: isActive
                                       ? Colors.teal
-                                      : Colors.grey[300],
+                                      : Colors.grey.shade300,
+                                  foregroundColor: isActive
+                                      ? Colors.white
+                                      : Colors.black87,
                                   child: Text(
                                     "${f.index}",
                                     style: const TextStyle(
                                       fontSize: 10,
-                                      color: Colors.black,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                 ),
@@ -209,25 +241,27 @@ class _MainScreenState extends State<MainScreen> {
                                   f.text,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontWeight: isActive
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                  ),
                                 ),
                                 subtitle: Text(
-                                  "${f.realStart.toStringAsFixed(2)} - ${f.realEnd.toStringAsFixed(2)}",
+                                  "${f.realStart.toStringAsFixed(2)}s  ➝  ${f.realEnd.toStringAsFixed(2)}s",
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 12,
+                                  ),
                                 ),
                                 trailing: isActive
-                                    ? const Icon(Icons.volume_up, size: 16)
+                                    ? const Icon(
+                                        Icons.volume_up,
+                                        size: 16,
+                                        color: Colors.teal,
+                                      )
                                     : null,
-                                onTap: () {
-                                  // The width of the waveform viewer is needed to center it
-                                  // We can estimate or use a GlobalKey.
-                                  // For now, we assume standard window width logic or just pass a fixed safe value.
-                                  // Better: Use LayoutBuilder above List to get width? No, we need Waveform width.
-                                  // Simplification: Just assume screen width or context size.
-                                  _jumpToFragment(
-                                    i,
-                                    state,
-                                    MediaQuery.of(context).size.width,
-                                  );
-                                },
+                                onTap: () => _jumpToFragment(i, state, width),
                               );
                             },
                           );
@@ -243,28 +277,55 @@ class _MainScreenState extends State<MainScreen> {
 
   Widget _buildFileToolbar(AppState state) {
     return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: Row(
+      padding: const EdgeInsets.all(12.0),
+      child: Wrap(
+        spacing: 8.0,
+        runSpacing: 8.0,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
+          // 1. Text File Picker
           OutlinedButton.icon(
-            icon: const Icon(Icons.description),
+            icon: const Icon(Icons.description, size: 18),
             label: const Text("Text"),
             onPressed: _controller.pickText,
             style: state.textPath != null
-                ? OutlinedButton.styleFrom(foregroundColor: Colors.teal)
+                ? OutlinedButton.styleFrom(
+                    foregroundColor: Colors.teal,
+                    side: const BorderSide(color: Colors.teal),
+                  )
                 : null,
           ),
-          const SizedBox(width: 8),
+
+          // 2. Audio File Picker
           OutlinedButton.icon(
-            icon: const Icon(Icons.audio_file),
+            icon: const Icon(Icons.audio_file, size: 18),
             label: const Text("Audio"),
             onPressed: _controller.pickAudio,
             style: state.audioPath != null
-                ? OutlinedButton.styleFrom(foregroundColor: Colors.teal)
+                ? OutlinedButton.styleFrom(
+                    foregroundColor: Colors.teal,
+                    side: const BorderSide(color: Colors.teal),
+                  )
                 : null,
           ),
-          const Spacer(),
-          ElevatedButton(
+
+          // 3. Dictionary Picker (Optional)
+          OutlinedButton.icon(
+            icon: const Icon(Icons.translate, size: 18),
+            label: const Text("Dict (JSON)"),
+            onPressed: _controller.pickDict,
+            style: state.dictPath != null
+                ? OutlinedButton.styleFrom(
+                    foregroundColor: Colors.deepPurple,
+                    side: const BorderSide(color: Colors.deepPurple),
+                  )
+                : null,
+          ),
+
+          // 4. Action Button
+          ElevatedButton.icon(
+            icon: const Icon(Icons.play_arrow),
+            label: const Text("Run Alignment"),
             onPressed:
                 (state.textPath != null &&
                     state.audioPath != null &&
@@ -274,7 +335,10 @@ class _MainScreenState extends State<MainScreen> {
                     _espeakCtrl.text,
                   )
                 : null,
-            child: const Text("Run Alignment"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+            ),
           ),
         ],
       ),
