@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:isochron_cli/isochron_cli.dart';
 import '../../../controllers/alignment_controller.dart';
 import '../../../models/app_state.dart';
 import '../../painters/waveform_painter.dart';
@@ -22,6 +23,76 @@ class WaveformView extends StatefulWidget {
 class _WaveformViewState extends State<WaveformView> {
   int? _dragIndex;
   bool _dragStart = true;
+
+  @override
+  void didUpdateWidget(WaveformView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Detect if Zoom Level Changed
+    if (oldWidget.state.zoomLevel != widget.state.zoomLevel) {
+      _maintainCenterOnZoom();
+    }
+  }
+
+  void _maintainCenterOnZoom() {
+    if (!widget.scrollController.hasClients ||
+        widget.state.audioDuration.inMilliseconds == 0) {
+      return;
+    }
+
+    // 1. Identify the "Anchor Time" we want to keep centered
+    double anchorTime = 0.0;
+
+    // Priority A: If explicitly focused (Double Clicked)
+    if (widget.state.focusedFragmentIndex != null) {
+      final idx = widget.state.focusedFragmentIndex!;
+      if (idx < widget.state.fragments.length) {
+        anchorTime = widget.state.fragments[idx].realStart;
+      }
+    }
+    // Priority B: The fragment currently under the playhead
+    else {
+      final pos = widget.state.currentPlaybackPosition.inMilliseconds / 1000.0;
+      final currentFrag = widget.state.fragments.firstWhere(
+        (f) => pos >= f.realStart && pos <= f.realEnd,
+        // Fallback: If between fragments, find the closest upcoming one or just use playhead
+        orElse: () => widget.state.fragments.firstWhere(
+          (f) => f.realStart > pos,
+          orElse: () => widget.state.fragments.isEmpty
+              ? Fragment(index: 0, text: "") // Dummy
+              : widget.state.fragments.last,
+        ),
+      );
+      // Use the start of that fragment (or 0 if dummy)
+      anchorTime = currentFrag.realStart;
+    }
+
+    // 2. Perform the Scroll Adjustment after layout calculates the new width
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!widget.scrollController.hasClients) return;
+
+      final viewportWidth = widget.scrollController.position.viewportDimension;
+      final totalDuration = widget.state.audioDuration.inMilliseconds / 1000.0;
+
+      // Calculate Content Width based on NEW zoom
+      // Note: LayoutBuilder in build() determines width = viewport * zoom
+      final contentWidth = viewportWidth * widget.state.zoomLevel;
+
+      // Calculate where the anchor time is in pixels
+      final targetPixel = (anchorTime / totalDuration) * contentWidth;
+
+      // Calculate offset to center that pixel
+      final centerOffset = targetPixel - (viewportWidth / 2);
+
+      // Jump
+      widget.scrollController.jumpTo(
+        centerOffset.clamp(
+          0.0,
+          widget.scrollController.position.maxScrollExtent,
+        ),
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
