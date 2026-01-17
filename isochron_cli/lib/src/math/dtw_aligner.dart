@@ -21,15 +21,13 @@ class DtwAligner {
   static List<AlignmentPoint> align(
     List<List<double>> realSeq,
     List<List<double>> anchorSeq, {
-    int radius = 1500, // Default fixed radius: 1500 frames ~= 15 seconds
+    int radius = 500, // Default fixed radius: 500 frames ~= 5 seconds
     ProgressCallback? onProgress,
   }) {
     final int N = realSeq.length;
     final int M = anchorSeq.length;
 
     // 1. Validate Radius
-    // A 5-second window is usually plenty.
-    // Ensure radius is at least enough to cover the difference in lengths.
     final int lengthDiff = (N - M).abs();
     final int r = max(radius, lengthDiff + 10);
 
@@ -39,7 +37,6 @@ class DtwAligner {
 
     // 2. Memory Allocation
     // Backtrack Matrix: Stores directions (1 byte per cell).
-    // Size: ~36MB for 6 mins audio vs 30GB with Maps.
     final backtrack = Uint8List(N * width);
 
     // Cost Rows: We only keep two rows in memory (Previous and Current).
