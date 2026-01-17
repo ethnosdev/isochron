@@ -1,4 +1,3 @@
-import 'dart:math'; // For min/max
 import 'package:flutter/material.dart';
 import 'package:just_waveform/just_waveform.dart'; // Import package
 import 'package:isochron_cli/isochron_cli.dart';
