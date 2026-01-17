@@ -51,6 +51,22 @@ class ControlBar extends StatelessWidget {
                 ? onRun
                 : null,
           ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.download),
+            label: const Text("Export JSON"),
+            onPressed: state.fragments.isNotEmpty
+                ? controller.exportJson
+                : null,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.teal,
+              side: BorderSide(
+                color: state.fragments.isNotEmpty
+                    ? Colors.teal
+                    : Colors.grey.shade300,
+              ),
+            ),
+          ),
         ],
       ),
     );

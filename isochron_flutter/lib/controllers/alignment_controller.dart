@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
@@ -199,6 +200,54 @@ class AlignmentController extends ValueNotifier<AppState> {
       });
     } catch (e) {
       debugPrint("Waveform error: $e");
+    }
+  }
+
+  Future<void> exportJson() async {
+    if (value.fragments.isEmpty) {
+      value = value.copyWith(statusMessage: "No data to export.");
+      return;
+    }
+
+    // 1. Open Save Dialog
+    final String? outputFile = await FilePicker.platform.saveFile(
+      dialogTitle: 'Export Alignment',
+      fileName: 'alignment.json',
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+      lockParentWindow: true,
+    );
+
+    if (outputFile == null) return; // User canceled
+
+    try {
+      value = value.copyWith(statusMessage: "Exporting...");
+
+      // 2. Convert Fragments to JSON List
+      // We manually map fields to ensure clean output (e.g. 3 decimal places)
+      final List<Map<String, dynamic>> jsonList = value.fragments
+          .map(
+            (f) => {
+              'index': f.index,
+              'text': f.text,
+              // Round to 3 decimals for cleanliness
+              'start': double.parse(f.realStart.toStringAsFixed(3)),
+              'end': double.parse(f.realEnd.toStringAsFixed(3)),
+            },
+          )
+          .toList();
+
+      // 3. Encode with indentation for readability
+      final jsonString = const JsonEncoder.withIndent('  ').convert(jsonList);
+
+      // 4. Write to file
+      await File(outputFile).writeAsString(jsonString);
+
+      value = value.copyWith(
+        statusMessage: "Saved to ${p.basename(outputFile)}",
+      );
+    } catch (e) {
+      value = value.copyWith(statusMessage: "Export failed: $e");
     }
   }
 
