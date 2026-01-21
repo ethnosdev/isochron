@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import '../../../controllers/alignment_controller.dart';
 import '../../../models/app_state.dart';
@@ -24,6 +25,8 @@ class _WaveformViewState extends State<WaveformView> {
   int? _dragIndex;
   bool _dragStart = true;
   static const double _hPadding = 40.0;
+  SystemMouseCursor _cursor = SystemMouseCursors.basic;
+  static const double _hoverThresholdPx = 10.0;
 
   @override
   void didUpdateWidget(WaveformView oldWidget) {
@@ -117,37 +120,87 @@ class _WaveformViewState extends State<WaveformView> {
           controller: widget.scrollController,
           scrollDirection: Axis.horizontal,
           physics: const ClampingScrollPhysics(),
-          child: GestureDetector(
-            // HitTestBehavior.opaque is vital so clicks in empty space/padding are caught
-            behavior: HitTestBehavior.opaque,
-            // Pass `contentWidth` to handlers, NOT fullPainterWidth
-            onTapUp: (d) =>
-                _handleSeek(d.localPosition.dx, contentWidth, totalSec),
-            onHorizontalDragStart: (d) =>
-                _handleDragStart(d.localPosition.dx, contentWidth, totalSec),
-            onHorizontalDragUpdate: (d) =>
-                _handleDragUpdate(d.localPosition.dx, contentWidth, totalSec),
-            onHorizontalDragEnd: (_) => setState(() => _dragIndex = null),
-            child: CustomPaint(
-              size: Size(fullPainterWidth, constraints.maxHeight),
-              painter: IsochronWaveformPainter(
-                waveform: wf,
-                fragments: widget.state.fragments,
-                playbackPosSeconds:
-                    widget.state.currentPlaybackPosition.inMilliseconds /
-                    1000.0,
-                totalSeconds: totalSec,
-                zoomLevel: widget.state.zoomLevel,
-                accentColor: Theme.of(context).primaryColor,
-                // NEW PARAMS
-                contentWidth: contentWidth,
-                padding: _hPadding,
+          child: MouseRegion(
+            cursor: _cursor,
+            // We use opaque to catch hover events everywhere in the box
+            hitTestBehavior: HitTestBehavior.opaque,
+            onHover: (event) =>
+                _handleHover(event.localPosition.dx, contentWidth, totalSec),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapUp: (d) =>
+                  _handleSeek(d.localPosition.dx, contentWidth, totalSec),
+              onHorizontalDragStart: (d) =>
+                  _handleDragStart(d.localPosition.dx, contentWidth, totalSec),
+              onHorizontalDragUpdate: (d) =>
+                  _handleDragUpdate(d.localPosition.dx, contentWidth, totalSec),
+              onHorizontalDragEnd: (_) => setState(() {
+                _dragIndex = null;
+                _cursor = SystemMouseCursors.basic;
+              }),
+              child: CustomPaint(
+                size: Size(fullPainterWidth, constraints.maxHeight),
+                painter: IsochronWaveformPainter(
+                  waveform: wf,
+                  fragments: widget.state.fragments,
+                  playbackPosSeconds:
+                      widget.state.currentPlaybackPosition.inMilliseconds /
+                      1000.0,
+                  totalSeconds: totalSec,
+                  zoomLevel: widget.state.zoomLevel,
+                  accentColor: Theme.of(context).primaryColor,
+                  // NEW PARAMS
+                  contentWidth: contentWidth,
+                  padding: _hPadding,
+                ),
               ),
             ),
           ),
         );
       },
     );
+  }
+
+  void _handleHover(double x, double contentWidth, double totalSec) {
+    // 1. If we are currently dragging, keep the resize cursor active
+    if (_dragIndex != null) {
+      if (_cursor != SystemMouseCursors.resizeLeftRight) {
+        setState(() => _cursor = SystemMouseCursors.resizeLeftRight);
+      }
+      return;
+    }
+
+    // 2. Convert the hover X pixel to Audio Time
+    final hoverTime = _pxToSeconds(x, contentWidth, totalSec);
+
+    // 3. Calculate the time difference equivalent to our pixel threshold.
+    // Logic: (Pixels / TotalWidth) * TotalSeconds
+    final double thresholdSeconds =
+        (_hoverThresholdPx / contentWidth) * totalSec;
+
+    bool isNearBoundary = false;
+
+    // 4. Check all fragments
+    // (Optimization note: For huge lists, we could optimize this to only check
+    // fragments currently in the viewport, but for <5000 lines this is fast enough)
+    for (var f in widget.state.fragments) {
+      if ((f.realStart - hoverTime).abs() < thresholdSeconds ||
+          (f.realEnd - hoverTime).abs() < thresholdSeconds) {
+        isNearBoundary = true;
+        break;
+      }
+    }
+
+    // 5. Update state only if changed to avoid unnecessary rebuilds
+    final newCursor = isNearBoundary
+        ? SystemMouseCursors.resizeLeftRight
+        : SystemMouseCursors.basic;
+
+    if (_cursor != newCursor) {
+      setState(() {
+        _cursor = newCursor;
+      });
+    }
   }
 
   void _handleSeek(double x, double contentWidth, double totalSec) {
