@@ -39,7 +39,7 @@ class ControlBar extends StatelessWidget {
             icon: Icons.translate,
             label: "Dict",
             active: state.dictPath != null,
-            onTap: controller.pickDict,
+            onTap: () => controller.pickDict(context),
           ),
           ElevatedButton.icon(
             icon: const Icon(Icons.play_arrow),

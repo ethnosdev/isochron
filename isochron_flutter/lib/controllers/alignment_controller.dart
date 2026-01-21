@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/ui/dialogs/text_preview_dialog.dart';
+import 'package:isochron_flutter/ui/dialogs/transliteration_preview_dialog.dart';
 import 'package:just_waveform/just_waveform.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
@@ -83,13 +84,57 @@ class AlignmentController extends ValueNotifier<AppState> {
     }
   }
 
-  Future<void> pickDict() async {
+  Future<void> pickDict(BuildContext context) async {
     final path = await _pickFile(type: FileType.custom, extensions: ['json']);
-    if (path != null) {
+    if (path == null) return;
+
+    if (value.textPath == null) {
       value = value.copyWith(
         dictPath: path,
         statusMessage: "Dict: ${p.basename(path)}",
       );
+      return;
+    }
+
+    try {
+      // 1. Load Rules & Text
+      final jsonString = await File(path).readAsString();
+      final Map<String, dynamic> rawMap = jsonDecode(jsonString);
+      final rules = rawMap.map((k, v) => MapEntry(k, v.toString()));
+
+      final textFile = File(value.textPath!);
+      final fullText = await textFile.readAsString();
+
+      // 2. Run Analysis in Background (compute)
+      // We pass all necessary data to a static helper function
+      final analysis = await compute(
+        _analyzeTransliteration,
+        _AnalysisRequest(fullText, rules, value.hasIds),
+      );
+
+      // 3. Show Dialog
+      if (!context.mounted) return;
+      final bool? confirm = await showDialog<bool>(
+        context: context,
+        builder: (_) => TransliterationPreviewDialog(
+          dictName: p.basename(path),
+          previewLines: analysis.previewLines,
+          unknownChars: analysis.unknownChars,
+        ),
+      );
+
+      if (confirm == true) {
+        value = value.copyWith(
+          dictPath: path,
+          statusMessage: "Dict: ${p.basename(path)}",
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
     }
   }
 
@@ -418,4 +463,66 @@ class AlignmentController extends ValueNotifier<AppState> {
     }
     return null;
   }
+}
+
+class _AnalysisRequest {
+  final String text;
+  final Map<String, String> rules;
+  final bool hasIds;
+  _AnalysisRequest(this.text, this.rules, this.hasIds);
+}
+
+class _AnalysisResult {
+  final List<String> previewLines;
+  final List<String> unknownChars;
+  _AnalysisResult(this.previewLines, this.unknownChars);
+}
+
+// Top-level function for compute()
+_AnalysisResult _analyzeTransliteration(_AnalysisRequest req) {
+  final List<String> previewLines = [];
+  final Set<String> unknownSet = {};
+
+  // Regex to find non-Latin characters (anything outside ASCII 0-127)
+  final nonLatinRegex = RegExp(r'[^\x00-\x7F]');
+
+  // Split text into lines for processing
+  final lines = const LineSplitter().convert(req.text);
+
+  int lineCount = 0;
+  for (var line in lines) {
+    if (line.trim().isEmpty) continue;
+
+    String textToProcess = line;
+
+    // Handle ID stripping logic
+    if (req.hasIds) {
+      final parts = line.trim().split(' ');
+      if (parts.length > 1) {
+        textToProcess = parts.sublist(1).join(' ');
+      }
+    }
+
+    // --- USE CLI LIBRARY HERE ---
+    final converted = Transliterator.convert(textToProcess, req.rules);
+
+    // 1. Populate Preview (first 5 lines)
+    if (lineCount < 5) {
+      previewLines.add(converted);
+      lineCount++;
+    }
+
+    // 2. Detect Unknowns in the RESULT
+    // We scan the *output* string. If there are still non-Latin characters,
+    // it means they weren't handled by the dictionary or the stripper.
+    // This is actually better for the user: it shows the "base" char they need to map.
+    final matches = nonLatinRegex.allMatches(converted);
+    for (var m in matches) {
+      unknownSet.add(m.group(0)!);
+    }
+  }
+
+  // Sort list for clean display
+  final sortedUnknowns = unknownSet.toList()..sort();
+  return _AnalysisResult(previewLines, sortedUnknowns);
 }
