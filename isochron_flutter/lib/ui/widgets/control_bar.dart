@@ -27,7 +27,7 @@ class ControlBar extends StatelessWidget {
             icon: Icons.description,
             label: "Text",
             active: state.textPath != null,
-            onTap: controller.pickText,
+            onTap: () => controller.pickText(context),
           ),
           _FileBtn(
             icon: Icons.audio_file,

@@ -2,7 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:isochron_cli/isochron_cli.dart';
+import 'package:isochron_flutter/ui/dialogs/text_preview_dialog.dart';
 import 'package:just_waveform/just_waveform.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
@@ -52,11 +55,29 @@ class AlignmentController extends ValueNotifier<AppState> {
     _generateWaveform(path);
   }
 
-  Future<void> pickText() async {
+  Future<void> pickText(BuildContext context) async {
     final path = await _pickFile(type: FileType.custom, extensions: ['txt']);
     if (path != null) {
+      // Read first few lines and ask user
+      final file = File(path);
+      final lines = await file.readAsLines();
+      final preview = lines.take(5).toList();
+
+      final bool? hasIds = await showDialog<bool>(
+        context: context,
+        builder: (_) => TextPreviewDialog(
+          filename: p.basename(path),
+          previewLines: preview,
+        ),
+      );
+
+      if (hasIds == null) return; // User canceled
+
+      // Store the path AND the formatting choice in AppState
+      // You'll need to add `final bool hasIds;` to your AppState class first!
       value = value.copyWith(
         textPath: path,
+        hasIds: hasIds,
         statusMessage: "Text: ${p.basename(path)}",
       );
     }
@@ -81,9 +102,47 @@ class AlignmentController extends ValueNotifier<AppState> {
       statusMessage: "Starting...",
     );
 
+    File? tempCleanTextFile;
+    List<String> extractedIds = [];
+
     try {
-      final fragments = await _alignmentService.runIsochron(
-        textPath: value.textPath!,
+      String actualTextPath = value.textPath!;
+
+      // --- PRE-PROCESSING ---
+      if (value.hasIds) {
+        // Assuming you added this to AppState
+        value = value.copyWith(statusMessage: "Preprocessing text...");
+
+        final lines = await File(value.textPath!).readAsLines();
+        final cleanLines = <String>[];
+
+        for (var line in lines) {
+          if (line.trim().isEmpty) continue;
+
+          // Split by first space
+          final parts = line.trim().split(' ');
+          if (parts.length > 1) {
+            extractedIds.add(parts.first); // Store ID
+            cleanLines.add(parts.sublist(1).join(' ')); // Join rest as text
+          } else {
+            // Fallback if no space found
+            extractedIds.add("");
+            cleanLines.add(line);
+          }
+        }
+
+        // Create temp file
+        final tempDir = await getTemporaryDirectory();
+        tempCleanTextFile = File(p.join(tempDir.path, 'clean_transcript.txt'));
+        await tempCleanTextFile.writeAsString(cleanLines.join('\n'));
+
+        actualTextPath = tempCleanTextFile.path;
+      }
+      // -----------------------
+
+      // Run existing service with potentially new path
+      List<Fragment> fragments = await _alignmentService.runIsochron(
+        textPath: actualTextPath,
         audioPath: value.audioPath!,
         dictPath: value.dictPath,
         ffmpegPath: ffmpeg,
@@ -93,7 +152,23 @@ class AlignmentController extends ValueNotifier<AppState> {
         },
       );
 
-      // Refresh waveform in case it wasn't ready
+      // --- POST-PROCESSING ---
+      if (value.hasIds && extractedIds.isNotEmpty) {
+        // Merge IDs back into fragments.
+        // We assume 1-to-1 mapping (Line = Fragment).
+        final mergedFragments = <Fragment>[];
+
+        for (int i = 0; i < fragments.length; i++) {
+          String? id;
+          if (i < extractedIds.length) {
+            id = extractedIds[i];
+          }
+
+          mergedFragments.add(fragments[i].copyWith(id: id));
+        }
+        fragments = mergedFragments;
+      }
+
       if (value.waveform == null) await _generateWaveform(value.audioPath!);
 
       value = value.copyWith(
@@ -104,6 +179,10 @@ class AlignmentController extends ValueNotifier<AppState> {
       );
     } catch (e) {
       value = value.copyWith(isProcessing: false, statusMessage: "Error: $e");
+    } finally {
+      if (tempCleanTextFile != null && await tempCleanTextFile.exists()) {
+        await tempCleanTextFile.delete();
+      }
     }
   }
 
@@ -229,8 +308,8 @@ class AlignmentController extends ValueNotifier<AppState> {
           .map(
             (f) => {
               'index': f.index,
+              if (f.id != null) 'id': f.id,
               'text': f.text,
-              // Round to 3 decimals for cleanliness
               'start': double.parse(f.realStart.toStringAsFixed(3)),
               'end': double.parse(f.realEnd.toStringAsFixed(3)),
             },

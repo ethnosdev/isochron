@@ -85,14 +85,16 @@ void main(List<String> arguments) async {
       );
       // ---------------------
 
-      if (verbose)
+      if (verbose) {
         print('Alignment complete. Found ${fragments.length} fragments.');
+      }
 
       // Output Generation
       final jsonOutput = fragments
           .map((f) => {
-                'id': f.index,
-                'text': f.text, // Note: We save original text, not spokenText
+                'index': f.index,
+                if (f.id != null) 'id': f.id,
+                'text': f.text,
                 'start': double.parse(f.realStart.toStringAsFixed(3)),
                 'end': double.parse(f.realEnd.toStringAsFixed(3)),
               })

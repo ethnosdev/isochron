@@ -2,23 +2,31 @@ import 'package:isochron_cli/isochron_cli.dart';
 import 'package:just_waveform/just_waveform.dart';
 
 class AppState {
+  // --- Processing Status ---
   final bool isProcessing;
   final String statusMessage;
   final double progress;
 
+  // --- File Paths ---
   final String? audioPath;
   final String? textPath;
   final String? dictPath;
 
-  final List<Fragment> fragments;
+  // --- Configuration ---
+  /// Tracks if the user confirmed the text file contains ID prefixes
+  final bool hasIds;
 
+  // --- Data ---
+  final List<Fragment> fragments;
   final Waveform? waveform;
+
+  // --- Playback State ---
   final Duration audioDuration;
   final Duration currentPlaybackPosition;
   final bool isPlaying;
-  final double zoomLevel;
 
-  // NEW: Tracks which fragment is double-clicked
+  // --- UI View State ---
+  final double zoomLevel;
   final int? focusedFragmentIndex;
 
   const AppState({
@@ -28,6 +36,7 @@ class AppState {
     this.audioPath,
     this.textPath,
     this.dictPath,
+    this.hasIds = false,
     this.fragments = const [],
     this.waveform,
     this.audioDuration = Duration.zero,
@@ -44,6 +53,7 @@ class AppState {
     String? audioPath,
     String? textPath,
     String? dictPath,
+    bool? hasIds,
     List<Fragment>? fragments,
     Waveform? waveform,
     Duration? audioDuration,
@@ -60,6 +70,7 @@ class AppState {
       audioPath: audioPath ?? this.audioPath,
       textPath: textPath ?? this.textPath,
       dictPath: dictPath ?? this.dictPath,
+      hasIds: hasIds ?? this.hasIds,
       fragments: fragments ?? this.fragments,
       waveform: waveform ?? this.waveform,
       audioDuration: audioDuration ?? this.audioDuration,

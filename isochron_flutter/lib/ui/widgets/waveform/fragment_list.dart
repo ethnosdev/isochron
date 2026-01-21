@@ -111,24 +111,61 @@ class _FragmentListState extends State<FragmentList> {
               onTap: null,
               dense: true,
               visualDensity: VisualDensity.compact,
-              leading: CircleAvatar(
-                radius: 12,
-                backgroundColor: isActive ? Colors.teal : Colors.grey.shade300,
-                foregroundColor: isActive ? Colors.white : Colors.black87,
-                child: Text(
-                  "${f.index}",
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
+              leading: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Show Index Circle
+                  CircleAvatar(
+                    radius: 10,
+                    backgroundColor: isActive
+                        ? Colors.teal
+                        : Colors.grey.shade300,
+                    foregroundColor: isActive ? Colors.white : Colors.black87,
+                    child: Text(
+                      "${f.index}",
+                      style: const TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-              // Must style text manually since enabled=true but onTap=null looks disabled otherwise
-              title: Text(
-                f.text,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.black87),
+              title: Row(
+                children: [
+                  // NEW: Show ID if it exists
+                  if (f.id != null && f.id!.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blueGrey.shade50,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: Colors.blueGrey.shade200),
+                      ),
+                      child: Text(
+                        f.id!,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.blueGrey.shade700,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  // The Text
+                  Expanded(
+                    child: Text(
+                      f.text,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.black87),
+                    ),
+                  ),
+                ],
               ),
               subtitle: Text(
                 "${f.realStart.toStringAsFixed(2)}s  ➝  ${f.realEnd.toStringAsFixed(2)}s",
