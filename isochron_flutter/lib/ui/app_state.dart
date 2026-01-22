@@ -2,33 +2,22 @@ import 'package:isochron_cli/isochron_cli.dart';
 import 'package:just_waveform/just_waveform.dart';
 
 class AppState {
-  // --- Processing Status ---
   final bool isProcessing;
   final String statusMessage;
   final double progress;
-
-  // --- File Paths ---
   final String? audioPath;
   final String? textPath;
   final String? dictPath;
-
-  // --- Configuration ---
-  /// Tracks if the user confirmed the text file contains ID prefixes
   final bool hasIds;
-
-  // --- Data ---
   final List<Fragment> fragments;
   final Waveform? waveform;
-
-  // --- Playback State ---
   final Duration audioDuration;
   final Duration currentPlaybackPosition;
   final bool isPlaying;
-
-  // --- UI View State ---
   final double zoomLevel;
   final int? focusedFragmentIndex;
   final String? autoSavePath;
+  final bool hasUnsavedChanges;
 
   const AppState({
     this.isProcessing = false,
@@ -46,6 +35,7 @@ class AppState {
     this.zoomLevel = 1.0,
     this.focusedFragmentIndex,
     this.autoSavePath,
+    this.hasUnsavedChanges = false,
   });
 
   AppState copyWith({
@@ -65,6 +55,7 @@ class AppState {
     int? focusedFragmentIndex,
     bool clearFocus = false,
     String? autoSavePath,
+    bool? hasUnsavedChanges,
   }) {
     return AppState(
       isProcessing: isProcessing ?? this.isProcessing,
@@ -85,6 +76,7 @@ class AppState {
           ? null
           : (focusedFragmentIndex ?? this.focusedFragmentIndex),
       autoSavePath: autoSavePath ?? this.autoSavePath,
+      hasUnsavedChanges: hasUnsavedChanges ?? this.hasUnsavedChanges,
     );
   }
 }

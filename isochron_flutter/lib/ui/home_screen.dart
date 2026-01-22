@@ -80,76 +80,120 @@ class _MainScreenState extends State<MainScreen> {
       },
       child: Focus(
         autofocus: true,
-        child: Scaffold(
-          appBar: AppBar(
-            leading: Navigator.canPop(context)
-                ? IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => Navigator.pop(context),
-                  )
-                : null,
-            title: const Text('Isochron Studio'),
-          ),
-          body: ValueListenableBuilder<AppState>(
-            valueListenable: _controller,
-            builder: (context, state, _) {
-              return Column(
-                children: [
-                  ControlBar(
-                    controller: _controller,
-                    state: state,
-                    onRun: () => _controller.runAlignment(
-                      _ffmpegCtrl.text,
-                      _espeakCtrl.text,
-                    ),
-                  ),
+        child: ValueListenableBuilder<AppState>(
+          valueListenable: _controller,
+          builder: (context, state, _) {
+            return PopScope(
+              canPop: !state.hasUnsavedChanges,
 
-                  if (state.isProcessing)
-                    LinearProgressIndicator(value: state.progress),
+              // Callback when pop is blocked
+              onPopInvokedWithResult: (didPop, result) async {
+                if (didPop) return;
 
-                  if (state.waveform != null) ...[
-                    WaveformControls(
-                      isPlaying: state.isPlaying,
-                      zoom: state.zoomLevel,
-                      onPlayPause: _controller.togglePlay,
-                      onSkipNext: () => _handleSkipNext(state),
-                      onSkipPrev: () => _handleSkipPrev(state),
-                      onZoom: (z) => _controller.setZoom(z.toDouble()),
-                    ),
-                    Expanded(
-                      flex: 1,
-                      child: Container(
-                        color: Colors.white,
-                        child: WaveformView(
-                          controller: _controller,
-                          state: state,
-                          scrollController: _waveScroll,
+                // Show warning dialog
+                final bool shouldDiscard =
+                    await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text("Unsaved Changes"),
+                        content: const Text(
+                          "You have unsaved changes. If you leave now, they will be lost.",
                         ),
+                        actions: [
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.of(context).pop(false), // Stay
+                            child: const Text("Cancel"),
+                          ),
+                          FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.red,
+                            ),
+                            onPressed: () =>
+                                Navigator.of(context).pop(true), // Leave
+                            child: const Text("Discard Changes"),
+                          ),
+                        ],
+                      ),
+                    ) ??
+                    false;
+
+                if (shouldDiscard) {
+                  // Mark state as clean so the next pop works
+                  _controller.discardChanges();
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
+                }
+              },
+              child: Scaffold(
+                appBar: AppBar(
+                  leading: Navigator.canPop(context)
+                      ? IconButton(
+                          icon: const Icon(Icons.arrow_back),
+                          onPressed: () => Navigator.maybePop(context),
+                        )
+                      : null,
+                  title: const Text('Isochron Studio'),
+                ),
+                body: Column(
+                  children: [
+                    ControlBar(
+                      controller: _controller,
+                      state: state,
+                      onRun: () => _controller.runAlignment(
+                        _ffmpegCtrl.text,
+                        _espeakCtrl.text,
+                      ),
+                    ),
+
+                    if (state.isProcessing)
+                      LinearProgressIndicator(value: state.progress),
+
+                    if (state.waveform != null) ...[
+                      WaveformControls(
+                        isPlaying: state.isPlaying,
+                        zoom: state.zoomLevel,
+                        onPlayPause: _controller.togglePlay,
+                        onSkipNext: () => _handleSkipNext(state),
+                        onSkipPrev: () => _handleSkipPrev(state),
+                        onZoom: (z) => _controller.setZoom(z.toDouble()),
+                      ),
+                      Expanded(
+                        flex: 1,
+                        child: Container(
+                          color: Colors.white,
+                          child: WaveformView(
+                            controller: _controller,
+                            state: state,
+                            scrollController: _waveScroll,
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    Expanded(
+                      flex: 2,
+                      child: FragmentList(
+                        fragments: state.fragments,
+                        currentPos: state.currentPlaybackPosition,
+                        // Use _jumpTo directly here
+                        onJumpTo: (idx) {
+                          _controller.exitFocusMode();
+                          _jumpTo(idx, state);
+                        },
+                        onDoubleTap: (idx) {
+                          _controller.enterFocusMode(idx);
+                          // Also scroll to it immediately using _jumpTo logic logic (optional,
+                          // but enterFocusMode usually handles center, _jumpTo handles scroll)
+                        },
                       ),
                     ),
                   ],
-
-                  Expanded(
-                    flex: 2,
-                    child: FragmentList(
-                      fragments: state.fragments,
-                      currentPos: state.currentPlaybackPosition,
-                      // Use _jumpTo directly here
-                      onJumpTo: (idx) {
-                        _controller.exitFocusMode();
-                        _jumpTo(idx, state);
-                      },
-                      onDoubleTap: (idx) {
-                        _controller.enterFocusMode(idx);
-                        // Also scroll to it immediately using _jumpTo logic logic (optional,
-                        // but enterFocusMode usually handles center, _jumpTo handles scroll)
-                      },
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );

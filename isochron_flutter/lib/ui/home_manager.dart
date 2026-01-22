@@ -72,10 +72,11 @@ class HomeManager extends ValueNotifier<AppState> {
     value = value.copyWith(
       audioPath: item.audioPath,
       textPath: item.textPath,
-      autoSavePath: absJsonPath, // <--- ENABLE AUTO SAVE
+      autoSavePath: absJsonPath,
       fragments: loadedFragments,
       audioDuration: duration,
       statusMessage: "Loaded ${p.basename(item.audioPath)}",
+      hasUnsavedChanges: false,
     );
   }
 
@@ -106,10 +107,14 @@ class HomeManager extends ValueNotifier<AppState> {
       final jsonString = const JsonEncoder.withIndent('  ').convert(jsonList);
       await File(value.autoSavePath!).writeAsString(jsonString);
 
-      value = value.copyWith(statusMessage: "Saved.");
+      value = value.copyWith(statusMessage: "Saved.", hasUnsavedChanges: false);
     } catch (e) {
       value = value.copyWith(statusMessage: "Save Failed: $e");
     }
+  }
+
+  void discardChanges() {
+    value = value.copyWith(hasUnsavedChanges: false);
   }
 
   // --- Actions ---
@@ -514,7 +519,7 @@ class HomeManager extends ValueNotifier<AppState> {
     }
 
     // 7. Trigger UI Update
-    value = value.copyWith(fragments: frags);
+    value = value.copyWith(fragments: frags, hasUnsavedChanges: true);
   }
 
   // --- Helper ---

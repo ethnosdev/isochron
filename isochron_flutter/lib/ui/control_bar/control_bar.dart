@@ -55,14 +55,18 @@ class ControlBar extends StatelessWidget {
           if (state.autoSavePath != null)
             ElevatedButton.icon(
               icon: const Icon(Icons.save),
-              label: const Text("Save Project"),
+              label: const Text("Save"),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.teal,
-                foregroundColor: Colors.white,
+                backgroundColor: state.hasUnsavedChanges
+                    ? Colors.teal
+                    : Colors.grey.shade300,
+                foregroundColor: state.hasUnsavedChanges
+                    ? Colors.white
+                    : Colors.grey.shade600,
               ),
-              onPressed: state.fragments.isNotEmpty
-                  ? controller
-                        .saveProject // Call the new silent save
+              // Disable button if no changes
+              onPressed: (state.fragments.isNotEmpty && state.hasUnsavedChanges)
+                  ? controller.saveProject
                   : null,
             )
           else
