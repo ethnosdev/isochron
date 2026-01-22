@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/ui/dialogs/text_preview_dialog.dart';
 import 'package:isochron_flutter/ui/dialogs/transliteration_preview_dialog.dart';
+import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:just_waveform/just_waveform.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
@@ -34,6 +35,81 @@ class HomeManager extends ValueNotifier<AppState> {
   void dispose() {
     _audioService.dispose();
     super.dispose();
+  }
+
+  /// Loads a specific item from a Project.
+  /// 1. Sets Audio/Text paths.
+  /// 2. Checks if output JSON already exists. If so, loads it.
+  /// 3. Sets the autoSavePath.
+  Future<void> loadProjectItem(ProjectItem item, String projectRoot) async {
+    final absJsonPath = item.getAbsoluteOutputPath(projectRoot);
+
+    // 1. Load Audio Duration
+    final duration = await _audioService.load(item.audioPath);
+
+    // 2. Load Existing JSON if available
+    List<Fragment> loadedFragments = [];
+    if (await File(absJsonPath).exists()) {
+      final content = await File(absJsonPath).readAsString();
+      final List<dynamic> jsonList = jsonDecode(content);
+      // Simple mapping back to Fragment
+      // (You might want to add a factory Fragment.fromJson to your class later)
+      loadedFragments = jsonList
+          .map(
+            (j) =>
+                Fragment(index: j['index'], id: j['id'], text: j['text'])
+                  ..setRealTiming(
+                    start: (j['start'] as num).toDouble(),
+                    end: (j['end'] as num).toDouble(),
+                  ),
+          )
+          .toList();
+    }
+
+    // 3. Initialize Waveform (Background)
+    _generateWaveform(item.audioPath);
+
+    value = value.copyWith(
+      audioPath: item.audioPath,
+      textPath: item.textPath,
+      autoSavePath: absJsonPath, // <--- ENABLE AUTO SAVE
+      fragments: loadedFragments,
+      audioDuration: duration,
+      statusMessage: "Loaded ${p.basename(item.audioPath)}",
+    );
+  }
+
+  /// Saves to the project file immediately without a dialog
+  Future<void> saveProject() async {
+    if (value.autoSavePath == null) {
+      // Fallback to export if not in project mode
+      return exportJson();
+    }
+
+    if (value.fragments.isEmpty) return;
+
+    try {
+      value = value.copyWith(statusMessage: "Saving...");
+
+      final List<Map<String, dynamic>> jsonList = value.fragments
+          .map(
+            (f) => {
+              'index': f.index,
+              if (f.id != null) 'id': f.id,
+              'text': f.text,
+              'start': double.parse(f.realStart.toStringAsFixed(3)),
+              'end': double.parse(f.realEnd.toStringAsFixed(3)),
+            },
+          )
+          .toList();
+
+      final jsonString = const JsonEncoder.withIndent('  ').convert(jsonList);
+      await File(value.autoSavePath!).writeAsString(jsonString);
+
+      value = value.copyWith(statusMessage: "Saved.");
+    } catch (e) {
+      value = value.copyWith(statusMessage: "Save Failed: $e");
+    }
   }
 
   // --- Actions ---

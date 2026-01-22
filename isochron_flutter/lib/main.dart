@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'ui/home_screen.dart';
+import 'ui/welcome_screen.dart'; // Import the new screen
 
 void main() {
   runApp(const IsochronApp());
@@ -17,7 +17,7 @@ class IsochronApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
       ),
-      home: const MainScreen(),
+      home: const WelcomeScreen(),
     );
   }
 }

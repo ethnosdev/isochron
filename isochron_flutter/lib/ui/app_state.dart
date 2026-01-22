@@ -28,6 +28,7 @@ class AppState {
   // --- UI View State ---
   final double zoomLevel;
   final int? focusedFragmentIndex;
+  final String? autoSavePath;
 
   const AppState({
     this.isProcessing = false,
@@ -44,6 +45,7 @@ class AppState {
     this.isPlaying = false,
     this.zoomLevel = 1.0,
     this.focusedFragmentIndex,
+    this.autoSavePath,
   });
 
   AppState copyWith({
@@ -62,6 +64,7 @@ class AppState {
     double? zoomLevel,
     int? focusedFragmentIndex,
     bool clearFocus = false,
+    String? autoSavePath,
   }) {
     return AppState(
       isProcessing: isProcessing ?? this.isProcessing,
@@ -81,6 +84,7 @@ class AppState {
       focusedFragmentIndex: clearFocus
           ? null
           : (focusedFragmentIndex ?? this.focusedFragmentIndex),
+      autoSavePath: autoSavePath ?? this.autoSavePath,
     );
   }
 }

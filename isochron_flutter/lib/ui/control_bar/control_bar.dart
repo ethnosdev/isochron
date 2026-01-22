@@ -52,21 +52,35 @@ class ControlBar extends StatelessWidget {
                 : null,
           ),
           const SizedBox(width: 8),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.download),
-            label: const Text("Export JSON"),
-            onPressed: state.fragments.isNotEmpty
-                ? controller.exportJson
-                : null,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.teal,
-              side: BorderSide(
-                color: state.fragments.isNotEmpty
-                    ? Colors.teal
-                    : Colors.grey.shade300,
+          if (state.autoSavePath != null)
+            ElevatedButton.icon(
+              icon: const Icon(Icons.save),
+              label: const Text("Save Project"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: state.fragments.isNotEmpty
+                  ? controller
+                        .saveProject // Call the new silent save
+                  : null,
+            )
+          else
+            OutlinedButton.icon(
+              icon: const Icon(Icons.download),
+              label: const Text("Export JSON"),
+              onPressed: state.fragments.isNotEmpty
+                  ? controller.exportJson
+                  : null,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.teal,
+                side: BorderSide(
+                  color: state.fragments.isNotEmpty
+                      ? Colors.teal
+                      : Colors.grey.shade300,
+                ),
               ),
             ),
-          ),
         ],
       ),
     );

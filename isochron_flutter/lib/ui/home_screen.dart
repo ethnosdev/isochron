@@ -1,15 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/waveform/fragment_list.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'home_manager.dart';
 import 'app_state.dart';
 import 'control_bar/control_bar.dart';
 import 'waveform/waveform_view.dart';
-import 'waveform/waveform_controls.dart'; // Assume this exists (simple row of buttons)
+import 'waveform/waveform_controls.dart';
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+  final ProjectItem? initialProjectItem;
+  final String? initialProjectRoot;
+
+  const MainScreen({
+    super.key,
+    this.initialProjectItem,
+    this.initialProjectRoot,
+  });
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -25,6 +33,18 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _loadSettings();
+
+    // Check if we are opening a project item
+    if (widget.initialProjectItem != null &&
+        widget.initialProjectRoot != null) {
+      // Execute this after the build frame so UI is ready
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _controller.loadProjectItem(
+          widget.initialProjectItem!,
+          widget.initialProjectRoot!,
+        );
+      });
+    }
   }
 
   Future<void> _loadSettings() async {
@@ -61,7 +81,15 @@ class _MainScreenState extends State<MainScreen> {
       child: Focus(
         autofocus: true,
         child: Scaffold(
-          appBar: AppBar(title: const Text('Isochron Studio')),
+          appBar: AppBar(
+            leading: Navigator.canPop(context)
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => Navigator.pop(context),
+                  )
+                : null,
+            title: const Text('Isochron Studio'),
+          ),
           body: ValueListenableBuilder<AppState>(
             valueListenable: _controller,
             builder: (context, state, _) {

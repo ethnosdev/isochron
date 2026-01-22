@@ -16,6 +16,7 @@ dependencies:
   just_audio: ^0.10.5
   just_waveform: ^0.0.7
   rxdart: ^0.28.0
+  uuid: ^4.5.2
   
   # Our Local Engine
   isochron_cli:
