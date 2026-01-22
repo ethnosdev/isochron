@@ -314,9 +314,8 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
               )
               .toList();
 
-          // B. Determine Recording ID (Use filename without extension)
-          // e.g. /path/to/MAT_01.mp3 -> MAT_01
-          final recId = p.basenameWithoutExtension(item.audioPath);
+          /// Could ask user for this
+          final recId = 'xxx';
 
           // C. Append Lines (Skip header logic in helper, do manually here for speed)
           for (final f in fragments) {
