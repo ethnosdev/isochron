@@ -10,6 +10,7 @@ class AlignmentService {
     required String ffmpegPath,
     required String espeakPath,
     String? dictPath,
+    bool hasIds = false,
     required Function(String status, double progress) onProgress,
   }) async {
     final receivePort = ReceivePort();
@@ -27,6 +28,7 @@ class AlignmentService {
         'rulesJson': rulesJson,
         'ffmpeg': ffmpegPath,
         'espeak': espeakPath,
+        'hasIds': hasIds,
       });
 
       await for (final message in receivePort) {
@@ -51,17 +53,41 @@ class AlignmentService {
     final workDir = Directory.systemTemp.createTempSync('iso_bg_');
 
     try {
-      final text = await File(args['textPath']).readAsString();
-
-      // Parse optional rules
       Map<String, String>? rules;
       if (args['rulesJson'] != null) {
         final rawMap = jsonDecode(args['rulesJson']) as Map<String, dynamic>;
         rules = rawMap.map((key, value) => MapEntry(key, value.toString()));
       }
 
-      final frags = await IsochronProcessor.process(
-        text: text,
+      final hasIds = args['hasIds'] as bool;
+      final File textFile = File(args['textPath']);
+      final lines = await textFile.readAsLines();
+
+      String cleanTextForEngine = "";
+      List<String> extractedIds = [];
+
+      if (hasIds) {
+        final buffer = StringBuffer();
+        for (var line in lines) {
+          if (line.trim().isEmpty) continue;
+          final parts = line.trim().split(' ');
+          if (parts.length > 1) {
+            extractedIds.add(parts.first); // Store ID
+            buffer.writeln(parts.sublist(1).join(' ')); // Store Text
+          } else {
+            extractedIds.add("");
+            buffer.writeln(line);
+          }
+        }
+        cleanTextForEngine = buffer.toString();
+      } else {
+        // Just read raw if no IDs
+        cleanTextForEngine = await textFile.readAsString();
+      }
+
+      // 1. Run Alignment on CLEAN text
+      final List<Fragment> rawFragments = await IsochronProcessor.process(
+        text: cleanTextForEngine,
         audioPath: args['audioPath'],
         workDir: workDir,
         ffmpegPath: args['ffmpeg'],
@@ -71,7 +97,21 @@ class AlignmentService {
             sendPort.send({'type': 'progress', 'status': s, 'value': p}),
       );
 
-      sendPort.send({'type': 'result', 'data': frags});
+      // 2. Merge IDs back (if applicable)
+      List<Fragment> finalFragments = rawFragments;
+
+      if (hasIds && extractedIds.isNotEmpty) {
+        finalFragments = [];
+        for (int i = 0; i < rawFragments.length; i++) {
+          String? id;
+          if (i < extractedIds.length) {
+            id = extractedIds[i];
+          }
+          finalFragments.add(rawFragments[i].copyWith(id: id));
+        }
+      }
+
+      sendPort.send({'type': 'result', 'data': finalFragments});
     } catch (e) {
       sendPort.send({'type': 'error', 'error': e.toString()});
     } finally {

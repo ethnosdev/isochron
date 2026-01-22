@@ -1,5 +1,12 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:isochron_cli/isochron_cli.dart';
+import 'package:isochron_flutter/services/user_settings_service.dart';
+import 'package:isochron_flutter/ui/dialogs/transliteration_preview_dialog.dart';
 import 'package:isochron_flutter/ui/project/project_dashboard.dart';
 import 'package:path/path.dart' as p;
 import '../../services/project_service.dart';
@@ -13,6 +20,8 @@ class ProjectCreationWizard extends StatefulWidget {
 
 class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
   final _projectNameCtrl = TextEditingController(text: "My New Project");
+  bool _hasIds = false;
+  bool _isAnalyzing = false;
 
   List<String> _audioFiles = [];
   List<String> _textFiles = [];
@@ -73,6 +82,14 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
                   FileType.custom,
                   (files) => setState(() => _textFiles = files),
                   extensions: ['txt'],
+                ),
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text("Text files start with ID?"),
+                  subtitle: const Text("e.g. '4001001 In the beginning...'"),
+                  value: _hasIds,
+                  onChanged: (val) => setState(() => _hasIds = val ?? false),
                 ),
                 const SizedBox(height: 20),
                 const Text("Optional:"),
@@ -146,6 +163,52 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
         );
         return;
       }
+
+      if (_dictPath != null) {
+        setState(() => _isAnalyzing = true);
+
+        try {
+          // 1. Load Dictionary
+          final jsonString = await File(_dictPath!).readAsString();
+          final Map<String, dynamic> rawMap = jsonDecode(jsonString);
+          final rules = rawMap.map((k, v) => MapEntry(k, v.toString()));
+
+          // 2. Run Analysis on ALL files via Compute
+          final result = await compute(
+            _analyzeAllFiles,
+            _AnalysisRequest(_textFiles, rules, _hasIds),
+          );
+
+          setState(() => _isAnalyzing = false);
+
+          if (!mounted) return;
+
+          // 3. Show Result
+          final bool confirm =
+              await showDialog<bool>(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => TransliterationPreviewDialog(
+                  dictName: p.basename(_dictPath!),
+                  previewLines:
+                      result.previewLines, // Show samples from first file
+                  unknownChars: result.unknownChars, // Collected from ALL files
+                ),
+              ) ??
+              false;
+
+          if (!confirm) return; // Stop if user cancels
+        } catch (e) {
+          setState(() => _isAnalyzing = false);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("Error checking dictionary: $e")),
+            );
+          }
+          return; // Stop on error
+        }
+      }
+
       // Sort initially for better UX before manual reordering
       _audioFiles.sort((a, b) => p.basename(a).compareTo(p.basename(b)));
       _textFiles.sort((a, b) => p.basename(a).compareTo(p.basename(b)));
@@ -159,6 +222,7 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
         _audioFiles,
         _textFiles,
         _dictPath,
+        _hasIds,
       );
 
       if (project != null && mounted) {
@@ -193,12 +257,20 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
             Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
             OutlinedButton(
               onPressed: () async {
+                final settings = UserSettingsService();
+                final lastDir = settings.lastSourceDir;
                 final result = await FilePicker.platform.pickFiles(
                   type: type,
                   allowMultiple: true,
                   allowedExtensions: extensions,
+                  initialDirectory: lastDir,
                 );
                 if (result != null) {
+                  if (result.files.isNotEmpty &&
+                      result.files.first.path != null) {
+                    final parent = File(result.files.first.path!).parent.path;
+                    await settings.setLastSourceDir(parent);
+                  }
                   onSelected(result.paths.whereType<String>().toList());
                 }
               },
@@ -362,4 +434,64 @@ class _PairingList extends StatelessWidget {
       ],
     );
   }
+}
+
+// --- BACKGROUND ISOLATE LOGIC ---
+
+class _AnalysisRequest {
+  final List<String> filePaths;
+  final Map<String, String> rules;
+  final bool hasIds;
+  _AnalysisRequest(this.filePaths, this.rules, this.hasIds);
+}
+
+class _AnalysisResult {
+  final List<String> previewLines;
+  final List<String> unknownChars;
+  _AnalysisResult(this.previewLines, this.unknownChars);
+}
+
+Future<_AnalysisResult> _analyzeAllFiles(_AnalysisRequest req) async {
+  final Set<String> unknownSet = {};
+  final List<String> previewLines = [];
+  final nonLatinRegex = RegExp(r'[^\x00-\x7F]'); // Detects non-ASCII
+
+  // Loop through ALL files
+  for (int i = 0; i < req.filePaths.length; i++) {
+    final file = File(req.filePaths[i]);
+    if (!file.existsSync()) continue;
+
+    final lines = await file.readAsLines();
+
+    for (var line in lines) {
+      if (line.trim().isEmpty) continue;
+
+      String textToProcess = line;
+
+      // Strip IDs
+      if (req.hasIds) {
+        final parts = line.trim().split(' ');
+        if (parts.length > 1) {
+          textToProcess = parts.sublist(1).join(' ');
+        }
+      }
+
+      // Transliterate
+      final converted = Transliterator.convert(textToProcess, req.rules);
+
+      // Collect Unknowns
+      final matches = nonLatinRegex.allMatches(converted);
+      for (var m in matches) {
+        unknownSet.add(m.group(0)!);
+      }
+
+      // Save Preview (Only from the first file, first 5 lines)
+      if (i == 0 && previewLines.length < 5) {
+        previewLines.add(converted);
+      }
+    }
+  }
+
+  final sortedUnknowns = unknownSet.toList()..sort();
+  return _AnalysisResult(previewLines, sortedUnknowns);
 }

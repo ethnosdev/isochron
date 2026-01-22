@@ -8,6 +8,7 @@ class ProjectItem {
   final String id;
   final String audioPath;
   final String textPath;
+  final bool hasIds;
 
   /// The filename of the JSON output (stored relative to project dir)
   final String outputFilename;
@@ -18,6 +19,7 @@ class ProjectItem {
     required this.audioPath,
     required this.textPath,
     required this.outputFilename,
+    required this.hasIds,
     this.status = ProjectItemStatus.pending,
   });
 
@@ -31,6 +33,7 @@ class ProjectItem {
     'audioPath': audioPath,
     'textPath': textPath,
     'outputFilename': outputFilename,
+    'hasIds': hasIds,
     'status': status.index,
   };
 
@@ -40,6 +43,7 @@ class ProjectItem {
       audioPath: json['audioPath'],
       textPath: json['textPath'],
       outputFilename: json['outputFilename'],
+      hasIds: json['hasIds'] ?? false,
       status: ProjectItemStatus.values[json['status'] ?? 0],
     );
   }
@@ -50,6 +54,7 @@ class ProjectItem {
       audioPath: audioPath,
       textPath: textPath,
       outputFilename: outputFilename,
+      hasIds: hasIds,
       status: status ?? this.status,
     );
   }
@@ -58,8 +63,16 @@ class ProjectItem {
 class Project {
   final String id;
   final String name;
+
+  /// The root folder where project.json lives
   final String directoryPath;
+
+  /// Optional global dictionary for this project
   final String? dictionaryPath;
+
+  /// Whether the text files include "ID prefixes" (e.g. "40001001 text...")
+  final bool hasIds;
+
   final List<ProjectItem> items;
 
   Project({
@@ -67,6 +80,7 @@ class Project {
     required this.name,
     required this.directoryPath,
     this.dictionaryPath,
+    required this.hasIds,
     required this.items,
   });
 
@@ -75,6 +89,7 @@ class Project {
     'name': name,
     'directoryPath': directoryPath,
     'dictionaryPath': dictionaryPath,
+    'hasIds': hasIds,
     'items': items.map((i) => i.toJson()).toList(),
   };
 
@@ -84,13 +99,14 @@ class Project {
       name: json['name'],
       directoryPath: json['directoryPath'],
       dictionaryPath: json['dictionaryPath'],
+      hasIds: json['hasIds'] ?? false,
       items: (json['items'] as List)
           .map((i) => ProjectItem.fromJson(i))
           .toList(),
     );
   }
 
-  /// Helper to save the project to disk
+  /// Saves the project metadata to [directoryPath]/project.json
   Future<void> save() async {
     final file = File(p.join(directoryPath, 'project.json'));
     const encoder = JsonEncoder.withIndent('  ');

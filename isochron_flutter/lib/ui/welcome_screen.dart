@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/project/creation_wizard.dart';
 import 'package:isochron_flutter/ui/project/project_dashboard.dart';
 import '../services/project_service.dart';
@@ -140,14 +143,20 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     });
 
     try {
+      final settings = UserSettingsService();
+      final lastDir = settings.lastProjectDir;
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['json'],
         dialogTitle: "Select Project File",
+        initialDirectory: lastDir,
       );
 
       if (result != null && result.files.single.path != null) {
         final path = result.files.single.path!;
+
+        final parentDir = File(path).parent.path;
+        await settings.setLastProjectDir(parentDir);
 
         // Load the project using your service
         final project = await _projectService.loadProject(path);

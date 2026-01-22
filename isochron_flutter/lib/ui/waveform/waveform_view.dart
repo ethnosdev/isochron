@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import '../home_manager.dart';
-import '../app_state.dart';
+import '../models/app_state.dart';
 import 'waveform_painter.dart';
 
 class WaveformView extends StatefulWidget {

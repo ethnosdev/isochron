@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
@@ -14,13 +15,19 @@ class ProjectService {
     List<String> audioPaths,
     List<String> textPaths,
     String? dictPath,
+    bool hasIds,
   ) async {
+    final settings = UserSettingsService();
+    final lastDir = settings.lastProjectDir;
+
     // 1. Pick Directory
     String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
       dialogTitle: "Select Folder to Save Project",
     );
 
     if (selectedDirectory == null) return null;
+
+    await settings.setLastProjectDir(selectedDirectory);
 
     final projectDir = Directory(p.join(selectedDirectory, name));
     if (!await projectDir.exists()) {
@@ -34,7 +41,7 @@ class ProjectService {
     }
 
     // 3. Create Items (The Pairing Logic)
-    final items = _pairFiles(audioPaths, textPaths);
+    final items = _pairFiles(audioPaths, textPaths, hasIds);
 
     // 4. Create Project Object
     final project = Project(
@@ -43,6 +50,7 @@ class ProjectService {
       directoryPath: projectDir.path,
       dictionaryPath: dictPath,
       items: items,
+      hasIds: hasIds,
     );
 
     // 5. Save to JSON
@@ -63,7 +71,11 @@ class ProjectService {
 
   /// Auto-pairs files based on sorting.
   /// This is the "Data Logic" for the wizard.
-  List<ProjectItem> _pairFiles(List<String> audio, List<String> text) {
+  List<ProjectItem> _pairFiles(
+    List<String> audio,
+    List<String> text,
+    bool hasIds,
+  ) {
     // Sort to increase chance of matching
     audio.sort((a, b) => p.basename(a).compareTo(p.basename(b)));
     text.sort((a, b) => p.basename(a).compareTo(p.basename(b)));
@@ -86,6 +98,7 @@ class ProjectService {
             audioPath: audioPath,
             textPath: textPath,
             outputFilename: '$name.json',
+            hasIds: hasIds,
             status: ProjectItemStatus.pending,
           ),
         );

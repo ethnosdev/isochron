@@ -4,7 +4,7 @@ import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/waveform/fragment_list.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'home_manager.dart';
-import 'app_state.dart';
+import 'models/app_state.dart';
 import 'control_bar/control_bar.dart';
 import 'waveform/waveform_view.dart';
 import 'waveform/waveform_controls.dart';

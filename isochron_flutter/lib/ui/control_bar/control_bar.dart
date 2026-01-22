@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../home_manager.dart';
-import '../app_state.dart';
+import '../models/app_state.dart';
 
 class ControlBar extends StatelessWidget {
   final HomeManager controller;

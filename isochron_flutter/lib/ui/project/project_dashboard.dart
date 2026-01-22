@@ -225,6 +225,7 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
         ffmpegPath: ffmpeg,
         espeakPath: espeak,
         dictPath: _project.dictionaryPath,
+        hasIds: _project.hasIds,
         onProgress: (status, prog) {
           if (mounted) setState(() => _currentProgress = prog);
         },

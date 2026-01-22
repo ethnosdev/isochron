@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'ui/welcome_screen.dart'; // Import the new screen
 
-void main() {
+void main() async {
+  // 1. Ensure bindings are initialized
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // 2. Init Settings
+  await UserSettingsService().init();
+
   runApp(const IsochronApp());
 }
 

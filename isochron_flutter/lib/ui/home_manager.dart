@@ -13,7 +13,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'app_state.dart';
+import 'models/app_state.dart';
 import '../services/alignment_service.dart';
 import '../services/audio_service.dart';
 
