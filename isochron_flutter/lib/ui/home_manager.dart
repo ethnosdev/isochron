@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/ui/dialogs/text_preview_dialog.dart';
 import 'package:isochron_flutter/ui/dialogs/transliteration_preview_dialog.dart';
@@ -12,17 +11,17 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/app_state.dart';
-import '../services/alignment_service.dart';
-import '../services/audio_service.dart';
+import 'app_state.dart';
+import '../../services/alignment_service.dart';
+import '../../services/audio_service.dart';
 
-class AlignmentController extends ValueNotifier<AppState> {
+class HomeManager extends ValueNotifier<AppState> {
   final AudioService _audioService = AudioService();
   final AlignmentService _alignmentService = AlignmentService();
 
   static const String _keyLastDir = 'last_picked_directory';
 
-  AlignmentController() : super(const AppState()) {
+  HomeManager() : super(const AppState()) {
     _audioService.positionStream.listen((pos) {
       value = value.copyWith(currentPlaybackPosition: pos);
     });

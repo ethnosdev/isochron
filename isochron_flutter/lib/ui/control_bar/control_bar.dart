@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../controllers/alignment_controller.dart';
-import '../../models/app_state.dart';
+import '../home_manager.dart';
+import '../app_state.dart';
 
 class ControlBar extends StatelessWidget {
-  final AlignmentController controller;
+  final HomeManager controller;
   final AppState state;
   final VoidCallback onRun;
 

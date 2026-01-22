@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:isochron_flutter/ui/widgets/waveform/fragment_list.dart';
+import 'package:isochron_flutter/ui/home/waveform/fragment_list.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../controllers/alignment_controller.dart';
-import '../../models/app_state.dart';
-import '../widgets/control_bar.dart';
-import '../widgets/waveform/waveform_view.dart';
-import '../widgets/waveform/waveform_controls.dart'; // Assume this exists (simple row of buttons)
+import 'home_manager.dart';
+import 'app_state.dart';
+import 'control_bar/control_bar.dart';
+import 'waveform/waveform_view.dart';
+import 'waveform/waveform_controls.dart'; // Assume this exists (simple row of buttons)
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -15,7 +15,7 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  final AlignmentController _controller = AlignmentController();
+  final HomeManager _controller = HomeManager();
   final ScrollController _waveScroll = ScrollController();
   final TextEditingController _ffmpegCtrl = TextEditingController();
   final TextEditingController _espeakCtrl = TextEditingController();
