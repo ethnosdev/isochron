@@ -77,33 +77,35 @@ dart run bin/isochron_cli.dart \
 *   `--dict`: Path to a JSON file for character transliteration rules.
 *   `--ffmpeg` / `--espeak`: Custom paths to binaries (useful if they are not in your system PATH).
 
-## 📱 Flutter App Usage
+## Isochron Studio (Flutter App)
 
-The Flutter app provides a GUI for the engine.
+Isochron Studio is a macOS desktop application for batch-aligning audio and text. It uses a **Project-based workflow**, allowing you to manage, align, and edit dozens of files simultaneously without losing your progress.
 
-1.  Navigate to `isochron_flutter` and run:
-    ```bash
-    flutter pub get
-    flutter run -d macos
-    ```
+### 1. Running the App
+Navigate to the `isochron_flutter` directory:
+
+```bash
+cd isochron_flutter
+flutter pub get
+flutter run -d macos
+```
+
+### 2. Project Workflow
+
+**A. Welcome Screen**
+When you launch the app, you can:
+*   **Create New Project:** Starts the setup wizard.
+*   **Open Project:** Loads an existing `.json` project file. 
+
+**B. Project Creation Wizard**
+1.  **Select Files:** Pick your audio files (mp3) and text transcripts (txt).
 2.  **Configuration:**
-    *   Click the **Settings (Gear)** icon.
-    *   If `ffmpeg` or `espeak-ng` are not in your system path, enter their absolute paths (e.g., `/usr/local/bin/ffmpeg`).
-3.  **Transliteration:**
-    *   You can optionally select a JSON dictionary file to handle accents or non-Latin scripts.
+    *   **IDs Checkbox:** Check *"Text files start with ID?"* if your transcripts look like `4001001 In the beginning...`. Isochron will strip the ID before alignment (so the robot doesn't read the numbers) and re-attach it to the output data automatically.
+    *   **Transliteration:** Optionally select a JSON dictionary. The app will analyze all text files and warn you if any characters are missing from your dictionary.
+3.  **Pairing:** Drag and drop text files to align them with the correct audio files if the filenames don't match perfectly.
 
-## Transliteration System
 
-Isochron includes a smart transliterator to help `espeak-ng` pronounce difficult languages (like Polytonic Greek or Mongolian).
-
-Create a JSON file (e.g., `rules.json`) to define your mapping.
-
-**Logic Order:**
-1.  **Exact Match:** Checks if the character exists in your JSON.
-2.  **Decomposition:** If not, it decomposes the character (NFD normalization) and strips diacritics/accents.
-3.  **Base Match:** Checks if the stripped "base" character exists in your JSON.
-
-**Example (Koine Greek):**
+**Example transliteration file (Koine Greek):**
 ```json
 {
   "α": "a",
@@ -116,6 +118,34 @@ Create a JSON file (e.g., `rules.json`) to define your mapping.
 *Input:* `ἀρχῇ` -> *Stripped:* `αρχη` -> *Mapped:* `arche` -> *Spoken by Robot:* "arche".
 
 Because the diacritics are stripped by Isochron, there is no need to include diacritics in your JSON map.
+
+**C. The Dashboard**
+This is your command center.
+*   **Batch Processing:** Click **Run All Pending** to align every file in the queue sequentially.
+*   **Status Tracking:** Visual indicators show which files are Pending (Grey), Processing (Spinner), Done (Green), or Error (Red).
+*   **Editor Access:** Click the **Edit (Pencil)** icon on any item to open the Waveform Editor.
+
+**D. The Waveform Editor**
+Fine-tune the alignment results visually.
+
+### 3. Keyboard Shortcuts
+
+| Shortcut        | Action                                    |
+| :-------------- | :---------------------------------------- |
+| **Space**       | Play / Pause                              |
+| **Right Arrow** | Skip to next segment                      |
+| **Left Arrow**  | Skip to previous segment                  |
+| **Cmd + Right** | Nudge segment start **forward** (+0.15s)  |
+| **Cmd + Left**  | Nudge segment start **backward** (-0.15s) |
+
+### 4. Export Options
+
+Isochron Studio supports flexible data export from both the Dashboard and the Editor.
+
+*   **JSON:** The standard Isochron format containing IDs, text, start, and end times.
+*   **CSV:** Export timing data for databases or spreadsheets.
+    *   **Columns:** `id`, `verse_id`, `xxx` (Recording ID), `start`, `end`.
+    *   **Batch Export:** From the Dashboard, you can export **all** completed files into a single master CSV.
 
 ## License
 

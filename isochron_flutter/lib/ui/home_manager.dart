@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:isochron_cli/isochron_cli.dart';
-import 'package:isochron_flutter/services/csv_service.dart';
 import 'package:isochron_flutter/ui/dialogs/text_preview_dialog.dart';
 import 'package:isochron_flutter/ui/dialogs/transliteration_preview_dialog.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
@@ -117,39 +116,6 @@ class HomeManager extends ValueNotifier<AppState> {
   void discardChanges() {
     value = value.copyWith(hasUnsavedChanges: false);
   }
-
-  // Future<void> exportCsv(String recordingId) async {
-  //   if (value.fragments.isEmpty) return;
-
-  //   // 1. Generate Content
-  //   final csvContent = CsvService.generateCsv(value.fragments, recordingId);
-
-  //   // 2. Pick Save Location
-  //   // Default filename based on recordingId or audio filename
-  //   String defaultName = 'timing_data.csv';
-  //   if (value.audioPath != null) {
-  //     defaultName = '${p.basenameWithoutExtension(value.audioPath!)}.csv';
-  //   }
-
-  //   final String? outputFile = await FilePicker.platform.saveFile(
-  //     dialogTitle: 'Export CSV',
-  //     fileName: defaultName,
-  //     type: FileType.custom,
-  //     allowedExtensions: ['csv'],
-  //     lockParentWindow: true,
-  //   );
-
-  //   if (outputFile == null) return;
-
-  //   try {
-  //     await File(outputFile).writeAsString(csvContent);
-  //     value = value.copyWith(
-  //       statusMessage: "CSV Exported: ${p.basename(outputFile)}",
-  //     );
-  //   } catch (e) {
-  //     value = value.copyWith(statusMessage: "Export failed: $e");
-  //   }
-  // }
 
   Future<void> pickAudio() async {
     final path = await _pickFile(type: FileType.audio);
