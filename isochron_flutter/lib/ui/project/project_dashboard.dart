@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -67,6 +69,17 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
               onPressed: _runBatch,
             ),
           ],
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              if (v == 'export_all_csv') _exportBatchCsv();
+            },
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'export_all_csv',
+                child: Text("Export All to Single CSV"),
+              ),
+            ],
+          ),
         ],
       ),
       body: Column(
@@ -246,6 +259,98 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
       });
     } finally {
       await _saveProjectState();
+    }
+  }
+
+  Future<void> _exportBatchCsv() async {
+    // 1. Filter for DONE items
+    final doneItems = _project.items
+        .where((i) => i.status == ProjectItemStatus.done)
+        .toList();
+
+    if (doneItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No completed items to export.")),
+      );
+      return;
+    }
+
+    // 2. Ask for Save Location
+    final String? outputFile = await FilePicker.platform.saveFile(
+      dialogTitle: 'Export Combined CSV',
+      fileName: '${_project.name.replaceAll(" ", "_")}_full.csv',
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+    );
+
+    if (outputFile == null) return;
+
+    setState(() => _isBatchRunning = true);
+    _batchStatus = "Generating CSV...";
+
+    try {
+      final masterBuffer = StringBuffer();
+      // Write Header Once
+      masterBuffer.writeln('id,verse_id,recording_id,start,end');
+
+      for (var item in doneItems) {
+        final absJsonPath = item.getAbsoluteOutputPath(_project.directoryPath);
+        final file = File(absJsonPath);
+
+        if (await file.exists()) {
+          // A. Parse JSON
+          final content = await file.readAsString();
+          final List<dynamic> jsonList = jsonDecode(content);
+
+          final fragments = jsonList
+              .map(
+                (j) =>
+                    Fragment(index: j['index'], id: j['id'], text: j['text'])
+                      ..setRealTiming(
+                        start: (j['start'] as num).toDouble(),
+                        end: (j['end'] as num).toDouble(),
+                      ),
+              )
+              .toList();
+
+          // B. Determine Recording ID (Use filename without extension)
+          // e.g. /path/to/MAT_01.mp3 -> MAT_01
+          final recId = p.basenameWithoutExtension(item.audioPath);
+
+          // C. Append Lines (Skip header logic in helper, do manually here for speed)
+          for (final f in fragments) {
+            masterBuffer.write('${f.index},');
+            masterBuffer.write('${f.id ?? ""},');
+            masterBuffer.write('$recId,'); // Automatic ID
+            masterBuffer.write('${f.realStart.toStringAsFixed(3)},');
+            masterBuffer.write(f.realEnd.toStringAsFixed(3));
+            masterBuffer.writeln();
+          }
+        }
+      }
+
+      // 3. Write File
+      await File(outputFile).writeAsString(masterBuffer.toString());
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Exported ${doneItems.length} files to CSV")),
+        );
+      }
+    } catch (e) {
+      debugPrint("CSV Export Error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isBatchRunning = false;
+          _batchStatus = "";
+        });
+      }
     }
   }
 }
