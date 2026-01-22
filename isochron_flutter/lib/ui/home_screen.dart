@@ -49,6 +49,14 @@ class _MainScreenState extends State<MainScreen> {
         const SingleActivator(LogicalKeyboardKey.arrowLeft): () {
           _handleSkipPrev(_controller.value);
         },
+        // Command + Right: Move current segment start +100ms
+        const SingleActivator(LogicalKeyboardKey.arrowRight, meta: true): () {
+          _handleNudge(0.15);
+        },
+        // Command + Left: Move current segment start -100ms
+        const SingleActivator(LogicalKeyboardKey.arrowLeft, meta: true): () {
+          _handleNudge(-0.15);
+        },
       },
       child: Focus(
         autofocus: true,
@@ -117,6 +125,32 @@ class _MainScreenState extends State<MainScreen> {
         ),
       ),
     );
+  }
+
+  /// Adjusts the START time of the currently playing fragment.
+  /// Because fragments are contiguous, this automatically adjusts the
+  /// END time of the previous fragment.
+  void _handleNudge(double deltaSeconds) {
+    final state = _controller.value;
+    if (state.fragments.isEmpty) return;
+
+    final currentMs = state.currentPlaybackPosition.inMilliseconds;
+
+    // 1. Find the fragment currently under the playhead
+    final index = state.fragments.indexWhere(
+      (f) =>
+          currentMs >= (f.realStart * 1000) && currentMs <= (f.realEnd * 1000),
+    );
+
+    if (index != -1) {
+      final frag = state.fragments[index];
+
+      // 2. Calculate new start time
+      final newStart = frag.realStart + deltaSeconds;
+
+      // 3. Update via controller (handles validation and neighbor syncing)
+      _controller.updateFragment(index, newStart, frag.realEnd);
+    }
   }
 
   void _handleSkipNext(AppState state) {
