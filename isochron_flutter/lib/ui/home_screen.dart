@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:isochron_flutter/ui/home/waveform/fragment_list.dart';
+import 'package:isochron_flutter/ui/waveform/fragment_list.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'home_manager.dart';
 import 'app_state.dart';

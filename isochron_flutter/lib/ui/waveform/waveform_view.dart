@@ -116,42 +116,54 @@ class _WaveformViewState extends State<WaveformView> {
         // The actual widget size needs room for padding on both sides:
         final fullPainterWidth = contentWidth + (_hPadding * 2);
 
-        return SingleChildScrollView(
+        return Scrollbar(
           controller: widget.scrollController,
-          scrollDirection: Axis.horizontal,
-          physics: const ClampingScrollPhysics(),
-          child: MouseRegion(
-            cursor: _cursor,
-            // We use opaque to catch hover events everywhere in the box
-            hitTestBehavior: HitTestBehavior.opaque,
-            onHover: (event) =>
-                _handleHover(event.localPosition.dx, contentWidth, totalSec),
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapUp: (d) =>
-                  _handleSeek(d.localPosition.dx, contentWidth, totalSec),
-              onHorizontalDragStart: (d) =>
-                  _handleDragStart(d.localPosition.dx, contentWidth, totalSec),
-              onHorizontalDragUpdate: (d) =>
-                  _handleDragUpdate(d.localPosition.dx, contentWidth, totalSec),
-              onHorizontalDragEnd: (_) => setState(() {
-                _dragIndex = null;
-                _cursor = SystemMouseCursors.basic;
-              }),
-              child: CustomPaint(
-                size: Size(fullPainterWidth, constraints.maxHeight),
-                painter: IsochronWaveformPainter(
-                  waveform: wf,
-                  fragments: widget.state.fragments,
-                  playbackPosSeconds:
-                      widget.state.currentPlaybackPosition.inMilliseconds /
-                      1000.0,
-                  totalSeconds: totalSec,
-                  zoomLevel: widget.state.zoomLevel,
-                  accentColor: Theme.of(context).primaryColor,
-                  // NEW PARAMS
-                  contentWidth: contentWidth,
-                  padding: _hPadding,
+          thumbVisibility: true,
+          trackVisibility: true,
+          thickness: 10.0,
+          radius: const Radius.circular(5.0),
+          child: SingleChildScrollView(
+            controller: widget.scrollController,
+            scrollDirection: Axis.horizontal,
+            physics: const ClampingScrollPhysics(),
+            child: MouseRegion(
+              cursor: _cursor,
+              hitTestBehavior: HitTestBehavior.opaque,
+              onHover: (event) =>
+                  _handleHover(event.localPosition.dx, contentWidth, totalSec),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapUp: (d) =>
+                    _handleSeek(d.localPosition.dx, contentWidth, totalSec),
+                onHorizontalDragStart: (d) => _handleDragStart(
+                  d.localPosition.dx,
+                  contentWidth,
+                  totalSec,
+                ),
+                onHorizontalDragUpdate: (d) => _handleDragUpdate(
+                  d.localPosition.dx,
+                  contentWidth,
+                  totalSec,
+                ),
+                onHorizontalDragEnd: (_) => setState(() {
+                  _dragIndex = null;
+                  _cursor = SystemMouseCursors.basic;
+                }),
+                child: CustomPaint(
+                  size: Size(fullPainterWidth, constraints.maxHeight),
+                  painter: IsochronWaveformPainter(
+                    waveform: wf,
+                    fragments: widget.state.fragments,
+                    playbackPosSeconds:
+                        widget.state.currentPlaybackPosition.inMilliseconds /
+                        1000.0,
+                    totalSeconds: totalSec,
+                    zoomLevel: widget.state.zoomLevel,
+                    accentColor: Theme.of(context).primaryColor,
+                    // NEW PARAMS
+                    contentWidth: contentWidth,
+                    padding: _hPadding,
+                  ),
                 ),
               ),
             ),

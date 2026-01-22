@@ -12,8 +12,8 @@ import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_state.dart';
-import '../../services/alignment_service.dart';
-import '../../services/audio_service.dart';
+import '../services/alignment_service.dart';
+import '../services/audio_service.dart';
 
 class HomeManager extends ValueNotifier<AppState> {
   final AudioService _audioService = AudioService();
