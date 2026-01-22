@@ -18,7 +18,6 @@ class ProjectService {
     bool hasIds,
   ) async {
     final settings = UserSettingsService();
-    final lastDir = settings.lastProjectDir;
 
     // 1. Pick Directory
     String? selectedDirectory = await FilePicker.platform.getDirectoryPath(

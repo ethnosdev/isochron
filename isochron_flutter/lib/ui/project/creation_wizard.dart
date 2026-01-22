@@ -33,123 +33,155 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("New Project Setup")),
-      body: Stepper(
-        type: StepperType.horizontal,
-        currentStep: _currentStep,
-        onStepContinue: _nextStep,
-        onStepCancel: _prevStep,
-        controlsBuilder: (context, details) {
-          return Padding(
-            padding: const EdgeInsets.only(top: 20),
-            child: Row(
-              children: [
-                FilledButton(
-                  onPressed: details.onStepContinue,
-                  child: Text(_currentStep == 2 ? "Create Project" : "Next"),
+      body: Stack(
+        children: [
+          Stepper(
+            type: StepperType.horizontal,
+            currentStep: _currentStep,
+            onStepContinue: _nextStep,
+            onStepCancel: _prevStep,
+            controlsBuilder: (context, details) {
+              return Padding(
+                padding: const EdgeInsets.only(top: 20),
+                child: Row(
+                  children: [
+                    FilledButton(
+                      onPressed: details.onStepContinue,
+                      child: Text(
+                        _currentStep == 2 ? "Create Project" : "Next",
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    if (_currentStep > 0)
+                      TextButton(
+                        onPressed: details.onStepCancel,
+                        child: const Text("Back"),
+                      ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                if (_currentStep > 0)
-                  TextButton(
-                    onPressed: details.onStepCancel,
-                    child: const Text("Back"),
+              );
+            },
+            steps: [
+              // STEP 1: INPUTS
+              Step(
+                title: const Text("Select Files"),
+                content: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: _projectNameCtrl,
+                      decoration: const InputDecoration(
+                        labelText: "Project Name",
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildFileSelector(
+                      "Audio Files",
+                      _audioFiles,
+                      FileType.audio,
+                      (files) => setState(() => _audioFiles = files),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildFileSelector(
+                      "Transcripts (Text)",
+                      _textFiles,
+                      FileType.custom,
+                      (files) => setState(() => _textFiles = files),
+                      extensions: ['txt'],
+                    ),
+                    const SizedBox(height: 12),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text("Text files start with ID?"),
+                      subtitle: const Text(
+                        "e.g. '4001001 In the beginning...'",
+                      ),
+                      value: _hasIds,
+                      onChanged: (val) =>
+                          setState(() => _hasIds = val ?? false),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text("Optional:"),
+                    _buildSingleFileSelector(
+                      "Transliteration Dictionary (JSON)",
+                      _dictPath,
+                      (path) => setState(() => _dictPath = path),
+                    ),
+                  ],
+                ),
+                isActive: _currentStep >= 0,
+              ),
+
+              // STEP 2: PAIRING
+              Step(
+                title: const Text("Verify Pairs"),
+                content: SizedBox(
+                  height: 400, // Fixed height for list
+                  child: _PairingList(
+                    audioFiles: _audioFiles,
+                    textFiles: _textFiles,
+                    onReorderText: (oldIdx, newIdx) {
+                      setState(() {
+                        if (newIdx > oldIdx) newIdx -= 1;
+                        final item = _textFiles.removeAt(oldIdx);
+                        _textFiles.insert(newIdx, item);
+                      });
+                    },
                   ),
-              ],
-            ),
-          );
-        },
-        steps: [
-          // STEP 1: INPUTS
-          Step(
-            title: const Text("Select Files"),
-            content: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: _projectNameCtrl,
-                  decoration: const InputDecoration(labelText: "Project Name"),
                 ),
-                const SizedBox(height: 20),
-                _buildFileSelector(
-                  "Audio Files",
-                  _audioFiles,
-                  FileType.audio,
-                  (files) => setState(() => _audioFiles = files),
+                isActive: _currentStep >= 1,
+              ),
+
+              // STEP 3: CONFIRM
+              Step(
+                title: const Text("Finish"),
+                content: Column(
+                  children: [
+                    Text("Ready to create '${_projectNameCtrl.text}'"),
+                    Text("Audio Files: ${_audioFiles.length}"),
+                    Text("Text Files: ${_textFiles.length}"),
+                    if (_audioFiles.length != _textFiles.length)
+                      Container(
+                        margin: const EdgeInsets.only(top: 10),
+                        padding: const EdgeInsets.all(8),
+                        color: Colors.orange.shade100,
+                        child: Row(
+                          children: const [
+                            Icon(Icons.warning, color: Colors.orange),
+                            SizedBox(width: 8),
+                            Text(
+                              "Warning: Counts do not match. Some files may be ignored.",
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
-                const SizedBox(height: 20),
-                _buildFileSelector(
-                  "Transcripts (Text)",
-                  _textFiles,
-                  FileType.custom,
-                  (files) => setState(() => _textFiles = files),
-                  extensions: ['txt'],
-                ),
-                const SizedBox(height: 12),
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text("Text files start with ID?"),
-                  subtitle: const Text("e.g. '4001001 In the beginning...'"),
-                  value: _hasIds,
-                  onChanged: (val) => setState(() => _hasIds = val ?? false),
-                ),
-                const SizedBox(height: 20),
-                const Text("Optional:"),
-                _buildSingleFileSelector(
-                  "Transliteration Dictionary (JSON)",
-                  _dictPath,
-                  (path) => setState(() => _dictPath = path),
-                ),
-              ],
-            ),
-            isActive: _currentStep >= 0,
+                isActive: _currentStep >= 2,
+              ),
+            ],
           ),
 
-          // STEP 2: PAIRING
-          Step(
-            title: const Text("Verify Pairs"),
-            content: SizedBox(
-              height: 400, // Fixed height for list
-              child: _PairingList(
-                audioFiles: _audioFiles,
-                textFiles: _textFiles,
-                onReorderText: (oldIdx, newIdx) {
-                  setState(() {
-                    if (newIdx > oldIdx) newIdx -= 1;
-                    final item = _textFiles.removeAt(oldIdx);
-                    _textFiles.insert(newIdx, item);
-                  });
-                },
+          if (_isAnalyzing)
+            Container(
+              color: Colors.black45,
+              child: const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(color: Colors.white),
+                    SizedBox(height: 16),
+                    Text(
+                      "Analyzing dictionary matches...",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            isActive: _currentStep >= 1,
-          ),
-
-          // STEP 3: CONFIRM
-          Step(
-            title: const Text("Finish"),
-            content: Column(
-              children: [
-                Text("Ready to create '${_projectNameCtrl.text}'"),
-                Text("Audio Files: ${_audioFiles.length}"),
-                Text("Text Files: ${_textFiles.length}"),
-                if (_audioFiles.length != _textFiles.length)
-                  Container(
-                    margin: const EdgeInsets.only(top: 10),
-                    padding: const EdgeInsets.all(8),
-                    color: Colors.orange.shade100,
-                    child: Row(
-                      children: const [
-                        Icon(Icons.warning, color: Colors.orange),
-                        SizedBox(width: 8),
-                        Text(
-                          "Warning: Counts do not match. Some files may be ignored.",
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-            isActive: _currentStep >= 2,
-          ),
         ],
       ),
     );
