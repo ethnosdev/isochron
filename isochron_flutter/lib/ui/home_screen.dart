@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:isochron_flutter/ui/waveform/fragment_list.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'home_manager.dart';
@@ -34,67 +35,86 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Isochron Studio')),
-      body: ValueListenableBuilder<AppState>(
-        valueListenable: _controller,
-        builder: (context, state, _) {
-          return Column(
-            children: [
-              ControlBar(
-                controller: _controller,
-                state: state,
-                onRun: () => _controller.runAlignment(
-                  _ffmpegCtrl.text,
-                  _espeakCtrl.text,
-                ),
-              ),
-
-              if (state.isProcessing)
-                LinearProgressIndicator(value: state.progress),
-
-              if (state.waveform != null) ...[
-                WaveformControls(
-                  isPlaying: state.isPlaying,
-                  zoom: state.zoomLevel,
-                  onPlayPause: _controller.togglePlay,
-                  onSkipNext: () => _handleSkipNext(state),
-                  onSkipPrev: () => _handleSkipPrev(state),
-                  onZoom: (z) => _controller.setZoom(z.toDouble()),
-                ),
-                Expanded(
-                  flex: 1,
-                  child: Container(
-                    color: Colors.white,
-                    child: WaveformView(
-                      controller: _controller,
-                      state: state,
-                      scrollController: _waveScroll,
+    return CallbackShortcuts(
+      bindings: {
+        // Space: Play/Pause
+        const SingleActivator(LogicalKeyboardKey.space): () {
+          _controller.togglePlay();
+        },
+        // Right Arrow: Skip Next
+        const SingleActivator(LogicalKeyboardKey.arrowRight): () {
+          _handleSkipNext(_controller.value);
+        },
+        // Left Arrow: Skip Previous
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): () {
+          _handleSkipPrev(_controller.value);
+        },
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          appBar: AppBar(title: const Text('Isochron Studio')),
+          body: ValueListenableBuilder<AppState>(
+            valueListenable: _controller,
+            builder: (context, state, _) {
+              return Column(
+                children: [
+                  ControlBar(
+                    controller: _controller,
+                    state: state,
+                    onRun: () => _controller.runAlignment(
+                      _ffmpegCtrl.text,
+                      _espeakCtrl.text,
                     ),
                   ),
-                ),
-              ],
 
-              Expanded(
-                flex: 2,
-                child: FragmentList(
-                  fragments: state.fragments,
-                  currentPos: state.currentPlaybackPosition,
-                  // Use _jumpTo directly here
-                  onJumpTo: (idx) {
-                    _controller.exitFocusMode();
-                    _jumpTo(idx, state);
-                  },
-                  onDoubleTap: (idx) {
-                    _controller.enterFocusMode(idx);
-                    // Also scroll to it immediately using _jumpTo logic logic (optional,
-                    // but enterFocusMode usually handles center, _jumpTo handles scroll)
-                  },
-                ),
-              ),
-            ],
-          );
-        },
+                  if (state.isProcessing)
+                    LinearProgressIndicator(value: state.progress),
+
+                  if (state.waveform != null) ...[
+                    WaveformControls(
+                      isPlaying: state.isPlaying,
+                      zoom: state.zoomLevel,
+                      onPlayPause: _controller.togglePlay,
+                      onSkipNext: () => _handleSkipNext(state),
+                      onSkipPrev: () => _handleSkipPrev(state),
+                      onZoom: (z) => _controller.setZoom(z.toDouble()),
+                    ),
+                    Expanded(
+                      flex: 1,
+                      child: Container(
+                        color: Colors.white,
+                        child: WaveformView(
+                          controller: _controller,
+                          state: state,
+                          scrollController: _waveScroll,
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  Expanded(
+                    flex: 2,
+                    child: FragmentList(
+                      fragments: state.fragments,
+                      currentPos: state.currentPlaybackPosition,
+                      // Use _jumpTo directly here
+                      onJumpTo: (idx) {
+                        _controller.exitFocusMode();
+                        _jumpTo(idx, state);
+                      },
+                      onDoubleTap: (idx) {
+                        _controller.enterFocusMode(idx);
+                        // Also scroll to it immediately using _jumpTo logic logic (optional,
+                        // but enterFocusMode usually handles center, _jumpTo handles scroll)
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }
