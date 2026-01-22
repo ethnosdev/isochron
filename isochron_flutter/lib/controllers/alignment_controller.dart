@@ -265,10 +265,10 @@ class AlignmentController extends ValueNotifier<AppState> {
 
     final totalSeconds = value.audioDuration.inMilliseconds / 1000.0;
 
-    // Calculate Zoom: We want exactly 2.0 seconds visible on screen.
+    // Calculate Zoom: We want exactly 10.0 seconds visible on screen.
     // Logic: zoomLevel = TotalDuration / DesiredVisibleDuration
     // We cap it at 500x to prevent memory/performance issues on extremely long files.
-    final targetZoom = (totalSeconds / 2.0).clamp(1.0, 500.0);
+    final targetZoom = (totalSeconds / 10.0).clamp(1.0, 500.0);
 
     final startSeconds = value.fragments[index].realStart;
     seekTo(Duration(milliseconds: (startSeconds * 1000).toInt()));
