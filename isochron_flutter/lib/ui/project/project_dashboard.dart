@@ -141,6 +141,10 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
           child: CircularProgressIndicator(strokeWidth: 2),
         );
       case ProjectItemStatus.done:
+        // Machine finished, but not reviewed
+        return const Icon(Icons.auto_awesome, color: Colors.blue);
+      case ProjectItemStatus.reviewed:
+        // You manually saved this!
         return const Icon(Icons.check_circle, color: Colors.green);
       case ProjectItemStatus.error:
         return const Icon(Icons.error, color: Colors.red);
@@ -150,19 +154,29 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
   // --- ACTIONS ---
 
   Future<void> _openEditor(ProjectItem item) async {
-    // Navigate to MainScreen.
-    // Note: We need a way to tell MainScreen to load THIS item.
-    // We can do this by passing arguments or calling a method after push.
-    // A clean way is to make MainScreen take an optional 'ProjectItem' + 'ProjectRoot'
+    // Find the index of the item we are editing
+    final index = _project.items.indexOf(item);
 
-    // For now, let's assume we modify MainScreen to accept these:
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => _EditorWrapper(item: item, project: _project),
+        builder: (_) => MainScreen(
+          initialProjectItem: item,
+          initialProjectRoot: _project.directoryPath,
+          onNotifySaved: () async {
+            // This code runs whenever you click "Save" in the editor
+            setState(() {
+              _project.items[index] = _project.items[index].copyWith(
+                status: ProjectItemStatus.reviewed,
+              );
+            });
+            // Persist the status change to project.json
+            await _project.save();
+          },
+        ),
       ),
     );
 
-    // When we return, the status might have changed (if user saved), so refresh
+    // Refresh UI when returning from editor
     setState(() {});
   }
 

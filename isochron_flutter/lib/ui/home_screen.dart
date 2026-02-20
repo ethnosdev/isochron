@@ -12,11 +12,13 @@ import 'waveform/waveform_controls.dart';
 class MainScreen extends StatefulWidget {
   final ProjectItem? initialProjectItem;
   final String? initialProjectRoot;
+  final VoidCallback? onNotifySaved;
 
   const MainScreen({
     super.key,
     this.initialProjectItem,
     this.initialProjectRoot,
+    this.onNotifySaved,
   });
 
   @override
@@ -32,6 +34,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
+    _controller.onSaveCallback = widget.onNotifySaved;
     _loadSettings();
 
     // Check if we are opening a project item

@@ -19,6 +19,7 @@ import '../services/audio_service.dart';
 class HomeManager extends ValueNotifier<AppState> {
   final AudioService _audioService = AudioService();
   final AlignmentService _alignmentService = AlignmentService();
+  VoidCallback? onSaveCallback;
 
   static const String _keyLastDir = 'last_picked_directory';
 
@@ -108,6 +109,7 @@ class HomeManager extends ValueNotifier<AppState> {
       await File(value.autoSavePath!).writeAsString(jsonString);
 
       value = value.copyWith(statusMessage: "Saved.", hasUnsavedChanges: false);
+      onSaveCallback?.call();
     } catch (e) {
       value = value.copyWith(statusMessage: "Save Failed: $e");
     }

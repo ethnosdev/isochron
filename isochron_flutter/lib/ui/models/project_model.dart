@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 
-enum ProjectItemStatus { pending, processing, done, error }
+enum ProjectItemStatus { pending, processing, done, reviewed, error }
 
 class ProjectItem {
   final String id;
