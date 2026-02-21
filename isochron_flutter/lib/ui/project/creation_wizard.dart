@@ -199,7 +199,7 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
                       Container(
                         margin: const EdgeInsets.only(top: 10),
                         padding: const EdgeInsets.all(8),
-                        color: Colors.orange.shade100,
+                        color: Colors.orange.withValues(alpha: 0.2),
                         child: Row(
                           children: const [
                             Icon(Icons.warning, color: Colors.orange),
@@ -460,7 +460,9 @@ class _PairingList extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       decoration: BoxDecoration(
                         border: Border(
-                          bottom: BorderSide(color: Colors.grey.shade200),
+                          bottom: BorderSide(
+                            color: Theme.of(context).dividerColor,
+                          ),
                         ),
                       ),
                       child: Text(name, style: const TextStyle(fontSize: 12)),
@@ -493,9 +495,11 @@ class _PairingList extends StatelessWidget {
                       alignment: Alignment.centerLeft,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.surface,
                         border: Border(
-                          bottom: BorderSide(color: Colors.grey.shade200),
+                          bottom: BorderSide(
+                            color: Theme.of(context).dividerColor,
+                          ),
                         ),
                       ),
                       child: Row(

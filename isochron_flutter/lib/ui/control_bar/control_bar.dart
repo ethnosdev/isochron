@@ -59,10 +59,10 @@ class ControlBar extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: state.hasUnsavedChanges
                     ? Colors.teal
-                    : Colors.grey.shade300,
+                    : Theme.of(context).colorScheme.surfaceContainerHighest,
                 foregroundColor: state.hasUnsavedChanges
-                    ? Colors.white
-                    : Colors.grey.shade600,
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
               // Disable button if no changes
               onPressed: (state.fragments.isNotEmpty && state.hasUnsavedChanges)
@@ -81,7 +81,7 @@ class ControlBar extends StatelessWidget {
                 side: BorderSide(
                   color: state.fragments.isNotEmpty
                       ? Colors.teal
-                      : Colors.grey.shade300,
+                      : Theme.of(context).colorScheme.outlineVariant,
                 ),
               ),
             ),

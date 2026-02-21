@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/ui/dialogs/project_settings_dialog.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
+import 'package:isochron_flutter/ui/widgets/theme_toggle_button.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -43,6 +44,9 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    // 1. Grab the dynamic color scheme for the current theme
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -51,11 +55,15 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
             Text(_project.name, style: const TextStyle(fontSize: 16)),
             Text(
               "${_project.items.length} files",
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(
+                fontSize: 12,
+                color: colorScheme.onSurfaceVariant,
+              ), // <-- Dynamic color
             ),
           ],
         ),
         actions: [
+          const ThemeToggleButton(), // Assuming you added this earlier!
           if (_isBatchRunning)
             Center(
               child: Padding(
@@ -71,7 +79,6 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
             ),
           ],
           PopupMenuButton<String>(
-            // Note: Made this async to handle the dialog
             onSelected: (v) async {
               if (v == 'export_all_csv') {
                 _exportBatchCsv();
@@ -82,8 +89,6 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
                 );
                 if (result != null && result.settingsChanged) {
                   await _saveProjectState();
-
-                  // Run the retroactive updater if they requested it
                   if (result.applyRetroactively) {
                     await _applyIdStrategyToSavedFiles();
                   }
@@ -91,23 +96,31 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
               }
             },
             itemBuilder: (ctx) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'project_settings',
                 child: Row(
                   children: [
-                    Icon(Icons.settings, color: Colors.black54, size: 20),
-                    SizedBox(width: 8),
-                    Text("Project Settings"),
+                    Icon(
+                      Icons.settings,
+                      color: colorScheme.onSurfaceVariant,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text("Project Settings"),
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'export_all_csv',
                 child: Row(
                   children: [
-                    Icon(Icons.download, color: Colors.black54, size: 20),
-                    SizedBox(width: 8),
-                    Text("Export All to Single CSV"),
+                    Icon(
+                      Icons.download,
+                      color: colorScheme.onSurfaceVariant,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text("Export All to Single CSV"),
                   ],
                 ),
               ),
@@ -122,34 +135,40 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
           Expanded(
             child: ListView.separated(
               itemCount: _project.items.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, __) =>
+                  Divider(height: 1, color: Theme.of(context).dividerColor),
               itemBuilder: (ctx, i) {
                 final item = _project.items[i];
+
+                final isCompleted =
+                    item.status == ProjectItemStatus.done ||
+                    item.status == ProjectItemStatus.reviewed;
+
                 return ListTile(
-                  leading: _buildStatusIcon(item.status),
+                  leading: _buildStatusIcon(item.status, colorScheme),
                   title: Text(p.basename(item.audioPath)),
                   subtitle: Text(
                     "JSON: ${item.outputFilename}",
                     style: TextStyle(
-                      color: item.status == ProjectItemStatus.done
-                          ? Colors.green
-                          : Colors.grey,
+                      color: isCompleted
+                          ? colorScheme.primary
+                          : colorScheme.onSurfaceVariant,
                     ),
                   ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // "Run Individual" Button
                       if (!_isBatchRunning)
                         IconButton(
                           icon: const Icon(Icons.bolt, size: 20),
                           tooltip: "Align this file",
+                          color: colorScheme.onSurfaceVariant,
                           onPressed: () => _runSingleItem(i),
                         ),
-                      // "Edit" Button
                       IconButton(
                         icon: const Icon(Icons.edit),
                         tooltip: "Open Editor",
+                        color: colorScheme.primary,
                         onPressed: () => _openEditor(item),
                       ),
                     ],
@@ -163,10 +182,10 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
     );
   }
 
-  Widget _buildStatusIcon(ProjectItemStatus status) {
+  Widget _buildStatusIcon(ProjectItemStatus status, ColorScheme colorScheme) {
     switch (status) {
       case ProjectItemStatus.pending:
-        return const Icon(Icons.circle_outlined, color: Colors.grey);
+        return Icon(Icons.circle_outlined, color: colorScheme.outline);
       case ProjectItemStatus.processing:
         return const SizedBox(
           width: 24,
@@ -174,13 +193,11 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
           child: CircularProgressIndicator(strokeWidth: 2),
         );
       case ProjectItemStatus.done:
-        // Machine finished, but not reviewed
-        return const Icon(Icons.auto_awesome, color: Colors.blue);
+        return Icon(Icons.auto_awesome, color: colorScheme.secondary);
       case ProjectItemStatus.reviewed:
-        // You manually saved this!
-        return const Icon(Icons.check_circle, color: Colors.green);
+        return Icon(Icons.check_circle, color: colorScheme.primary);
       case ProjectItemStatus.error:
-        return const Icon(Icons.error, color: Colors.red);
+        return Icon(Icons.error, color: colorScheme.error);
     }
   }
 

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/project/creation_wizard.dart';
 import 'package:isochron_flutter/ui/project/project_dashboard.dart';
+import 'package:isochron_flutter/ui/widgets/theme_toggle_button.dart';
 import '../services/project_service.dart';
 
 class WelcomeScreen extends StatefulWidget {
@@ -21,7 +22,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: const [ThemeToggleButton()],
+      ),
       body: Center(
         child: Container(
           constraints: const BoxConstraints(maxWidth: 800),
@@ -29,7 +37,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // --- Logo / Title ---
               const Icon(Icons.waves, size: 64, color: Colors.teal),
               const SizedBox(height: 16),
               const Text(
@@ -39,11 +46,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               const SizedBox(height: 8),
               Text(
                 "Forced Alignment & Audio Timings Editor",
-                style: TextStyle(color: Colors.grey.shade600),
+                style: TextStyle(
+                  color: colorScheme.onSurfaceVariant,
+                ), // <-- Dynamic color
               ),
               const SizedBox(height: 48),
 
-              // --- Action Cards ---
               if (_isLoading)
                 const CircularProgressIndicator()
               else
@@ -66,20 +74,21 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   ],
                 ),
 
-              // --- Error Message ---
               if (_error != null) ...[
                 const SizedBox(height: 24),
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.red.shade50,
+                    color: colorScheme.errorContainer, // <-- Dynamic color
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.shade200),
+                    border: Border.all(
+                      color: colorScheme.error,
+                    ), // <-- Dynamic color
                   ),
                   child: Text(
                     _error!,
-                    style: TextStyle(color: Colors.red.shade800),
-                  ),
+                    style: TextStyle(color: colorScheme.onErrorContainer),
+                  ), // <-- Dynamic color
                 ),
               ],
             ],
@@ -121,7 +130,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               Text(
                 subtitle,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ), // <-- Dynamic color
               ),
             ],
           ),

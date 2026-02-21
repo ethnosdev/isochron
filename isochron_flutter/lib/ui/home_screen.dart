@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/waveform/fragment_list.dart';
+import 'package:isochron_flutter/ui/widgets/theme_toggle_button.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
 import 'home_manager.dart';
@@ -169,6 +170,7 @@ class _MainScreenState extends State<MainScreen> {
                       : null,
                   title: Text(appBarTitle),
                   actions: [
+                    const ThemeToggleButton(),
                     if (hasNextFile)
                       TextButton.icon(
                         icon: const Icon(Icons.skip_next),
@@ -202,7 +204,7 @@ class _MainScreenState extends State<MainScreen> {
                       Expanded(
                         flex: 1,
                         child: Container(
-                          color: Colors.white,
+                          color: Theme.of(context).colorScheme.surface,
                           child: WaveformView(
                             controller: _controller,
                             state: state,

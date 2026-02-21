@@ -8,7 +8,12 @@ class IsochronWaveformPainter extends CustomPainter {
   final double playbackPosSeconds;
   final double totalSeconds;
   final double zoomLevel;
+
+  // --- Dynamic Theme Colors ---
   final Color accentColor;
+  final Color waveColor;
+  final Color playheadColor;
+
   final double contentWidth;
   final double padding;
 
@@ -19,6 +24,8 @@ class IsochronWaveformPainter extends CustomPainter {
     required this.totalSeconds,
     required this.zoomLevel,
     required this.accentColor,
+    required this.waveColor,
+    required this.playheadColor,
     required this.contentWidth,
     required this.padding,
   });
@@ -42,7 +49,7 @@ class IsochronWaveformPainter extends CustomPainter {
     final wavePaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0
-      ..color = Colors.blueGrey.withOpacity(0.6);
+      ..color = waveColor; // <-- Uses dynamic color from theme
 
     final totalSamples = waveform.length;
     const double pixelStep = 1.0;
@@ -62,6 +69,8 @@ class IsochronWaveformPainter extends CustomPainter {
     final paintLine = Paint()
       ..color = accentColor
       ..strokeWidth = 2.0;
+
+    // Fill background for the verse
     final paintFill = Paint()..color = accentColor.withOpacity(0.15);
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
 
@@ -96,8 +105,10 @@ class IsochronWaveformPainter extends CustomPainter {
   void _drawPlayhead(Canvas canvas, Size size) {
     final x = (playbackPosSeconds / totalSeconds) * size.width;
     final paint = Paint()
-      ..color = Colors.red
+      ..color =
+          playheadColor // <-- Uses dynamic color from theme
       ..strokeWidth = 2.0;
+
     canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
 
     // Triangle Cap
@@ -106,7 +117,10 @@ class IsochronWaveformPainter extends CustomPainter {
     pathHead.lineTo(x + 6, 0);
     pathHead.lineTo(x, 8);
     pathHead.close();
-    canvas.drawPath(pathHead, Paint()..color = Colors.red);
+    canvas.drawPath(
+      pathHead,
+      Paint()..color = playheadColor,
+    ); // <-- dynamic color
   }
 
   double _normalise(int s, double height) {

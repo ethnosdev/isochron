@@ -159,8 +159,11 @@ class _WaveformViewState extends State<WaveformView> {
                         1000.0,
                     totalSeconds: totalSec,
                     zoomLevel: widget.state.zoomLevel,
-                    accentColor: Theme.of(context).primaryColor,
-                    // NEW PARAMS
+                    accentColor: Theme.of(context).colorScheme.primary,
+                    waveColor: Theme.of(
+                      context,
+                    ).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                    playheadColor: Theme.of(context).colorScheme.error,
                     contentWidth: contentWidth,
                     padding: _hPadding,
                   ),

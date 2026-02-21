@@ -35,8 +35,10 @@ class _TextPreviewDialogState extends State<TextPreviewDialog> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                border: Border.all(color: Colors.grey.shade300),
+                color: Theme.of(context).colorScheme.surfaceContainer,
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Column(

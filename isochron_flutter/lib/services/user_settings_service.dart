@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class UserSettingsService {
@@ -14,9 +15,24 @@ class UserSettingsService {
   static const String _keyLastDictDir = 'last_dict_dir';
   static const String _keyFfmpegPath = 'ffmpeg';
   static const String _keyEspeakPath = 'espeak';
+  static const String _keyThemeMode = 'theme_mode';
+
+  late final ValueNotifier<ThemeMode> themeNotifier;
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
+
+    // Load saved theme or default to system
+    final savedThemeIndex =
+        _prefs.getInt(_keyThemeMode) ?? ThemeMode.system.index;
+    themeNotifier = ValueNotifier(ThemeMode.values[savedThemeIndex]);
+  }
+
+  // --- Theme ---
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    themeNotifier.value = mode;
+    await _prefs.setInt(_keyThemeMode, mode.index);
   }
 
   // --- Directory Settings ---
@@ -30,8 +46,6 @@ class UserSettingsService {
   Future<void> setLastSourceDir(String path) async {
     await _prefs.setString(_keyLastSourceDir, path);
   }
-
-  // --- Dictionary ---
 
   String? get lastDictDir => _prefs.getString(_keyLastDictDir);
   Future<void> setLastDictDir(String path) async {

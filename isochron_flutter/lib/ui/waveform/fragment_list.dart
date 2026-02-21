@@ -21,21 +21,14 @@ class FragmentList extends StatefulWidget {
 
 class _FragmentListState extends State<FragmentList> {
   final ScrollController _scrollController = ScrollController();
-
-  // Standard height for a dense, two-line ListTile
   static const double _itemHeight = 64.0;
 
   @override
   void didUpdateWidget(FragmentList oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    // 1. Calculate which index was active before
     final oldIndex = _getActiveIndex(oldWidget.fragments, oldWidget.currentPos);
-
-    // 2. Calculate which index is active now
     final newIndex = _getActiveIndex(widget.fragments, widget.currentPos);
 
-    // 3. If the active index changed, scroll to the new one
     if (newIndex != -1 && newIndex != oldIndex) {
       _scrollToIndex(newIndex);
     }
@@ -50,18 +43,10 @@ class _FragmentListState extends State<FragmentList> {
 
   void _scrollToIndex(int index) {
     if (!_scrollController.hasClients) return;
-
-    // 1. Target the previous item to keep context
     final targetIndex = index > 0 ? index - 1 : 0;
-
-    // 2. Calculate ideal pixel offset
     final idealOffset = targetIndex * _itemHeight;
-
-    // 3. Get physical limits of the scroll view
     final min = _scrollController.position.minScrollExtent;
     final max = _scrollController.position.maxScrollExtent;
-
-    // 4. Clamp the offset so we don't try to scroll past the bottom
     final clampedOffset = idealOffset.clamp(min, max);
 
     _scrollController.animateTo(
@@ -83,8 +68,8 @@ class _FragmentListState extends State<FragmentList> {
       return const Center(child: Text("No alignment data."));
     }
 
-    // We use ListView.builder with itemExtent instead of separated.
-    // itemExtent enforces fixed height, allowing precise scrolling.
+    final colorScheme = Theme.of(context).colorScheme;
+
     return ListView.builder(
       controller: _scrollController,
       itemCount: widget.fragments.length,
@@ -96,16 +81,19 @@ class _FragmentListState extends State<FragmentList> {
             widget.currentPos.inMilliseconds <= (f.realEnd * 1000);
 
         return Container(
-          // Simulate the Divider using a bottom border
           decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-            color: isActive ? Colors.teal.withOpacity(0.1) : null,
+            border: Border(
+              bottom: BorderSide(color: Theme.of(context).dividerColor),
+            ),
+            // A beautiful dynamic highlight color for both light/dark mode
+            color: isActive
+                ? colorScheme.primaryContainer.withOpacity(0.5)
+                : null,
           ),
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () => widget.onJumpTo(i),
             onDoubleTap: () => widget.onDoubleTap(i),
-            // 2. Disable ListTile's internal onTap so gestures bubble up
             child: ListTile(
               enabled: true,
               onTap: null,
@@ -114,13 +102,14 @@ class _FragmentListState extends State<FragmentList> {
               leading: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Show Index Circle
                   CircleAvatar(
                     radius: 10,
                     backgroundColor: isActive
-                        ? Colors.teal
-                        : Colors.grey.shade300,
-                    foregroundColor: isActive ? Colors.white : Colors.black87,
+                        ? colorScheme.primary
+                        : colorScheme.surfaceContainerHighest,
+                    foregroundColor: isActive
+                        ? colorScheme.onPrimary
+                        : colorScheme.onSurfaceVariant,
                     child: Text(
                       "${f.index}",
                       style: const TextStyle(
@@ -133,7 +122,6 @@ class _FragmentListState extends State<FragmentList> {
               ),
               title: Row(
                 children: [
-                  // NEW: Show ID if it exists
                   if (f.id != null && f.id!.isNotEmpty) ...[
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -141,38 +129,41 @@ class _FragmentListState extends State<FragmentList> {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.blueGrey.shade50,
+                        color: colorScheme.surfaceContainer,
                         borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: Colors.blueGrey.shade200),
+                        border: Border.all(color: colorScheme.outlineVariant),
                       ),
                       child: Text(
                         f.id!,
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.blueGrey.shade700,
+                          color: colorScheme.onSurfaceVariant,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
                   ],
-                  // The Text
                   Expanded(
                     child: Text(
                       f.text,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.black87),
+                      // Removed hardcoded black so it turns white in Dark Mode automatically
+                      style: TextStyle(color: colorScheme.onSurface),
                     ),
                   ),
                 ],
               ),
               subtitle: Text(
                 "${f.realStart.toStringAsFixed(2)}s  ➝  ${f.realEnd.toStringAsFixed(2)}s",
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: colorScheme.onSurfaceVariant,
+                ),
               ),
               trailing: isActive
-                  ? const Icon(Icons.volume_up, size: 16, color: Colors.teal)
+                  ? Icon(Icons.volume_up, size: 16, color: colorScheme.primary)
                   : null,
             ),
           ),

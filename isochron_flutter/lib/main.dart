@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
-import 'ui/welcome_screen.dart'; // Import the new screen
+import 'ui/welcome_screen.dart';
 
 void main() async {
-  // 1. Ensure bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
-
-  // 2. Init Settings
   await UserSettingsService().init();
-
   runApp(const IsochronApp());
 }
 
@@ -17,14 +13,30 @@ class IsochronApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Isochron Studio',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
-        useMaterial3: true,
-      ),
-      home: const WelcomeScreen(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: UserSettingsService().themeNotifier,
+      builder: (context, currentMode, _) {
+        return MaterialApp(
+          title: 'Isochron Studio',
+          debugShowCheckedModeBanner: false,
+          themeMode: currentMode, // <-- Listens to the toggle!
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: Colors.teal,
+              brightness: Brightness.light,
+            ),
+            useMaterial3: true,
+          ),
+          darkTheme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: Colors.teal,
+              brightness: Brightness.dark,
+            ),
+            useMaterial3: true,
+          ),
+          home: const WelcomeScreen(),
+        );
+      },
     );
   }
 }
