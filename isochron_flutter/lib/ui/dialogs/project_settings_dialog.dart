@@ -3,6 +3,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:path/path.dart' as p;
 
+class ProjectSettingsResult {
+  final bool settingsChanged;
+  final bool applyRetroactively;
+  ProjectSettingsResult(this.settingsChanged, this.applyRetroactively);
+}
+
 class ProjectSettingsDialog extends StatefulWidget {
   final Project project;
 
@@ -17,6 +23,10 @@ class _ProjectSettingsDialogState extends State<ProjectSettingsDialog> {
   late TextEditingController _prefixCtrl;
   String? _dictPath;
   int _idMode = 0;
+
+  // Track original settings to see if they changed
+  late int _originalIdMode;
+  late String _originalPrefix;
 
   @override
   void initState() {
@@ -34,6 +44,9 @@ class _ProjectSettingsDialogState extends State<ProjectSettingsDialog> {
     } else {
       _idMode = 0;
     }
+
+    _originalIdMode = _idMode;
+    _originalPrefix = _prefixCtrl.text.trim();
   }
 
   @override
@@ -136,22 +149,17 @@ class _ProjectSettingsDialogState extends State<ProjectSettingsDialog> {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
-              const Text(
-                "Note: Changing the ID strategy will only affect alignments run AFTER saving. To update existing completed files, you must run them again.",
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
             ],
           ),
         ),
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
+          onPressed: () => Navigator.of(context).pop(null),
           child: const Text("Cancel"),
         ),
         FilledButton(
-          onPressed: () {
+          onPressed: () async {
             if (_idMode == 2 && _prefixCtrl.text.trim().isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text("Please enter a prefix.")),
@@ -159,6 +167,38 @@ class _ProjectSettingsDialogState extends State<ProjectSettingsDialog> {
               return;
             }
 
+            bool applyRetroactively = false;
+            bool strategyChanged =
+                (_idMode != _originalIdMode) ||
+                (_prefixCtrl.text.trim() != _originalPrefix);
+
+            // If they changed the ID Strategy to something new, ask them if they want to apply it
+            if (strategyChanged && _idMode != 0) {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text("Update Existing Files?"),
+                  content: const Text(
+                    "You changed the Verse ID Strategy.\n\n"
+                    "Would you like to automatically inject these new IDs into your existing aligned JSON files now?\n\n"
+                    "Note: Your manual timing edits (start/end times) will NOT be overwritten.",
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text("No"),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text("Yes, Update IDs"),
+                    ),
+                  ],
+                ),
+              );
+              applyRetroactively = confirm ?? false;
+            }
+
+            // Apply to project object
             widget.project.name = _nameCtrl.text;
             widget.project.dictionaryPath = _dictPath;
             widget.project.hasIds = (_idMode == 1);
@@ -167,7 +207,11 @@ class _ProjectSettingsDialogState extends State<ProjectSettingsDialog> {
                 ? _prefixCtrl.text.trim()
                 : null;
 
-            Navigator.of(context).pop(true);
+            if (mounted) {
+              Navigator.of(
+                context,
+              ).pop(ProjectSettingsResult(true, applyRetroactively));
+            }
           },
           child: const Text("Save"),
         ),

@@ -73,12 +73,17 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
               icon: const Icon(Icons.settings),
               tooltip: "Project Settings",
               onPressed: () async {
-                final changed = await showDialog<bool>(
+                final result = await showDialog<ProjectSettingsResult>(
                   context: context,
                   builder: (_) => ProjectSettingsDialog(project: _project),
                 );
-                if (changed == true) {
+                if (result != null && result.settingsChanged) {
                   await _saveProjectState();
+
+                  // Run the retroactive updater if they requested it!
+                  if (result.applyRetroactively) {
+                    await _applyIdStrategyToSavedFiles();
+                  }
                 }
               },
             ),
@@ -386,6 +391,92 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
           _batchStatus = "";
         });
       }
+    }
+  }
+
+  Future<void> _applyIdStrategyToSavedFiles() async {
+    setState(() => _isBatchRunning = true);
+    _batchStatus = "Updating IDs in saved files...";
+
+    int updatedCount = 0;
+
+    // Loop through all project items
+    for (int index = 0; index < _project.items.length; index++) {
+      final item = _project.items[index];
+      final absPath = item.getAbsoluteOutputPath(_project.directoryPath);
+      final file = File(absPath);
+
+      // Only touch files that already exist (already aligned)
+      if (await file.exists()) {
+        try {
+          final content = await file.readAsString();
+          final List<dynamic> jsonList = jsonDecode(content);
+          bool modified = false;
+
+          for (int j = 0; j < jsonList.length; j++) {
+            final Map<String, dynamic> frag = jsonList[j];
+
+            // Strategy: Auto-Generate
+            if (_project.generateIds && _project.generatedIdPrefix != null) {
+              final recStr = (index + 1).toString().padLeft(
+                3,
+                '0',
+              ); // file index + 1
+              final verseStr = (j + 1).toString().padLeft(
+                3,
+                '0',
+              ); // verse index + 1
+              final newId = '${_project.generatedIdPrefix}$recStr$verseStr';
+
+              if (frag['id'] != newId) {
+                frag['id'] = newId;
+                modified = true;
+              }
+            }
+            // Strategy: IDs are in Text
+            else if (_project.hasIds) {
+              final textLines = await File(item.textPath).readAsLines();
+              final cleanLines = textLines
+                  .where((l) => l.trim().isNotEmpty)
+                  .toList();
+
+              if (j < cleanLines.length) {
+                final parts = cleanLines[j].trim().split(' ');
+                if (parts.length > 1) {
+                  final extractedId = parts.first;
+                  if (frag['id'] != extractedId) {
+                    frag['id'] = extractedId;
+                    modified = true;
+                  }
+                }
+              }
+            }
+          }
+
+          // Save the JSON back to disk ONLY if it actually changed
+          if (modified) {
+            final jsonString = const JsonEncoder.withIndent(
+              '  ',
+            ).convert(jsonList);
+            await file.writeAsString(jsonString);
+            updatedCount++;
+          }
+        } catch (e) {
+          debugPrint("Error updating IDs for ${item.audioPath}: $e");
+        }
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _isBatchRunning = false;
+        _batchStatus = "";
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Successfully updated IDs in $updatedCount files."),
+        ),
+      );
     }
   }
 }
