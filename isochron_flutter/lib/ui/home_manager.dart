@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:isochron_cli/isochron_cli.dart';
+import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/dialogs/text_preview_dialog.dart';
 import 'package:isochron_flutter/ui/dialogs/transliteration_preview_dialog.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
@@ -19,11 +20,12 @@ import '../services/audio_service.dart';
 class HomeManager extends ValueNotifier<AppState> {
   final AudioService _audioService = AudioService();
   final AlignmentService _alignmentService = AlignmentService();
+  final _settings = UserSettingsService();
   VoidCallback? onSaveCallback;
 
   static const String _keyLastDir = 'last_picked_directory';
 
-  HomeManager() : super(const AppState()) {
+  HomeManager() : super(AppState(zoomLevel: UserSettingsService().lastZoom)) {
     _audioService.positionStream.listen((pos) {
       value = value.copyWith(currentPlaybackPosition: pos);
     });
@@ -78,7 +80,6 @@ class HomeManager extends ValueNotifier<AppState> {
       clearWaveform: true, // Clears the old waveform
       clearFocus: true, // Clears focus
       currentPlaybackPosition: Duration.zero,
-      zoomLevel: 1.0,
     );
 
     // 5. Initialize Waveform (Background)
@@ -466,7 +467,9 @@ class HomeManager extends ValueNotifier<AppState> {
   void seekTo(Duration d) => _audioService.seek(d);
 
   void setZoom(double z) {
-    value = value.copyWith(zoomLevel: z.clamp(1.0, 500.0));
+    final clampedZoom = z.clamp(1.0, 500.0);
+    value = value.copyWith(zoomLevel: clampedZoom);
+    _settings.setLastZoom(clampedZoom);
   }
 
   /// Updates a fragment's timing and automatically synchronizes neighbors

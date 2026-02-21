@@ -16,6 +16,7 @@ class UserSettingsService {
   static const String _keyFfmpegPath = 'ffmpeg';
   static const String _keyEspeakPath = 'espeak';
   static const String _keyThemeMode = 'theme_mode';
+  static const String _keyLastZoom = 'last_zoom_level';
 
   late final ValueNotifier<ThemeMode> themeNotifier;
 
@@ -62,5 +63,12 @@ class UserSettingsService {
   String get espeakPath => _prefs.getString(_keyEspeakPath) ?? 'espeak-ng';
   Future<void> setEspeakPath(String path) async {
     await _prefs.setString(_keyEspeakPath, path);
+  }
+
+  // --- Zoom Setting ---
+
+  double get lastZoom => _prefs.getDouble(_keyLastZoom) ?? 10.0;
+  Future<void> setLastZoom(double value) async {
+    await _prefs.setDouble(_keyLastZoom, value);
   }
 }

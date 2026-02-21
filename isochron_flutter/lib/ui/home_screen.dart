@@ -121,6 +121,11 @@ class _MainScreenState extends State<MainScreen> {
       widget.project!.items[_currentIndex!],
       widget.project!.directoryPath,
     );
+
+    // Reset scroll to start for the new file
+    if (_waveScroll.hasClients) {
+      _waveScroll.jumpTo(0);
+    }
   }
 
   void _handleSave() {
