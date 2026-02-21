@@ -391,11 +391,21 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
             Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
             OutlinedButton(
               onPressed: () async {
+                final settings =
+                    UserSettingsService(); // <-- Get settings instance
                 final result = await FilePicker.platform.pickFiles(
                   type: FileType.custom,
                   allowedExtensions: ['json'],
+                  initialDirectory:
+                      settings.lastDictDir, // <-- Start in last dir
                 );
-                if (result != null) onSelected(result.files.single.path);
+
+                if (result != null && result.files.single.path != null) {
+                  final path = result.files.single.path!;
+                  // Save the parent folder so it opens here next time
+                  await settings.setLastDictDir(File(path).parent.path);
+                  onSelected(path);
+                }
               },
               child: const Text("Browse..."),
             ),

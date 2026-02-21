@@ -69,10 +69,13 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
               label: const Text("Run All Pending"),
               onPressed: _runBatch,
             ),
-            IconButton(
-              icon: const Icon(Icons.settings),
-              tooltip: "Project Settings",
-              onPressed: () async {
+          ],
+          PopupMenuButton<String>(
+            // Note: Made this async to handle the dialog
+            onSelected: (v) async {
+              if (v == 'export_all_csv') {
+                _exportBatchCsv();
+              } else if (v == 'project_settings') {
                 final result = await showDialog<ProjectSettingsResult>(
                   context: context,
                   builder: (_) => ProjectSettingsDialog(project: _project),
@@ -80,22 +83,33 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
                 if (result != null && result.settingsChanged) {
                   await _saveProjectState();
 
-                  // Run the retroactive updater if they requested it!
+                  // Run the retroactive updater if they requested it
                   if (result.applyRetroactively) {
                     await _applyIdStrategyToSavedFiles();
                   }
                 }
-              },
-            ),
-          ],
-          PopupMenuButton<String>(
-            onSelected: (v) {
-              if (v == 'export_all_csv') _exportBatchCsv();
+              }
             },
             itemBuilder: (ctx) => [
               const PopupMenuItem(
+                value: 'project_settings',
+                child: Row(
+                  children: [
+                    Icon(Icons.settings, color: Colors.black54, size: 20),
+                    SizedBox(width: 8),
+                    Text("Project Settings"),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
                 value: 'export_all_csv',
-                child: Text("Export All to Single CSV"),
+                child: Row(
+                  children: [
+                    Icon(Icons.download, color: Colors.black54, size: 20),
+                    SizedBox(width: 8),
+                    Text("Export All to Single CSV"),
+                  ],
+                ),
               ),
             ],
           ),

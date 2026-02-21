@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:path/path.dart' as p;
 
@@ -84,12 +87,18 @@ class _ProjectSettingsDialogState extends State<ProjectSettingsDialog> {
                   ),
                   TextButton(
                     onPressed: () async {
+                      final settings = UserSettingsService();
                       final result = await FilePicker.platform.pickFiles(
                         type: FileType.custom,
                         allowedExtensions: ['json'],
+                        initialDirectory: settings.lastDictDir,
                       );
-                      if (result != null) {
-                        setState(() => _dictPath = result.files.single.path);
+
+                      if (result != null && result.files.single.path != null) {
+                        final path = result.files.single.path!;
+                        // Save the parent folder so it opens here next time
+                        await settings.setLastDictDir(File(path).parent.path);
+                        setState(() => _dictPath = path);
                       }
                     },
                     child: const Text("Browse"),
