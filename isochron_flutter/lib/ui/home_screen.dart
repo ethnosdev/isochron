@@ -107,6 +107,9 @@ class _MainScreenState extends State<MainScreen> {
   Future<void> _goToNextFile() async {
     if (widget.project == null || _currentIndex == null) return;
 
+    // Prevent going out of bounds if they press Cmd+N on the last file
+    if (_currentIndex! >= widget.project!.items.length - 1) return;
+
     final canProceed = await _handleUnsavedChanges();
     if (!canProceed) return;
 
@@ -118,6 +121,14 @@ class _MainScreenState extends State<MainScreen> {
       widget.project!.items[_currentIndex!],
       widget.project!.directoryPath,
     );
+  }
+
+  void _handleSave() {
+    // Only save if there's actually data and it has been modified
+    final state = _controller.value;
+    if (state.fragments.isNotEmpty && state.hasUnsavedChanges) {
+      _controller.saveProject();
+    }
   }
 
   @override
@@ -134,16 +145,44 @@ class _MainScreenState extends State<MainScreen> {
 
     return CallbackShortcuts(
       bindings: {
+        // Space: Play/Pause
         const SingleActivator(LogicalKeyboardKey.space): () =>
             _controller.togglePlay(),
+
+        // Right/Left Arrows: Skip Next/Prev
         const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
             _handleSkipNext(_controller.value),
         const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
             _handleSkipPrev(_controller.value),
+
+        // Command/Ctrl + Right: Move current segment start +100ms
         const SingleActivator(LogicalKeyboardKey.arrowRight, meta: true): () =>
             _handleNudge(0.15),
+        const SingleActivator(
+          LogicalKeyboardKey.arrowRight,
+          control: true,
+        ): () =>
+            _handleNudge(0.15),
+
+        // Command/Ctrl + Left: Move current segment start -100ms
         const SingleActivator(LogicalKeyboardKey.arrowLeft, meta: true): () =>
             _handleNudge(-0.15),
+        const SingleActivator(
+          LogicalKeyboardKey.arrowLeft,
+          control: true,
+        ): () =>
+            _handleNudge(-0.15),
+
+        // Save (Command/Ctrl + S)
+        const SingleActivator(LogicalKeyboardKey.keyS, meta: true): _handleSave,
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true):
+            _handleSave,
+
+        // Next File (Command/Ctrl + N)
+        const SingleActivator(LogicalKeyboardKey.keyN, meta: true):
+            _goToNextFile,
+        const SingleActivator(LogicalKeyboardKey.keyN, control: true):
+            _goToNextFile,
       },
       child: Focus(
         autofocus: true,
