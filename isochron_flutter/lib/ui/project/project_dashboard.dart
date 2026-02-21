@@ -145,6 +145,17 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
                     item.status == ProjectItemStatus.reviewed;
 
                 return ListTile(
+                  // 1. ADD THIS: Makes the whole row clickable to open the editor
+                  onTap: () => _openEditor(item),
+
+                  // 2. ADD THIS: Explicitly sets a beautiful, theme-aware hover color
+                  // (0.04 opacity is the Material Design standard for hover states)
+                  hoverColor: colorScheme.onSurface.withValues(alpha: 0.04),
+
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+
                   leading: _buildStatusIcon(item.status, colorScheme),
                   title: Text(p.basename(item.audioPath)),
                   subtitle: Text(
