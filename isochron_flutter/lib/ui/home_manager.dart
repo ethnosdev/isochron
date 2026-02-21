@@ -38,23 +38,22 @@ class HomeManager extends ValueNotifier<AppState> {
     super.dispose();
   }
 
-  /// Loads a specific item from a Project.
-  /// 1. Sets Audio/Text paths.
-  /// 2. Checks if output JSON already exists. If so, loads it.
-  /// 3. Sets the autoSavePath.
   Future<void> loadProjectItem(ProjectItem item, String projectRoot) async {
+    // 1. Pause audio if it was playing from previous file
+    if (value.isPlaying) {
+      await _audioService.pause();
+    }
+
     final absJsonPath = item.getAbsoluteOutputPath(projectRoot);
 
-    // 1. Load Audio Duration
+    // 2. Load Audio Duration
     final duration = await _audioService.load(item.audioPath);
 
-    // 2. Load Existing JSON if available
+    // 3. Load Existing JSON if available
     List<Fragment> loadedFragments = [];
     if (await File(absJsonPath).exists()) {
       final content = await File(absJsonPath).readAsString();
       final List<dynamic> jsonList = jsonDecode(content);
-      // Simple mapping back to Fragment
-      // (You might want to add a factory Fragment.fromJson to your class later)
       loadedFragments = jsonList
           .map(
             (j) =>
@@ -67,9 +66,7 @@ class HomeManager extends ValueNotifier<AppState> {
           .toList();
     }
 
-    // 3. Initialize Waveform (Background)
-    _generateWaveform(item.audioPath);
-
+    // 4. Reset State Completely for the new file
     value = value.copyWith(
       audioPath: item.audioPath,
       textPath: item.textPath,
@@ -78,7 +75,14 @@ class HomeManager extends ValueNotifier<AppState> {
       audioDuration: duration,
       statusMessage: "Loaded ${p.basename(item.audioPath)}",
       hasUnsavedChanges: false,
+      clearWaveform: true, // Clears the old waveform
+      clearFocus: true, // Clears focus
+      currentPlaybackPosition: Duration.zero,
+      zoomLevel: 1.0,
     );
+
+    // 5. Initialize Waveform (Background)
+    _generateWaveform(item.audioPath);
   }
 
   /// Saves to the project file immediately without a dialog

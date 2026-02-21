@@ -48,6 +48,7 @@ class AppState {
     bool? hasIds,
     List<Fragment>? fragments,
     Waveform? waveform,
+    bool clearWaveform = false,
     Duration? audioDuration,
     Duration? currentPlaybackPosition,
     bool? isPlaying,
@@ -66,7 +67,7 @@ class AppState {
       dictPath: dictPath ?? this.dictPath,
       hasIds: hasIds ?? this.hasIds,
       fragments: fragments ?? this.fragments,
-      waveform: waveform ?? this.waveform,
+      waveform: clearWaveform ? null : (waveform ?? this.waveform),
       audioDuration: audioDuration ?? this.audioDuration,
       currentPlaybackPosition:
           currentPlaybackPosition ?? this.currentPlaybackPosition,

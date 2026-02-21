@@ -187,18 +187,17 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
   // --- ACTIONS ---
 
   Future<void> _openEditor(ProjectItem item) async {
-    // Find the index of the item we are editing
     final index = _project.items.indexOf(item);
 
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => MainScreen(
-          initialProjectItem: item,
-          initialProjectRoot: _project.directoryPath,
-          onNotifySaved: () async {
-            // This code runs whenever you click "Save" in the editor
+          project: _project, // Passed the whole project
+          initialItemIndex: index, // Passed the starting index
+          onNotifySaved: (savedIndex) async {
+            // Update the status of whichever file was just saved
             setState(() {
-              _project.items[index] = _project.items[index].copyWith(
+              _project.items[savedIndex] = _project.items[savedIndex].copyWith(
                 status: ProjectItemStatus.reviewed,
               );
             });
@@ -209,7 +208,7 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
       ),
     );
 
-    // Refresh UI when returning from editor
+    // Refresh UI when returning to Dashboard
     setState(() {});
   }
 
@@ -492,39 +491,5 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
         ),
       );
     }
-  }
-}
-
-/// A small wrapper to initialize the MainScreen with project data
-class _EditorWrapper extends StatefulWidget {
-  final ProjectItem item;
-  final Project project;
-
-  const _EditorWrapper({required this.item, required this.project});
-
-  @override
-  State<_EditorWrapper> createState() => _EditorWrapperState();
-}
-
-class _EditorWrapperState extends State<_EditorWrapper> {
-  // We grab the state of MainScreen via GlobalKey or just let MainScreen
-  // expose a setup method. But MainScreen manages its own HomeManager.
-  // The cleanest way without rewriting MainScreen completely is to
-  // wrap it and use the `HomeManager` to load data in `initState`.
-
-  // NOTE: This assumes MainScreen is accessible.
-  // Actually, MainScreen instantiates its own HomeManager internally.
-  // To fix this dependency injection, we'll modify MainScreen to accept an optional Manager
-  // OR we use a GlobalKey to access the state.
-  // Let's use the standard Flutter approach: passing arguments to MainScreen.
-
-  @override
-  Widget build(BuildContext context) {
-    // For this to work, you must update MainScreen constructor
-    // to accept 'initialProjectItem' and 'initialProjectRoot'.
-    return MainScreen(
-      initialProjectItem: widget.item,
-      initialProjectRoot: widget.project.directoryPath,
-    );
   }
 }

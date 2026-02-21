@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/waveform/fragment_list.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path/path.dart' as p;
 import 'home_manager.dart';
 import 'models/app_state.dart';
 import 'control_bar/control_bar.dart';
@@ -10,14 +11,14 @@ import 'waveform/waveform_view.dart';
 import 'waveform/waveform_controls.dart';
 
 class MainScreen extends StatefulWidget {
-  final ProjectItem? initialProjectItem;
-  final String? initialProjectRoot;
-  final VoidCallback? onNotifySaved;
+  final Project? project;
+  final int? initialItemIndex;
+  final Function(int index)? onNotifySaved;
 
   const MainScreen({
     super.key,
-    this.initialProjectItem,
-    this.initialProjectRoot,
+    this.project,
+    this.initialItemIndex,
     this.onNotifySaved,
   });
 
@@ -31,20 +32,28 @@ class _MainScreenState extends State<MainScreen> {
   final TextEditingController _ffmpegCtrl = TextEditingController();
   final TextEditingController _espeakCtrl = TextEditingController();
 
+  int? _currentIndex;
+
   @override
   void initState() {
     super.initState();
-    _controller.onSaveCallback = widget.onNotifySaved;
+    _currentIndex = widget.initialItemIndex;
+
+    // Wire up the save callback to pass the current index
+    _controller.onSaveCallback = () {
+      if (_currentIndex != null && widget.onNotifySaved != null) {
+        widget.onNotifySaved!(_currentIndex!);
+      }
+    };
+
     _loadSettings();
 
-    // Check if we are opening a project item
-    if (widget.initialProjectItem != null &&
-        widget.initialProjectRoot != null) {
-      // Execute this after the build frame so UI is ready
+    // Load initial item
+    if (widget.project != null && _currentIndex != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _controller.loadProjectItem(
-          widget.initialProjectItem!,
-          widget.initialProjectRoot!,
+          widget.project!.items[_currentIndex!],
+          widget.project!.directoryPath,
         );
       });
     }
@@ -56,30 +65,84 @@ class _MainScreenState extends State<MainScreen> {
     _espeakCtrl.text = prefs.getString('espeak') ?? 'espeak-ng';
   }
 
+  Future<bool> _handleUnsavedChanges() async {
+    if (!_controller.value.hasUnsavedChanges) return true;
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Unsaved Changes"),
+        content: const Text(
+          "You have unsaved changes. What would you like to do?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop('cancel'),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop('discard'),
+            child: const Text("Discard", style: TextStyle(color: Colors.red)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop('save'),
+            child: const Text("Save"),
+          ),
+        ],
+      ),
+    );
+
+    if (result == 'save') {
+      await _controller.saveProject();
+      return true; // Proceed after saving
+    } else if (result == 'discard') {
+      _controller.discardChanges();
+      return true; // Proceed and lose changes
+    }
+
+    return false; // User cancelled
+  }
+
+  Future<void> _goToNextFile() async {
+    if (widget.project == null || _currentIndex == null) return;
+
+    final canProceed = await _handleUnsavedChanges();
+    if (!canProceed) return;
+
+    setState(() {
+      _currentIndex = _currentIndex! + 1;
+    });
+
+    _controller.loadProjectItem(
+      widget.project!.items[_currentIndex!],
+      widget.project!.directoryPath,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Generate App Bar Title
+    String appBarTitle = 'Isochron Studio';
+    bool hasNextFile = false;
+
+    if (widget.project != null && _currentIndex != null) {
+      final item = widget.project!.items[_currentIndex!];
+      appBarTitle = p.basename(item.audioPath);
+      hasNextFile = _currentIndex! < widget.project!.items.length - 1;
+    }
+
     return CallbackShortcuts(
       bindings: {
-        // Space: Play/Pause
-        const SingleActivator(LogicalKeyboardKey.space): () {
-          _controller.togglePlay();
-        },
-        // Right Arrow: Skip Next
-        const SingleActivator(LogicalKeyboardKey.arrowRight): () {
-          _handleSkipNext(_controller.value);
-        },
-        // Left Arrow: Skip Previous
-        const SingleActivator(LogicalKeyboardKey.arrowLeft): () {
-          _handleSkipPrev(_controller.value);
-        },
-        // Command + Right: Move current segment start +100ms
-        const SingleActivator(LogicalKeyboardKey.arrowRight, meta: true): () {
-          _handleNudge(0.15);
-        },
-        // Command + Left: Move current segment start -100ms
-        const SingleActivator(LogicalKeyboardKey.arrowLeft, meta: true): () {
-          _handleNudge(-0.15);
-        },
+        const SingleActivator(LogicalKeyboardKey.space): () =>
+            _controller.togglePlay(),
+        const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+            _handleSkipNext(_controller.value),
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+            _handleSkipPrev(_controller.value),
+        const SingleActivator(LogicalKeyboardKey.arrowRight, meta: true): () =>
+            _handleNudge(0.15),
+        const SingleActivator(LogicalKeyboardKey.arrowLeft, meta: true): () =>
+            _handleNudge(-0.15),
       },
       child: Focus(
         autofocus: true,
@@ -88,45 +151,12 @@ class _MainScreenState extends State<MainScreen> {
           builder: (context, state, _) {
             return PopScope(
               canPop: !state.hasUnsavedChanges,
-
-              // Callback when pop is blocked
               onPopInvokedWithResult: (didPop, result) async {
                 if (didPop) return;
 
-                // Show warning dialog
-                final bool shouldDiscard =
-                    await showDialog<bool>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text("Unsaved Changes"),
-                        content: const Text(
-                          "You have unsaved changes. If you leave now, they will be lost.",
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () =>
-                                Navigator.of(context).pop(false), // Stay
-                            child: const Text("Cancel"),
-                          ),
-                          FilledButton(
-                            style: FilledButton.styleFrom(
-                              backgroundColor: Colors.red,
-                            ),
-                            onPressed: () =>
-                                Navigator.of(context).pop(true), // Leave
-                            child: const Text("Discard Changes"),
-                          ),
-                        ],
-                      ),
-                    ) ??
-                    false;
-
-                if (shouldDiscard) {
-                  // Mark state as clean so the next pop works
-                  _controller.discardChanges();
-                  if (context.mounted) {
-                    Navigator.of(context).pop();
-                  }
+                final canProceed = await _handleUnsavedChanges();
+                if (canProceed && context.mounted) {
+                  Navigator.of(context).pop();
                 }
               },
               child: Scaffold(
@@ -137,7 +167,16 @@ class _MainScreenState extends State<MainScreen> {
                           onPressed: () => Navigator.maybePop(context),
                         )
                       : null,
-                  title: const Text('Isochron Studio'),
+                  title: Text(appBarTitle),
+                  actions: [
+                    if (hasNextFile)
+                      TextButton.icon(
+                        icon: const Icon(Icons.skip_next),
+                        label: const Text("Next File"),
+                        onPressed: _goToNextFile,
+                      ),
+                    const SizedBox(width: 8),
+                  ],
                 ),
                 body: Column(
                   children: [
@@ -149,10 +188,8 @@ class _MainScreenState extends State<MainScreen> {
                         _espeakCtrl.text,
                       ),
                     ),
-
                     if (state.isProcessing)
                       LinearProgressIndicator(value: state.progress),
-
                     if (state.waveform != null) ...[
                       WaveformControls(
                         isPlaying: state.isPlaying,
@@ -174,21 +211,17 @@ class _MainScreenState extends State<MainScreen> {
                         ),
                       ),
                     ],
-
                     Expanded(
                       flex: 2,
                       child: FragmentList(
                         fragments: state.fragments,
                         currentPos: state.currentPlaybackPosition,
-                        // Use _jumpTo directly here
                         onJumpTo: (idx) {
                           _controller.exitFocusMode();
                           _jumpTo(idx, state);
                         },
                         onDoubleTap: (idx) {
                           _controller.enterFocusMode(idx);
-                          // Also scroll to it immediately using _jumpTo logic logic (optional,
-                          // but enterFocusMode usually handles center, _jumpTo handles scroll)
                         },
                       ),
                     ),
@@ -202,89 +235,62 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  /// Adjusts the START time of the currently playing fragment.
-  /// Because fragments are contiguous, this automatically adjusts the
-  /// END time of the previous fragment.
+  // --- Keyboard Nav Handlers (Unchanged internally) ---
   void _handleNudge(double deltaSeconds) {
     final state = _controller.value;
     if (state.fragments.isEmpty) return;
-
     final currentMs = state.currentPlaybackPosition.inMilliseconds;
-
-    // 1. Find the fragment currently under the playhead
     final index = state.fragments.indexWhere(
       (f) =>
           currentMs >= (f.realStart * 1000) && currentMs <= (f.realEnd * 1000),
     );
-
     if (index != -1) {
       final frag = state.fragments[index];
-
-      // 2. Calculate new start time
-      final newStart = frag.realStart + deltaSeconds;
-
-      // 3. Update via controller (handles validation and neighbor syncing)
-      _controller.updateFragment(index, newStart, frag.realEnd);
+      _controller.updateFragment(
+        index,
+        frag.realStart + deltaSeconds,
+        frag.realEnd,
+      );
     }
   }
 
   void _handleSkipNext(AppState state) {
     if (state.fragments.isEmpty) return;
-
     final currentMs = state.currentPlaybackPosition.inMilliseconds;
-    // Find the first fragment that starts *after* current position (+ buffer)
     final nextIndex = state.fragments.indexWhere(
       (f) => (f.realStart * 1000) > currentMs + 100,
     );
-
     if (nextIndex != -1) {
-      _controller.exitFocusMode(); // Optional: Exit focus mode on skip
+      _controller.exitFocusMode();
       _jumpTo(nextIndex, state);
     }
   }
 
   void _handleSkipPrev(AppState state) {
     if (state.fragments.isEmpty) return;
-
     final currentMs = state.currentPlaybackPosition.inMilliseconds;
-    // Find last fragment that started *before* current position (- buffer)
     final prevIndex = state.fragments.lastIndexWhere(
       (f) => (f.realStart * 1000) < currentMs - 100,
     );
-
     if (prevIndex != -1) {
-      _controller.exitFocusMode(); // Optional: Exit focus mode on skip
+      _controller.exitFocusMode();
       _jumpTo(prevIndex, state);
     } else {
-      // If none found (at start), jump to 0
       _jumpTo(0, state);
     }
   }
 
-  // --- EXISTING _jumpTo LOGIC (Updated for robust centering) ---
-
   void _jumpTo(int index, AppState state) {
     final frag = state.fragments[index];
     final ms = (frag.realStart * 1000).toInt();
-
-    // 1. Seek Audio
     _controller.seekTo(Duration(milliseconds: ms));
 
-    // 2. Center Waveform View
     if (state.audioDuration.inMilliseconds > 0 && _waveScroll.hasClients) {
       final viewportWidth = _waveScroll.position.viewportDimension;
-
-      // Total width of the waveform at current zoom
-      // Note: We use the *current* viewport width to calculate content width
       final totalContentWidth = viewportWidth * state.zoomLevel;
-
       final totalMs = state.audioDuration.inMilliseconds;
       final pct = ms / totalMs;
-
-      // The pixel X coordinate of the fragment start
       final targetPixel = totalContentWidth * pct;
-
-      // Center it: Target - (Half Viewport)
       final centeredScrollPos = targetPixel - (viewportWidth / 2);
 
       _waveScroll.jumpTo(
