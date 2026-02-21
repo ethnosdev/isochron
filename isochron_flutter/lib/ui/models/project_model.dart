@@ -8,7 +8,7 @@ class ProjectItem {
   final String id;
   final String audioPath;
   final String textPath;
-  final bool hasIds;
+  final bool hasIds; // Kept for legacy compatibility at the item level
 
   /// The filename of the JSON output (stored relative to project dir)
   final String outputFilename;
@@ -62,16 +62,14 @@ class ProjectItem {
 
 class Project {
   final String id;
-  final String name;
-
-  /// The root folder where project.json lives
+  String name;
   final String directoryPath;
+  String? dictionaryPath;
 
-  /// Optional global dictionary for this project
-  final String? dictionaryPath;
-
-  /// Whether the text files include "ID prefixes" (e.g. "40001001 text...")
-  final bool hasIds;
+  // ID Strategies
+  bool hasIds;
+  bool generateIds;
+  String? generatedIdPrefix;
 
   final List<ProjectItem> items;
 
@@ -81,6 +79,8 @@ class Project {
     required this.directoryPath,
     this.dictionaryPath,
     required this.hasIds,
+    this.generateIds = false,
+    this.generatedIdPrefix,
     required this.items,
   });
 
@@ -90,6 +90,8 @@ class Project {
     'directoryPath': directoryPath,
     'dictionaryPath': dictionaryPath,
     'hasIds': hasIds,
+    'generateIds': generateIds,
+    'generatedIdPrefix': generatedIdPrefix,
     'items': items.map((i) => i.toJson()).toList(),
   };
 
@@ -100,6 +102,8 @@ class Project {
       directoryPath: json['directoryPath'],
       dictionaryPath: json['dictionaryPath'],
       hasIds: json['hasIds'] ?? false,
+      generateIds: json['generateIds'] ?? false,
+      generatedIdPrefix: json['generatedIdPrefix'],
       items: (json['items'] as List)
           .map((i) => ProjectItem.fromJson(i))
           .toList(),

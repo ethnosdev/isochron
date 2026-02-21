@@ -11,6 +11,9 @@ class AlignmentService {
     required String espeakPath,
     String? dictPath,
     bool hasIds = false,
+    bool generateIds = false,
+    String? generatedIdPrefix,
+    int recordingNumber = 1,
     required Function(String status, double progress) onProgress,
   }) async {
     final receivePort = ReceivePort();
@@ -29,6 +32,9 @@ class AlignmentService {
         'ffmpeg': ffmpegPath,
         'espeak': espeakPath,
         'hasIds': hasIds,
+        'generateIds': generateIds,
+        'generatedIdPrefix': generatedIdPrefix,
+        'recordingNumber': recordingNumber,
       });
 
       await for (final message in receivePort) {
@@ -59,7 +65,11 @@ class AlignmentService {
         rules = rawMap.map((key, value) => MapEntry(key, value.toString()));
       }
 
-      final hasIds = args['hasIds'] as bool;
+      final hasIds = args['hasIds'] as bool? ?? false;
+      final generateIds = args['generateIds'] as bool? ?? false;
+      final generatedIdPrefix = args['generatedIdPrefix'] as String?;
+      final recordingNumber = args['recordingNumber'] as int? ?? 1;
+
       final File textFile = File(args['textPath']);
       final lines = await textFile.readAsLines();
 
@@ -72,8 +82,8 @@ class AlignmentService {
           if (line.trim().isEmpty) continue;
           final parts = line.trim().split(' ');
           if (parts.length > 1) {
-            extractedIds.add(parts.first); // Store ID
-            buffer.writeln(parts.sublist(1).join(' ')); // Store Text
+            extractedIds.add(parts.first);
+            buffer.writeln(parts.sublist(1).join(' '));
           } else {
             extractedIds.add("");
             buffer.writeln(line);
@@ -81,7 +91,6 @@ class AlignmentService {
         }
         cleanTextForEngine = buffer.toString();
       } else {
-        // Just read raw if no IDs
         cleanTextForEngine = await textFile.readAsString();
       }
 
@@ -108,6 +117,17 @@ class AlignmentService {
             id = extractedIds[i];
           }
           finalFragments.add(rawFragments[i].copyWith(id: id));
+        }
+      } else if (generateIds && generatedIdPrefix != null) {
+        // AUTO-GENERATE IDs: {Prefix}{RecordingNumber:000}{VerseNumber:000}
+        finalFragments = [];
+        final recStr = recordingNumber.toString().padLeft(3, '0');
+
+        for (int i = 0; i < rawFragments.length; i++) {
+          final verseStr = (i + 1).toString().padLeft(3, '0');
+          final generatedId = '$generatedIdPrefix$recStr$verseStr';
+
+          finalFragments.add(rawFragments[i].copyWith(id: generatedId));
         }
       }
 

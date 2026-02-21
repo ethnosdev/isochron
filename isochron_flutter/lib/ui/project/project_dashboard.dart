@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:isochron_cli/isochron_cli.dart';
+import 'package:isochron_flutter/ui/dialogs/project_settings_dialog.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -67,6 +68,19 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
               icon: const Icon(Icons.play_arrow),
               label: const Text("Run All Pending"),
               onPressed: _runBatch,
+            ),
+            IconButton(
+              icon: const Icon(Icons.settings),
+              tooltip: "Project Settings",
+              onPressed: () async {
+                final changed = await showDialog<bool>(
+                  context: context,
+                  builder: (_) => ProjectSettingsDialog(project: _project),
+                );
+                if (changed == true) {
+                  await _saveProjectState();
+                }
+              },
             ),
           ],
           PopupMenuButton<String>(
@@ -223,7 +237,6 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
   Future<void> _processItem(int index, String ffmpeg, String espeak) async {
     final item = _project.items[index];
 
-    // Update UI to Processing
     setState(() {
       _project.items[index] = item.copyWith(
         status: ProjectItemStatus.processing,
@@ -232,7 +245,7 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
     });
 
     try {
-      // 1. Run Alignment
+      // Pass the new ID generation parameters. Recording number is index + 1
       final fragments = await _alignmentService.runIsochron(
         textPath: item.textPath,
         audioPath: item.audioPath,
@@ -240,12 +253,15 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
         espeakPath: espeak,
         dictPath: _project.dictionaryPath,
         hasIds: _project.hasIds,
+        generateIds: _project.generateIds,
+        generatedIdPrefix: _project.generatedIdPrefix,
+        recordingNumber:
+            index + 1, // <--- Passes the recording number based on list order
         onProgress: (status, prog) {
           if (mounted) setState(() => _currentProgress = prog);
         },
       );
 
-      // 2. Save JSON Output
       final absPath = item.getAbsoluteOutputPath(_project.directoryPath);
 
       final List<Map<String, dynamic>> jsonList = fragments
@@ -263,7 +279,6 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
       final jsonString = const JsonEncoder.withIndent('  ').convert(jsonList);
       await File(absPath).writeAsString(jsonString);
 
-      // 3. Mark Done
       setState(() {
         _project.items[index] = item.copyWith(status: ProjectItemStatus.done);
       });
@@ -278,12 +293,16 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
   }
 
   Future<void> _exportBatchCsv() async {
-    // 1. Filter for DONE items
-    final doneItems = _project.items
-        .where((i) => i.status == ProjectItemStatus.done)
+    // 1. Filter for DONE and REVIEWED items
+    final exportableItems = _project.items
+        .where(
+          (i) =>
+              i.status == ProjectItemStatus.done ||
+              i.status == ProjectItemStatus.reviewed,
+        )
         .toList();
 
-    if (doneItems.isEmpty) {
+    if (exportableItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("No completed items to export.")),
       );
@@ -308,7 +327,7 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
       // Write Header Once
       masterBuffer.writeln('id,verse_id,recording_id,start,end');
 
-      for (var item in doneItems) {
+      for (var item in exportableItems) {
         final absJsonPath = item.getAbsoluteOutputPath(_project.directoryPath);
         final file = File(absJsonPath);
 
@@ -348,7 +367,9 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Exported ${doneItems.length} files to CSV")),
+          SnackBar(
+            content: Text("Exported ${exportableItems.length} files to CSV"),
+          ),
         );
       }
     } catch (e) {

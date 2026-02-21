@@ -20,7 +20,10 @@ class ProjectCreationWizard extends StatefulWidget {
 
 class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
   final _projectNameCtrl = TextEditingController(text: "My New Project");
-  bool _hasIds = false;
+  final _idPrefixCtrl = TextEditingController();
+
+  // 0 = None, 1 = In Text, 2 = Auto-Generate
+  int _idMode = 0;
   bool _isAnalyzing = false;
 
   List<String> _audioFiles = [];
@@ -62,7 +65,6 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
               );
             },
             steps: [
-              // STEP 1: INPUTS
               Step(
                 title: const Text("Select Files"),
                 content: Column(
@@ -89,18 +91,72 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
                       (files) => setState(() => _textFiles = files),
                       extensions: ['txt'],
                     ),
-                    const SizedBox(height: 12),
-                    CheckboxListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text("Text files start with ID?"),
-                      subtitle: const Text(
-                        "e.g. '4001001 In the beginning...'",
+                    const SizedBox(height: 24),
+
+                    // --- ID STRATEGY BLOCK ---
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      value: _hasIds,
-                      onChanged: (val) =>
-                          setState(() => _hasIds = val ?? false),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "Verse ID Strategy",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          RadioListTile<int>(
+                            title: const Text("None"),
+                            subtitle: const Text("Do not use verse IDs"),
+                            value: 0,
+                            groupValue: _idMode,
+                            onChanged: (v) => setState(() => _idMode = v!),
+                          ),
+                          RadioListTile<int>(
+                            title: const Text("IDs are in the text files"),
+                            subtitle: const Text(
+                              "e.g. '40001001 In the beginning...'",
+                            ),
+                            value: 1,
+                            groupValue: _idMode,
+                            onChanged: (v) => setState(() => _idMode = v!),
+                          ),
+                          RadioListTile<int>(
+                            title: const Text("Auto-Generate IDs"),
+                            subtitle: const Text(
+                              "Based on book prefix + file order + line number",
+                            ),
+                            value: 2,
+                            groupValue: _idMode,
+                            onChanged: (v) => setState(() => _idMode = v!),
+                          ),
+                          if (_idMode == 2)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                left: 32,
+                                right: 32,
+                                top: 8,
+                              ),
+                              child: TextField(
+                                controller: _idPrefixCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: "Fixed Book Prefix (e.g. 40)",
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 20),
+
+                    // -------------------------
+                    const SizedBox(height: 24),
                     const Text("Optional:"),
                     _buildSingleFileSelector(
                       "Transliteration Dictionary (JSON)",
@@ -112,11 +168,10 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
                 isActive: _currentStep >= 0,
               ),
 
-              // STEP 2: PAIRING
               Step(
                 title: const Text("Verify Pairs"),
                 content: SizedBox(
-                  height: 400, // Fixed height for list
+                  height: 400,
                   child: _PairingList(
                     audioFiles: _audioFiles,
                     textFiles: _textFiles,
@@ -132,10 +187,10 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
                 isActive: _currentStep >= 1,
               ),
 
-              // STEP 3: CONFIRM
               Step(
                 title: const Text("Finish"),
                 content: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text("Ready to create '${_projectNameCtrl.text}'"),
                     Text("Audio Files: ${_audioFiles.length}"),
@@ -149,8 +204,10 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
                           children: const [
                             Icon(Icons.warning, color: Colors.orange),
                             SizedBox(width: 8),
-                            Text(
-                              "Warning: Counts do not match. Some files may be ignored.",
+                            Expanded(
+                              child: Text(
+                                "Warning: Counts do not match. Extra files will be ignored.",
+                              ),
                             ),
                           ],
                         ),
@@ -196,40 +253,42 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
         return;
       }
 
+      if (_idMode == 2 && _idPrefixCtrl.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Please enter a Fixed Book Prefix.")),
+        );
+        return;
+      }
+
       if (_dictPath != null) {
         setState(() => _isAnalyzing = true);
-
         try {
-          // 1. Load Dictionary
           final jsonString = await File(_dictPath!).readAsString();
-          final Map<String, dynamic> rawMap = jsonDecode(jsonString);
+          final rawMap = jsonDecode(jsonString) as Map<String, dynamic>;
           final rules = rawMap.map((k, v) => MapEntry(k, v.toString()));
 
-          // 2. Run Analysis on ALL files via Compute
           final result = await compute(
             _analyzeAllFiles,
-            _AnalysisRequest(_textFiles, rules, _hasIds),
+            _AnalysisRequest(_textFiles, rules, _idMode == 1),
           );
 
           setState(() => _isAnalyzing = false);
 
           if (!mounted) return;
 
-          // 3. Show Result
           final bool confirm =
               await showDialog<bool>(
                 context: context,
                 barrierDismissible: false,
                 builder: (_) => TransliterationPreviewDialog(
                   dictName: p.basename(_dictPath!),
-                  previewLines:
-                      result.previewLines, // Show samples from first file
-                  unknownChars: result.unknownChars, // Collected from ALL files
+                  previewLines: result.previewLines,
+                  unknownChars: result.unknownChars,
                 ),
               ) ??
               false;
 
-          if (!confirm) return; // Stop if user cancels
+          if (!confirm) return;
         } catch (e) {
           setState(() => _isAnalyzing = false);
           if (mounted) {
@@ -237,28 +296,27 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
               SnackBar(content: Text("Error checking dictionary: $e")),
             );
           }
-          return; // Stop on error
+          return;
         }
       }
 
-      // Sort initially for better UX before manual reordering
       _audioFiles.sort((a, b) => p.basename(a).compareTo(p.basename(b)));
       _textFiles.sort((a, b) => p.basename(a).compareTo(p.basename(b)));
     }
 
     if (_currentStep == 2) {
-      // CREATE PROJECT
       final service = ProjectService();
       final project = await service.createNewProject(
         _projectNameCtrl.text,
         _audioFiles,
         _textFiles,
         _dictPath,
-        _hasIds,
+        _idMode == 1, // hasIds
+        _idMode == 2, // generateIds
+        _idMode == 2 ? _idPrefixCtrl.text.trim() : null, // generatedIdPrefix
       );
 
       if (project != null && mounted) {
-        // NAVIGATE TO DASHBOARD (Will implement next)
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => ProjectDashboard(project: project)),
         );
@@ -290,18 +348,18 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
             OutlinedButton(
               onPressed: () async {
                 final settings = UserSettingsService();
-                final lastDir = settings.lastSourceDir;
                 final result = await FilePicker.platform.pickFiles(
                   type: type,
                   allowMultiple: true,
                   allowedExtensions: extensions,
-                  initialDirectory: lastDir,
+                  initialDirectory: settings.lastSourceDir,
                 );
                 if (result != null) {
                   if (result.files.isNotEmpty &&
                       result.files.first.path != null) {
-                    final parent = File(result.files.first.path!).parent.path;
-                    await settings.setLastSourceDir(parent);
+                    await settings.setLastSourceDir(
+                      File(result.files.first.path!).parent.path,
+                    );
                   }
                   onSelected(result.paths.whereType<String>().toList());
                 }
@@ -313,7 +371,7 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
         if (current.isNotEmpty)
           Text(
             "${current.length} files selected",
-            style: TextStyle(color: Colors.teal),
+            style: const TextStyle(color: Colors.teal),
           ),
       ],
     );
@@ -337,21 +395,20 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
                   type: FileType.custom,
                   allowedExtensions: ['json'],
                 );
-                if (result != null) {
-                  onSelected(result.files.single.path);
-                }
+                if (result != null) onSelected(result.files.single.path);
               },
               child: const Text("Browse..."),
             ),
           ],
         ),
         if (current != null)
-          Text(p.basename(current), style: TextStyle(color: Colors.teal)),
+          Text(p.basename(current), style: const TextStyle(color: Colors.teal)),
       ],
     );
   }
 }
 
+// Keeping your _PairingList widget here from before
 class _PairingList extends StatelessWidget {
   final List<String> audioFiles;
   final List<String> textFiles;
@@ -365,14 +422,11 @@ class _PairingList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // We visualize based on the longer list to show gaps
     final int count = audioFiles.length > textFiles.length
         ? audioFiles.length
         : textFiles.length;
-
     return Row(
       children: [
-        // Left Column: Audio (Fixed)
         Expanded(
           child: Column(
             children: [
@@ -407,11 +461,7 @@ class _PairingList extends StatelessWidget {
             ],
           ),
         ),
-
-        // Divider
         Container(width: 1, color: Colors.grey),
-
-        // Right Column: Text (Reorderable)
         Expanded(
           child: Column(
             children: [
@@ -429,9 +479,7 @@ class _PairingList extends StatelessWidget {
                   onReorder: onReorderText,
                   itemBuilder: (context, i) {
                     return Container(
-                      key: ValueKey(
-                        textFiles[i],
-                      ), // Key must be unique based on path
+                      key: ValueKey(textFiles[i]),
                       alignment: Alignment.centerLeft,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       decoration: BoxDecoration(
@@ -468,8 +516,6 @@ class _PairingList extends StatelessWidget {
   }
 }
 
-// --- BACKGROUND ISOLATE LOGIC ---
-
 class _AnalysisRequest {
   final List<String> filePaths;
   final Map<String, String> rules;
@@ -486,44 +532,25 @@ class _AnalysisResult {
 Future<_AnalysisResult> _analyzeAllFiles(_AnalysisRequest req) async {
   final Set<String> unknownSet = {};
   final List<String> previewLines = [];
-  final nonLatinRegex = RegExp(r'[^\x00-\x7F]'); // Detects non-ASCII
+  final nonLatinRegex = RegExp(r'[^\x00-\x7F]');
 
-  // Loop through ALL files
   for (int i = 0; i < req.filePaths.length; i++) {
     final file = File(req.filePaths[i]);
     if (!file.existsSync()) continue;
 
     final lines = await file.readAsLines();
-
     for (var line in lines) {
       if (line.trim().isEmpty) continue;
-
       String textToProcess = line;
-
-      // Strip IDs
       if (req.hasIds) {
         final parts = line.trim().split(' ');
-        if (parts.length > 1) {
-          textToProcess = parts.sublist(1).join(' ');
-        }
+        if (parts.length > 1) textToProcess = parts.sublist(1).join(' ');
       }
-
-      // Transliterate
       final converted = Transliterator.convert(textToProcess, req.rules);
-
-      // Collect Unknowns
       final matches = nonLatinRegex.allMatches(converted);
-      for (var m in matches) {
-        unknownSet.add(m.group(0)!);
-      }
-
-      // Save Preview (Only from the first file, first 5 lines)
-      if (i == 0 && previewLines.length < 5) {
-        previewLines.add(converted);
-      }
+      for (var m in matches) unknownSet.add(m.group(0)!);
+      if (i == 0 && previewLines.length < 5) previewLines.add(converted);
     }
   }
-
-  final sortedUnknowns = unknownSet.toList()..sort();
-  return _AnalysisResult(previewLines, sortedUnknowns);
+  return _AnalysisResult(previewLines, unknownSet.toList()..sort());
 }
