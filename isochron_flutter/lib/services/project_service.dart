@@ -20,11 +20,15 @@ class ProjectService {
   ) async {
     final settings = UserSettingsService();
 
+    // Add initialDirectory here so it opens to the last used workspace
     String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
       dialogTitle: "Select Folder to Save Project",
+      initialDirectory: settings.lastProjectDir,
     );
 
     if (selectedDirectory == null) return null;
+
+    // This successfully saves the chosen parent folder for next time!
     await settings.setLastProjectDir(selectedDirectory);
 
     final projectDir = Directory(p.join(selectedDirectory, name));

@@ -155,8 +155,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       if (result != null && result.files.single.path != null) {
         final path = result.files.single.path!;
 
-        final parentDir = File(path).parent.path;
-        await settings.setLastProjectDir(parentDir);
+        // Change this to get the parent's parent (the workspace directory)
+        // path is:  /Workspace/My Project/project.json
+        // parent is: /Workspace/My Project
+        // workspace is: /Workspace
+        final workspaceDir = File(path).parent.parent.path;
+        await settings.setLastProjectDir(workspaceDir);
 
         // Load the project using your service
         final project = await _projectService.loadProject(path);
