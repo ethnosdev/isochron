@@ -19,7 +19,7 @@ class ProjectCreationWizard extends StatefulWidget {
 }
 
 class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
-  final _projectNameCtrl = TextEditingController(text: "My New Project");
+  final _projectNameCtrl = TextEditingController();
   final _idPrefixCtrl = TextEditingController();
 
   // 0 = None, 1 = In Text, 2 = Auto-Generate
