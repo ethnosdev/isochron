@@ -14,6 +14,9 @@ class TransliterationPreviewDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
     final bool hasErrors = unknownChars.isNotEmpty;
 
     return AlertDialog(
@@ -26,18 +29,21 @@ class TransliterationPreviewDialog extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // --- PREVIEW SECTION ---
-              const Text(
+              Text(
                 "First 5 lines (Transliterated):",
-                style: TextStyle(fontWeight: FontWeight.bold),
+                style: textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(4),
+                  // Use a subtle container color that adapts to dark/light
+                  color: colorScheme.surfaceContainerHighest,
+                  border: Border.all(color: colorScheme.outlineVariant),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -48,9 +54,9 @@ class TransliterationPreviewDialog extends StatelessWidget {
                         line,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: textTheme.bodySmall?.copyWith(
                           fontFamily: 'monospace',
-                          fontSize: 12,
+                          color: colorScheme.onSurfaceVariant,
                         ),
                       ),
                     );
@@ -63,43 +69,41 @@ class TransliterationPreviewDialog extends StatelessWidget {
                 const SizedBox(height: 24),
                 Row(
                   children: [
-                    Icon(
-                      Icons.warning_amber_rounded,
-                      color: Colors.orange.shade800,
-                    ),
+                    Icon(Icons.warning_amber_rounded, color: colorScheme.error),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        "Warning: The following characters were found in the full text but are not handled by your dictionary or standard Latin transliteration.",
-                        style: TextStyle(
-                          color: Colors.orange.shade900,
+                        "Warning: The following characters were found in the full text but are not handled by your dictionary.",
+                        style: textTheme.labelLarge?.copyWith(
+                          color: colorScheme.error,
                           fontWeight: FontWeight.bold,
-                          fontSize: 13,
                         ),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   "Select and copy these to add them to your JSON rules:",
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    border: Border.all(color: Colors.orange.shade200),
-                    borderRadius: BorderRadius.circular(4),
+                    color: colorScheme.surfaceContainerHighest,
+                    border: Border.all(
+                      color: colorScheme.error.withValues(alpha: 0.5),
+                    ),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: SelectableText(
-                    unknownChars.join(
-                      '  ',
-                    ), // Space them out for easy selection
-                    style: const TextStyle(
-                      fontSize: 18,
+                    unknownChars.join('  '),
+                    style: textTheme.headlineSmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 2.0,
                     ),
@@ -118,7 +122,12 @@ class TransliterationPreviewDialog extends StatelessWidget {
         FilledButton(
           onPressed: () => Navigator.of(context).pop(true),
           style: FilledButton.styleFrom(
-            backgroundColor: hasErrors ? Colors.orange.shade800 : Colors.teal,
+            backgroundColor: hasErrors
+                ? colorScheme.error
+                : colorScheme.primary,
+            foregroundColor: hasErrors
+                ? colorScheme.onError
+                : colorScheme.onPrimary,
           ),
           child: Text(hasErrors ? "Use Anyway" : "Confirm"),
         ),

@@ -87,7 +87,7 @@ class _FragmentListState extends State<FragmentList> {
             ),
             // A beautiful dynamic highlight color for both light/dark mode
             color: isActive
-                ? colorScheme.primaryContainer.withOpacity(0.5)
+                ? colorScheme.primaryContainer.withValues(alpha: 0.5)
                 : null,
           ),
           child: GestureDetector(

@@ -71,7 +71,7 @@ class IsochronWaveformPainter extends CustomPainter {
       ..strokeWidth = 2.0;
 
     // Fill background for the verse
-    final paintFill = Paint()..color = accentColor.withOpacity(0.15);
+    final paintFill = Paint()..color = accentColor.withValues(alpha: 0.15);
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
 
     for (final frag in fragments) {
