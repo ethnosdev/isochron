@@ -22,8 +22,7 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
   final _projectNameCtrl = TextEditingController();
   final _idPrefixCtrl = TextEditingController();
 
-  // 0 = None, 1 = In Text, 2 = Auto-Generate
-  int _idMode = 0;
+  int _idMode = 0; // 0 = None, 1 = In Text, 2 = Auto-Generate
   bool _isAnalyzing = false;
 
   List<String> _audioFiles = [];
@@ -51,7 +50,7 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
                     FilledButton(
                       onPressed: details.onStepContinue,
                       child: Text(
-                        _currentStep == 2 ? "Create Project" : "Next",
+                        _currentStep == 1 ? "Create Project" : "Next",
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -65,6 +64,7 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
               );
             },
             steps: [
+              // STEP 1: INPUTS
               Step(
                 title: const Text("Select Files"),
                 content: Column(
@@ -97,7 +97,9 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                        ),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Column(
@@ -157,7 +159,11 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
 
                     // -------------------------
                     const SizedBox(height: 24),
-                    const Text("Optional:"),
+                    const Text(
+                      "Optional:",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
                     _buildSingleFileSelector(
                       "Transliteration Dictionary (JSON)",
                       _dictPath,
@@ -168,45 +174,55 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
                 isActive: _currentStep >= 0,
               ),
 
+              // STEP 2: PAIRING & FINALIZE
               Step(
                 title: const Text("Verify Pairs"),
-                content: SizedBox(
-                  height: 400,
-                  child: _PairingList(
-                    audioFiles: _audioFiles,
-                    textFiles: _textFiles,
-                    onReorderText: (oldIdx, newIdx) {
-                      setState(() {
-                        if (newIdx > oldIdx) newIdx -= 1;
-                        final item = _textFiles.removeAt(oldIdx);
-                        _textFiles.insert(newIdx, item);
-                      });
-                    },
-                  ),
-                ),
-                isActive: _currentStep >= 1,
-              ),
-
-              Step(
-                title: const Text("Finish"),
                 content: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("Ready to create '${_projectNameCtrl.text}'"),
-                    Text("Audio Files: ${_audioFiles.length}"),
-                    Text("Text Files: ${_textFiles.length}"),
+                    SizedBox(
+                      height: 400, // Fixed height for list
+                      child: _PairingList(
+                        audioFiles: _audioFiles,
+                        textFiles: _textFiles,
+                        onReorderText: (oldIdx, newIdx) {
+                          setState(() {
+                            if (newIdx > oldIdx) newIdx -= 1;
+                            final item = _textFiles.removeAt(oldIdx);
+                            _textFiles.insert(newIdx, item);
+                          });
+                        },
+                      ),
+                    ),
+                    // Warning section
                     if (_audioFiles.length != _textFiles.length)
                       Container(
-                        margin: const EdgeInsets.only(top: 10),
-                        padding: const EdgeInsets.all(8),
-                        color: Colors.orange.withValues(alpha: 0.2),
+                        margin: const EdgeInsets.only(top: 16),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.errorContainer,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.error.withOpacity(0.5),
+                          ),
+                        ),
                         child: Row(
-                          children: const [
-                            Icon(Icons.warning, color: Colors.orange),
-                            SizedBox(width: 8),
+                          children: [
+                            Icon(
+                              Icons.warning,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                "Warning: Counts do not match. Extra files will be ignored.",
+                                "Warning: File counts do not match. Only pairs will be imported; orphan files will be ignored.",
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onErrorContainer,
+                                ),
                               ),
                             ),
                           ],
@@ -214,14 +230,14 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
                       ),
                   ],
                 ),
-                isActive: _currentStep >= 2,
+                isActive: _currentStep >= 1,
               ),
             ],
           ),
 
           if (_isAnalyzing)
             Container(
-              color: Colors.black45,
+              color: Colors.black54,
               child: const Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -262,11 +278,14 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
 
       if (_dictPath != null) {
         setState(() => _isAnalyzing = true);
+
         try {
+          // 1. Load Dictionary
           final jsonString = await File(_dictPath!).readAsString();
-          final rawMap = jsonDecode(jsonString) as Map<String, dynamic>;
+          final Map<String, dynamic> rawMap = jsonDecode(jsonString);
           final rules = rawMap.map((k, v) => MapEntry(k, v.toString()));
 
+          // 2. Run Analysis on ALL files via Compute
           final result = await compute(
             _analyzeAllFiles,
             _AnalysisRequest(_textFiles, rules, _idMode == 1),
@@ -276,6 +295,7 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
 
           if (!mounted) return;
 
+          // 3. Show Result
           final bool confirm =
               await showDialog<bool>(
                 context: context,
@@ -288,7 +308,7 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
               ) ??
               false;
 
-          if (!confirm) return;
+          if (!confirm) return; // Stop if user cancels
         } catch (e) {
           setState(() => _isAnalyzing = false);
           if (mounted) {
@@ -296,15 +316,17 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
               SnackBar(content: Text("Error checking dictionary: $e")),
             );
           }
-          return;
+          return; // Stop on error
         }
       }
 
+      // Sort initially for better UX before manual reordering
       _audioFiles.sort((a, b) => p.basename(a).compareTo(p.basename(b)));
       _textFiles.sort((a, b) => p.basename(a).compareTo(p.basename(b)));
-    }
 
-    if (_currentStep == 2) {
+      setState(() => _currentStep = 1);
+    } else if (_currentStep == 1) {
+      // CREATE PROJECT
       final service = ProjectService();
       final project = await service.createNewProject(
         _projectNameCtrl.text,
@@ -321,10 +343,7 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
           MaterialPageRoute(builder: (_) => ProjectDashboard(project: project)),
         );
       }
-      return;
     }
-
-    setState(() => _currentStep++);
   }
 
   void _prevStep() {
@@ -357,9 +376,8 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
                 if (result != null) {
                   if (result.files.isNotEmpty &&
                       result.files.first.path != null) {
-                    await settings.setLastSourceDir(
-                      File(result.files.first.path!).parent.path,
-                    );
+                    final parent = File(result.files.first.path!).parent.path;
+                    await settings.setLastSourceDir(parent);
                   }
                   onSelected(result.paths.whereType<String>().toList());
                 }
@@ -371,7 +389,7 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
         if (current.isNotEmpty)
           Text(
             "${current.length} files selected",
-            style: const TextStyle(color: Colors.teal),
+            style: TextStyle(color: Theme.of(context).colorScheme.primary),
           ),
       ],
     );
@@ -391,18 +409,14 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
             Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
             OutlinedButton(
               onPressed: () async {
-                final settings =
-                    UserSettingsService(); // <-- Get settings instance
+                final settings = UserSettingsService();
                 final result = await FilePicker.platform.pickFiles(
                   type: FileType.custom,
                   allowedExtensions: ['json'],
-                  initialDirectory:
-                      settings.lastDictDir, // <-- Start in last dir
+                  initialDirectory: settings.lastDictDir,
                 );
-
                 if (result != null && result.files.single.path != null) {
                   final path = result.files.single.path!;
-                  // Save the parent folder so it opens here next time
                   await settings.setLastDictDir(File(path).parent.path);
                   onSelected(path);
                 }
@@ -412,13 +426,15 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
           ],
         ),
         if (current != null)
-          Text(p.basename(current), style: const TextStyle(color: Colors.teal)),
+          Text(
+            p.basename(current),
+            style: TextStyle(color: Theme.of(context).colorScheme.primary),
+          ),
       ],
     );
   }
 }
 
-// Keeping your _PairingList widget here from before
 class _PairingList extends StatelessWidget {
   final List<String> audioFiles;
   final List<String> textFiles;
@@ -432,11 +448,14 @@ class _PairingList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // We visualize based on the longer list to show gaps
     final int count = audioFiles.length > textFiles.length
         ? audioFiles.length
         : textFiles.length;
+
     return Row(
       children: [
+        // Left Column: Audio (Fixed)
         Expanded(
           child: Column(
             children: [
@@ -473,7 +492,11 @@ class _PairingList extends StatelessWidget {
             ],
           ),
         ),
-        Container(width: 1, color: Colors.grey),
+
+        // Divider
+        Container(width: 1, color: Theme.of(context).dividerColor),
+
+        // Right Column: Text (Reorderable)
         Expanded(
           child: Column(
             children: [
@@ -491,7 +514,9 @@ class _PairingList extends StatelessWidget {
                   onReorder: onReorderText,
                   itemBuilder: (context, i) {
                     return Container(
-                      key: ValueKey(textFiles[i]),
+                      key: ValueKey(
+                        textFiles[i],
+                      ), // Key must be unique based on path
                       alignment: Alignment.centerLeft,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       decoration: BoxDecoration(
@@ -504,10 +529,12 @@ class _PairingList extends StatelessWidget {
                       ),
                       child: Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.drag_handle,
                             size: 16,
-                            color: Colors.grey,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
                           ),
                           const SizedBox(width: 8),
                           Expanded(
@@ -530,6 +557,8 @@ class _PairingList extends StatelessWidget {
   }
 }
 
+// --- BACKGROUND ISOLATE LOGIC ---
+
 class _AnalysisRequest {
   final List<String> filePaths;
   final Map<String, String> rules;
@@ -546,25 +575,44 @@ class _AnalysisResult {
 Future<_AnalysisResult> _analyzeAllFiles(_AnalysisRequest req) async {
   final Set<String> unknownSet = {};
   final List<String> previewLines = [];
-  final nonLatinRegex = RegExp(r'[^\x00-\x7F]');
+  final nonLatinRegex = RegExp(r'[^\x00-\x7F]'); // Detects non-ASCII
 
+  // Loop through ALL files
   for (int i = 0; i < req.filePaths.length; i++) {
     final file = File(req.filePaths[i]);
     if (!file.existsSync()) continue;
 
     final lines = await file.readAsLines();
+
     for (var line in lines) {
       if (line.trim().isEmpty) continue;
+
       String textToProcess = line;
+
+      // Strip IDs
       if (req.hasIds) {
         final parts = line.trim().split(' ');
-        if (parts.length > 1) textToProcess = parts.sublist(1).join(' ');
+        if (parts.length > 1) {
+          textToProcess = parts.sublist(1).join(' ');
+        }
       }
+
+      // Transliterate
       final converted = Transliterator.convert(textToProcess, req.rules);
+
+      // Collect Unknowns
       final matches = nonLatinRegex.allMatches(converted);
-      for (var m in matches) unknownSet.add(m.group(0)!);
-      if (i == 0 && previewLines.length < 5) previewLines.add(converted);
+      for (var m in matches) {
+        unknownSet.add(m.group(0)!);
+      }
+
+      // Save Preview (Only from the first file, first 5 lines)
+      if (i == 0 && previewLines.length < 5) {
+        previewLines.add(converted);
+      }
     }
   }
-  return _AnalysisResult(previewLines, unknownSet.toList()..sort());
+
+  final sortedUnknowns = unknownSet.toList()..sort();
+  return _AnalysisResult(previewLines, sortedUnknowns);
 }
