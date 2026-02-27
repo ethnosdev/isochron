@@ -55,6 +55,7 @@ class _MainScreenState extends State<MainScreen> {
         _controller.loadProjectItem(
           widget.project!.items[_currentIndex!],
           widget.project!.directoryPath,
+          dictPath: widget.project!.dictionaryPath,
         );
       });
     }
@@ -120,6 +121,7 @@ class _MainScreenState extends State<MainScreen> {
     _controller.loadProjectItem(
       widget.project!.items[_currentIndex!],
       widget.project!.directoryPath,
+      dictPath: widget.project!.dictionaryPath,
     );
 
     // Reset scroll to start for the new file
@@ -262,6 +264,7 @@ class _MainScreenState extends State<MainScreen> {
                       child: FragmentList(
                         fragments: state.fragments,
                         currentPos: state.currentPlaybackPosition,
+                        rules: state.transliterationRules,
                         onJumpTo: (idx) {
                           _controller.exitFocusMode();
                           _jumpTo(idx, state);

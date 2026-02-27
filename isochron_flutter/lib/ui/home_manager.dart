@@ -40,7 +40,11 @@ class HomeManager extends ValueNotifier<AppState> {
     super.dispose();
   }
 
-  Future<void> loadProjectItem(ProjectItem item, String projectRoot) async {
+  Future<void> loadProjectItem(
+    ProjectItem item,
+    String projectRoot, {
+    String? dictPath,
+  }) async {
     // 1. Pause audio if it was playing from previous file
     if (value.isPlaying) {
       await _audioService.pause();
@@ -48,8 +52,15 @@ class HomeManager extends ValueNotifier<AppState> {
 
     final absJsonPath = item.getAbsoluteOutputPath(projectRoot);
 
+    final prefs = await SharedPreferences.getInstance();
+    final ffmpegPath = prefs.getString('ffmpeg') ?? 'ffmpeg';
+    final playbackPath = await _ensureWavForPlayback(
+      item.audioPath,
+      ffmpegPath,
+    );
+
     // 2. Load Audio Duration
-    final duration = await _audioService.load(item.audioPath);
+    final duration = await _audioService.load(playbackPath);
 
     // 3. Load Existing JSON if available
     List<Fragment> loadedFragments = [];
@@ -68,10 +79,28 @@ class HomeManager extends ValueNotifier<AppState> {
           .toList();
     }
 
+    // 3.5. Load Dictionary if not already loaded into memory
+    final actualDictPath = dictPath ?? value.dictPath;
+    Map<String, String>? rules = value.transliterationRules;
+
+    if (actualDictPath != null &&
+        rules == null &&
+        await File(actualDictPath).exists()) {
+      try {
+        final jsonString = await File(actualDictPath).readAsString();
+        final Map<String, dynamic> rawMap = jsonDecode(jsonString);
+        rules = rawMap.map((k, v) => MapEntry(k, v.toString()));
+      } catch (e) {
+        debugPrint("Failed to load dict: $e");
+      }
+    }
+
     // 4. Reset State Completely for the new file
     value = value.copyWith(
       audioPath: item.audioPath,
       textPath: item.textPath,
+      dictPath: actualDictPath,
+      transliterationRules: rules,
       autoSavePath: absJsonPath,
       fragments: loadedFragments,
       audioDuration: duration,
@@ -173,25 +202,35 @@ class HomeManager extends ValueNotifier<AppState> {
     final path = await _pickFile(type: FileType.custom, extensions: ['json']);
     if (path == null) return;
 
+    // 1. Load Rules immediately
+    Map<String, String>? rules;
+    try {
+      final jsonString = await File(path).readAsString();
+      final Map<String, dynamic> rawMap = jsonDecode(jsonString);
+      rules = rawMap.map((k, v) => MapEntry(k, v.toString()));
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
+      return;
+    }
+
     if (value.textPath == null) {
       value = value.copyWith(
         dictPath: path,
+        transliterationRules: rules,
         statusMessage: "Dict: ${p.basename(path)}",
       );
       return;
     }
 
     try {
-      // 1. Load Rules & Text
-      final jsonString = await File(path).readAsString();
-      final Map<String, dynamic> rawMap = jsonDecode(jsonString);
-      final rules = rawMap.map((k, v) => MapEntry(k, v.toString()));
-
       final textFile = File(value.textPath!);
       final fullText = await textFile.readAsString();
 
       // 2. Run Analysis in Background (compute)
-      // We pass all necessary data to a static helper function
       final analysis = await compute(
         _analyzeTransliteration,
         _AnalysisRequest(fullText, rules, value.hasIds),
@@ -211,6 +250,7 @@ class HomeManager extends ValueNotifier<AppState> {
       if (confirm == true) {
         value = value.copyWith(
           dictPath: path,
+          transliterationRules: rules,
           statusMessage: "Dict: ${p.basename(path)}",
         );
       }
@@ -549,6 +589,47 @@ class HomeManager extends ValueNotifier<AppState> {
       return path;
     }
     return null;
+  }
+
+  Future<String> _ensureWavForPlayback(
+    String originalPath,
+    String ffmpegPath,
+  ) async {
+    // If it's already a WAV, we don't need to do anything
+    if (originalPath.toLowerCase().endsWith('.wav')) return originalPath;
+
+    final tempDir = await getTemporaryDirectory();
+    final outPath = p.join(
+      tempDir.path,
+      '${p.basenameWithoutExtension(originalPath)}_playback.wav',
+    );
+
+    // If we already converted this file previously, just return it
+    if (await File(outPath).exists()) return outPath;
+
+    // Convert to uncompressed WAV for frame-perfect seeking in just_audio
+    value = value.copyWith(statusMessage: "Optimizing audio for playback...");
+
+    final result = await Process.run(ffmpegPath, [
+      '-y',
+      '-i',
+      originalPath,
+      '-vn',
+      '-acodec',
+      'pcm_s16le',
+      '-ar',
+      '44100',
+      '-ac',
+      '2',
+      outPath,
+    ]);
+
+    if (result.exitCode != 0) {
+      debugPrint("FFmpeg conversion failed: ${result.stderr}");
+      return originalPath; // Fallback to original if it fails
+    }
+
+    return outPath;
   }
 }
 

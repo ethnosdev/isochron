@@ -18,6 +18,7 @@ class AppState {
   final int? focusedFragmentIndex;
   final String? autoSavePath;
   final bool hasUnsavedChanges;
+  final Map<String, String>? transliterationRules;
 
   const AppState({
     this.isProcessing = false,
@@ -36,6 +37,7 @@ class AppState {
     this.focusedFragmentIndex,
     this.autoSavePath,
     this.hasUnsavedChanges = false,
+    this.transliterationRules,
   });
 
   AppState copyWith({
@@ -57,6 +59,7 @@ class AppState {
     bool clearFocus = false,
     String? autoSavePath,
     bool? hasUnsavedChanges,
+    Map<String, String>? transliterationRules,
   }) {
     return AppState(
       isProcessing: isProcessing ?? this.isProcessing,
@@ -78,6 +81,7 @@ class AppState {
           : (focusedFragmentIndex ?? this.focusedFragmentIndex),
       autoSavePath: autoSavePath ?? this.autoSavePath,
       hasUnsavedChanges: hasUnsavedChanges ?? this.hasUnsavedChanges,
+      transliterationRules: transliterationRules ?? this.transliterationRules,
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:isochron_cli/isochron_cli.dart';
 class FragmentList extends StatefulWidget {
   final List<Fragment> fragments;
   final Duration currentPos;
+  final Map<String, String>? rules;
   final Function(int) onJumpTo;
   final Function(int) onDoubleTap;
 
@@ -11,6 +12,7 @@ class FragmentList extends StatefulWidget {
     super.key,
     required this.fragments,
     required this.currentPos,
+    this.rules,
     required this.onJumpTo,
     required this.onDoubleTap,
   });
@@ -21,7 +23,9 @@ class FragmentList extends StatefulWidget {
 
 class _FragmentListState extends State<FragmentList> {
   final ScrollController _scrollController = ScrollController();
-  static const double _itemHeight = 64.0;
+
+  // Conditionally increase item height to accommodate 3 lines
+  double get _itemHeight => widget.rules != null ? 84.0 : 64.0;
 
   @override
   void didUpdateWidget(FragmentList oldWidget) {
@@ -80,12 +84,16 @@ class _FragmentListState extends State<FragmentList> {
             widget.currentPos.inMilliseconds >= (f.realStart * 1000) &&
             widget.currentPos.inMilliseconds <= (f.realEnd * 1000);
 
+        String? transliteratedText;
+        if (widget.rules != null) {
+          transliteratedText = Transliterator.convert(f.text, widget.rules!);
+        }
+
         return Container(
           decoration: BoxDecoration(
             border: Border(
               bottom: BorderSide(color: Theme.of(context).dividerColor),
             ),
-            // A beautiful dynamic highlight color for both light/dark mode
             color: isActive
                 ? colorScheme.primaryContainer.withValues(alpha: 0.5)
                 : null,
@@ -99,6 +107,7 @@ class _FragmentListState extends State<FragmentList> {
               onTap: null,
               dense: true,
               visualDensity: VisualDensity.compact,
+              isThreeLine: transliteratedText != null,
               leading: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -149,18 +158,40 @@ class _FragmentListState extends State<FragmentList> {
                       f.text,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      // Removed hardcoded black so it turns white in Dark Mode automatically
                       style: TextStyle(color: colorScheme.onSurface),
                     ),
                   ),
                 ],
               ),
-              subtitle: Text(
-                "${f.realStart.toStringAsFixed(2)}s  ➝  ${f.realEnd.toStringAsFixed(2)}s",
-                style: TextStyle(
-                  fontSize: 12,
-                  color: colorScheme.onSurfaceVariant,
-                ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Transliteration Inject
+                  if (transliteratedText != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      transliteratedText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.8,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 4),
+                  // Timing Data
+                  Text(
+                    "${f.realStart.toStringAsFixed(2)}s  ➝  ${f.realEnd.toStringAsFixed(2)}s",
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
               trailing: isActive
                   ? Icon(Icons.volume_up, size: 16, color: colorScheme.primary)
