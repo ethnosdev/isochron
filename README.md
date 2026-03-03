@@ -75,7 +75,33 @@ dart run bin/isochron_cli.dart \
 *   `-a, --audio`: Path to input audio file.
 *   `-o, --output`: JSON output path (default: `alignment.json`).
 *   `--dict`: Path to a JSON file for character transliteration rules.
+*   `--pins`: Path to a JSON file containing known-correct timings for specific fragments (see below).
 *   `--ffmpeg` / `--espeak`: Custom paths to binaries (useful if they are not in your system PATH).
+
+**Pinned Timings (`--pins`):**
+
+If you have listened to the audio and verified that certain fragments are mis-aligned, you can lock those timestamps in and have the aligner re-compute everything else around them.
+
+Create a JSON file where each key is a **fragment index** (0-based, as a string) and each value is an object with `start` and `end` in seconds:
+
+```json
+{
+  "0": { "start": 0.0,  "end": 1.4  },
+  "7": { "start": 12.3, "end": 15.2 }
+}
+```
+
+Then pass it with `--pins`:
+
+```bash
+dart run bin/isochron_cli.dart \
+  --text transcript.txt \
+  --audio recording.mp3 \
+  --pins pins.json \
+  --output result.json
+```
+
+Pins do **not** need to be contiguous or in order — you can lock in the first and eighth fragment while leaving everything else to the automatic aligner. The pipeline splits the audio into segments between pins and runs a separate DTW pass in each window, so non-pinned fragments are constrained to exactly the real-audio range their surrounding pins define.
 
 ## Isochron Studio (Flutter App)
 

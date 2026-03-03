@@ -21,6 +21,15 @@ class Fragment {
   double realStart = 0.0;
   double realEnd = 0.0;
 
+  // --- Pinned Timings (user-verified) ---
+  /// If set, these values were supplied by the user and are treated as ground truth.
+  /// The alignment pipeline will use these as hard boundaries rather than computing them.
+  double? pinnedStart;
+  double? pinnedEnd;
+
+  /// Returns true if the user has locked in the timing for this fragment.
+  bool get isPinned => pinnedStart != null;
+
   Fragment({
     required this.index,
     required this.text,
@@ -32,6 +41,13 @@ class Fragment {
   void setRealTiming({required double start, required double end}) {
     realStart = start;
     realEnd = end;
+  }
+
+  /// Locks in user-verified timing so the pipeline treats this fragment as a
+  /// fixed boundary rather than aligning it via DTW.
+  void setPinnedTiming({required double start, required double end}) {
+    pinnedStart = start;
+    pinnedEnd = end;
   }
 
   /// Helper to update anchor timing during synthesis
