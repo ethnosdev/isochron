@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import '../core/fragment.dart';
 import '../core/text_parser.dart';
 import '../core/time_projector.dart';
+import '../core/pin_boundary_enforcer.dart';
 import '../synthesis/anchor_generator.dart';
 import '../math/mfcc_extractor.dart';
 import '../math/dtw_aligner.dart';
@@ -190,6 +191,13 @@ class IsochronProcessor {
 
     onProgress?.call('Refining Timestamps...', 0.98);
     BoundarySnapper.snap(fragments, audioBytes, 16000);
+
+    // When pins are present, re-enforce boundaries after snapping.
+    // BoundarySnapper can advance a start past a pin boundary (gap) or
+    // DTW can leave an end inside the next pin's window (overlap).
+    if (pinnedTimings != null && pinnedTimings.isNotEmpty) {
+      PinBoundaryEnforcer.enforce(fragments);
+    }
 
     onProgress?.call("Done", 1.0);
     return fragments;
