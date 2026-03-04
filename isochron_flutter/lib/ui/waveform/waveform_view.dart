@@ -133,8 +133,13 @@ class _WaveformViewState extends State<WaveformView> {
                   _handleHover(event.localPosition.dx, contentWidth, totalSec),
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTapUp: (d) =>
-                    _handleSeek(d.localPosition.dx, contentWidth, totalSec),
+                onTapDown: (d) =>
+                    _handleTap(d.localPosition.dx, contentWidth, totalSec),
+                onDoubleTapDown: (d) => _handleDoubleTap(
+                  d.localPosition.dx,
+                  contentWidth,
+                  totalSec,
+                ),
                 onHorizontalDragStart: (d) => _handleDragStart(
                   d.localPosition.dx,
                   contentWidth,
@@ -149,24 +154,49 @@ class _WaveformViewState extends State<WaveformView> {
                   _dragIndex = null;
                   _cursor = SystemMouseCursors.basic;
                 }),
-                child: CustomPaint(
-                  size: Size(fullPainterWidth, constraints.maxHeight),
-                  painter: IsochronWaveformPainter(
-                    waveform: wf,
-                    fragments: widget.state.fragments,
-                    playbackPosSeconds:
-                        widget.state.currentPlaybackPosition.inMilliseconds /
-                        1000.0,
-                    totalSeconds: totalSec,
-                    zoomLevel: widget.state.zoomLevel,
-                    accentColor: Theme.of(context).colorScheme.primary,
-                    waveColor: Theme.of(
-                      context,
-                    ).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-                    playheadColor: Theme.of(context).colorScheme.error,
-                    contentWidth: contentWidth,
-                    padding: _hPadding,
-                  ),
+                child: Stack(
+                  children: [
+                    CustomPaint(
+                      size: Size(fullPainterWidth, constraints.maxHeight),
+                      painter: IsochronWaveformPainter(
+                        waveform: wf,
+                        fragments: widget.state.fragments,
+                        playbackPosSeconds:
+                            widget
+                                .state
+                                .currentPlaybackPosition
+                                .inMilliseconds /
+                            1000.0,
+                        totalSeconds: totalSec,
+                        zoomLevel: widget.state.zoomLevel,
+                        accentColor: Theme.of(context).colorScheme.primary,
+                        waveColor: Theme.of(
+                          context,
+                        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                        playheadColor: Theme.of(context).colorScheme.error,
+                        contentWidth: contentWidth,
+                        padding: _hPadding,
+                      ),
+                    ),
+                    // Lock icon overlays for pinned fragments
+                    for (final f in widget.state.fragments)
+                      if (f.isPinned)
+                        Positioned(
+                          left:
+                              (f.realStart + f.realEnd) /
+                                  2 /
+                                  totalSec *
+                                  contentWidth +
+                              _hPadding -
+                              8,
+                          top: 4,
+                          child: const Icon(
+                            Icons.lock,
+                            size: 16,
+                            color: Color(0xFFFFC107), // amber
+                          ),
+                        ),
+                  ],
                 ),
               ),
             ),
@@ -188,17 +218,27 @@ class _WaveformViewState extends State<WaveformView> {
     // 2. Convert the hover X pixel to Audio Time
     final hoverTime = _pxToSeconds(x, contentWidth, totalSec);
 
-    // 3. Calculate the time difference equivalent to our pixel threshold.
+    // 3. Track which fragment the cursor is currently inside (for L key)
+    int? hoveredIdx;
+    for (final f in widget.state.fragments) {
+      if (hoverTime >= f.realStart && hoverTime <= f.realEnd) {
+        hoveredIdx = f.index;
+        break;
+      }
+    }
+    widget.controller.setHoveredFragmentIndex(hoveredIdx);
+
+    // 4. Calculate the time difference equivalent to our pixel threshold.
     // Logic: (Pixels / TotalWidth) * TotalSeconds
     final double thresholdSeconds =
         (_hoverThresholdPx / contentWidth) * totalSec;
 
     bool isNearBoundary = false;
 
-    // 4. Check all fragments
-    // (Optimization note: For huge lists, we could optimize this to only check
-    // fragments currently in the viewport, but for <5000 lines this is fast enough)
-    for (var f in widget.state.fragments) {
+    // 5. Check non-pinned fragments only — pinned handles cannot be dragged
+    // so we suppress the resize cursor near them to avoid confusion.
+    for (final f in widget.state.fragments) {
+      if (f.isPinned) continue;
       if ((f.realStart - hoverTime).abs() < thresholdSeconds ||
           (f.realEnd - hoverTime).abs() < thresholdSeconds) {
         isNearBoundary = true;
@@ -206,7 +246,7 @@ class _WaveformViewState extends State<WaveformView> {
       }
     }
 
-    // 5. Update state only if changed to avoid unnecessary rebuilds
+    // 6. Update state only if changed to avoid unnecessary rebuilds
     final newCursor = isNearBoundary
         ? SystemMouseCursors.resizeLeftRight
         : SystemMouseCursors.basic;
@@ -227,6 +267,22 @@ class _WaveformViewState extends State<WaveformView> {
     widget.controller.seekTo(Duration(milliseconds: ms));
   }
 
+  void _handleTap(double x, double contentWidth, double totalSec) {
+    _handleSeek(x, contentWidth, totalSec);
+  }
+
+  // Double-tap anywhere inside a fragment region toggles its pin lock.
+  void _handleDoubleTap(double x, double contentWidth, double totalSec) {
+    for (final f in widget.state.fragments) {
+      final fragStartPx = (f.realStart / totalSec) * contentWidth + _hPadding;
+      final fragEndPx = (f.realEnd / totalSec) * contentWidth + _hPadding;
+      if (x >= fragStartPx && x <= fragEndPx) {
+        widget.controller.toggleFragmentPin(f.index);
+        return;
+      }
+    }
+  }
+
   void _handleDragStart(double x, double contentWidth, double totalSec) {
     final time = _pxToSeconds(x, contentWidth, totalSec);
 
@@ -235,15 +291,32 @@ class _WaveformViewState extends State<WaveformView> {
     // Threshold in seconds (e.g. 15 pixels worth of time)
     final thresholdSec = 15.0 / pixelsPerSecond;
 
+    // Collect all positions that are locked by a pin — no drag handle may
+    // land within threshold of these, even if it belongs to a neighbour.
+    final pinnedPositions = <double>{};
+    for (final f in widget.state.fragments) {
+      if (f.isPinned) {
+        pinnedPositions.add(f.realStart);
+        pinnedPositions.add(f.realEnd);
+      }
+    }
+
+    bool isNearPinned(double t) =>
+        pinnedPositions.any((p) => (p - t).abs() < thresholdSec);
+
     for (var f in widget.state.fragments) {
-      if ((f.realStart - time).abs() < thresholdSec) {
+      // Pinned fragments: both handles are fully locked
+      if (f.isPinned) continue;
+
+      if ((f.realStart - time).abs() < thresholdSec &&
+          !isNearPinned(f.realStart)) {
         setState(() {
           _dragIndex = f.index;
           _dragStart = true;
         });
         return;
       }
-      if ((f.realEnd - time).abs() < thresholdSec) {
+      if ((f.realEnd - time).abs() < thresholdSec && !isNearPinned(f.realEnd)) {
         setState(() {
           _dragIndex = f.index;
           _dragStart = false;

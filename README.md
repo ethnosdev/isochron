@@ -156,13 +156,14 @@ Fine-tune the alignment results visually.
 
 ### 3. Keyboard Shortcuts
 
-| Shortcut        | Action                                    |
-| :-------------- | :---------------------------------------- |
-| **Space**       | Play / Pause                              |
-| **Right Arrow** | Skip to next segment                      |
-| **Left Arrow**  | Skip to previous segment                  |
-| **Cmd + Right** | Nudge segment start **forward** (+0.15s)  |
-| **Cmd + Left**  | Nudge segment start **backward** (-0.15s) |
+| Shortcut        | Action                                                              |
+| :-------------- | :------------------------------------------------------------------ |
+| **Space**       | Play / Pause                                                        |
+| **Right Arrow** | Skip to next segment                                                |
+| **Left Arrow**  | Skip to previous segment                                            |
+| **Cmd + Right** | Nudge segment start **forward** (+0.15s)                            |
+| **Cmd + Left**  | Nudge segment start **backward** (-0.15s)                           |
+| **L**           | Lock / unlock the focused fragment's timing (pin). Requires a fragment to be focused (double-click a row in the list to focus it). |
 
 ### 4. Export Options
 

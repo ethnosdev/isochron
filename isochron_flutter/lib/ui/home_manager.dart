@@ -428,6 +428,36 @@ class HomeManager extends ValueNotifier<AppState> {
     }
   }
 
+  /// Index of the fragment the mouse is currently hovering over in the
+  /// waveform view. Updated by WaveformView on every mouse-move; used by the
+  /// `L` keyboard shortcut so it doesn't require a prior double-click.
+  int? hoveredFragmentIndex;
+
+  void setHoveredFragmentIndex(int? idx) {
+    hoveredFragmentIndex = idx;
+  }
+
+  /// Toggles the pin lock on a fragment.
+  /// When pinned, the fragment's current realStart/realEnd are locked in as
+  /// ground-truth boundaries — drag handles are disabled and the alignment
+  /// pipeline treats them as hard constraints on re-run.
+  void toggleFragmentPin(int index) {
+    final frags = List<Fragment>.from(value.fragments);
+    if (index < 0 || index >= frags.length) return;
+
+    final frag = frags[index];
+    if (frag.isPinned) {
+      frag.clearPinnedTiming();
+      debugPrint('[PIN] Fragment $index unlocked');
+    } else {
+      frag.setPinnedTiming(start: frag.realStart, end: frag.realEnd);
+      debugPrint(
+          '[PIN] Fragment $index locked at ${frag.realStart.toStringAsFixed(3)}–${frag.realEnd.toStringAsFixed(3)}');
+    }
+
+    value = value.copyWith(fragments: frags);
+  }
+
   // --- Waveform Logic ---
 
   Future<void> _generateWaveform(String audioPath) async {

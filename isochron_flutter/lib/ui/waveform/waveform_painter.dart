@@ -65,16 +65,22 @@ class IsochronWaveformPainter extends CustomPainter {
     }
   }
 
-  void _drawFragments(Canvas canvas, Size size) {
-    final paintLine = Paint()
-      ..color = accentColor
-      ..strokeWidth = 2.0;
+  // Amber used for pinned fragment boundaries — semantic, not theme-dependent.
+  static const Color _pinnedColor = Color(0xFFFFC107); // Colors.amber
 
-    // Fill background for the verse
-    final paintFill = Paint()..color = accentColor.withValues(alpha: 0.15);
+  void _drawFragments(Canvas canvas, Size size) {
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
 
     for (final frag in fragments) {
+      final bool pinned = frag.isPinned;
+      final Color lineColor = pinned ? _pinnedColor : accentColor;
+
+      final paintLine = Paint()
+        ..color = lineColor
+        ..strokeWidth = pinned ? 2.5 : 2.0;
+
+      final paintFill = Paint()..color = lineColor.withValues(alpha: 0.15);
+
       // Map time -> pixels using contentWidth
       final xStart = (frag.realStart / totalSeconds) * size.width;
       final xEnd = (frag.realEnd / totalSeconds) * size.width;
@@ -87,11 +93,13 @@ class IsochronWaveformPainter extends CustomPainter {
       );
       canvas.drawLine(Offset(xEnd, 0), Offset(xEnd, size.height), paintLine);
 
+      // Pin indicator drawn as a widget overlay in WaveformView — nothing to paint here.
+
       if (xEnd - xStart > 25) {
         textPainter.text = TextSpan(
           text: "${frag.index}",
           style: TextStyle(
-            color: accentColor,
+            color: lineColor,
             fontWeight: FontWeight.bold,
             fontSize: 10,
           ),

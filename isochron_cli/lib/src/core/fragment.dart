@@ -50,6 +50,12 @@ class Fragment {
     pinnedEnd = end;
   }
 
+  /// Removes the pin, returning this fragment to normal DTW-aligned status.
+  void clearPinnedTiming() {
+    pinnedStart = null;
+    pinnedEnd = null;
+  }
+
   /// Helper to update anchor timing during synthesis
   void setAnchorTiming({required double start, required double end}) {
     anchorStart = start;
