@@ -16,10 +16,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'models/app_state.dart';
 import '../services/alignment_service.dart';
 import '../services/audio_service.dart';
+import '../services/pins_service.dart';
 
 class HomeManager extends ValueNotifier<AppState> {
   final AudioService _audioService = AudioService();
   final AlignmentService _alignmentService = AlignmentService();
+  final PinsService _pinsService = PinsService();
   final _settings = UserSettingsService();
   VoidCallback? onSaveCallback;
 
@@ -77,6 +79,9 @@ class HomeManager extends ValueNotifier<AppState> {
                   ),
           )
           .toList();
+
+      // Restore any previously saved pin locks from sidecar file
+      await _pinsService.load(absJsonPath, loadedFragments);
     }
 
     // 3.5. Load Dictionary if not already loaded into memory
@@ -437,11 +442,24 @@ class HomeManager extends ValueNotifier<AppState> {
     hoveredFragmentIndex = idx;
   }
 
+  /// Path to the sidecar pins file: same directory as [autoSavePath] but with
+  /// a `-pins.json` suffix. Returns null when not in project mode.
+  String? get _pinsPath => value.autoSavePath == null
+      ? null
+      : PinsService.pinsPath(value.autoSavePath!);
+
+  /// Saves pinned fragments to the sidecar via [PinsService].
+  Future<void> savePinsFile() async {
+    final path = _pinsPath;
+    if (path == null) return;
+    await _pinsService.save(value.autoSavePath!, value.fragments);
+  }
+
   /// Toggles the pin lock on a fragment.
   /// When pinned, the fragment's current realStart/realEnd are locked in as
   /// ground-truth boundaries — drag handles are disabled and the alignment
   /// pipeline treats them as hard constraints on re-run.
-  void toggleFragmentPin(int index) {
+  void toggleFragmentPin(int index) async {
     final frags = List<Fragment>.from(value.fragments);
     if (index < 0 || index >= frags.length) return;
 
@@ -452,10 +470,12 @@ class HomeManager extends ValueNotifier<AppState> {
     } else {
       frag.setPinnedTiming(start: frag.realStart, end: frag.realEnd);
       debugPrint(
-          '[PIN] Fragment $index locked at ${frag.realStart.toStringAsFixed(3)}–${frag.realEnd.toStringAsFixed(3)}');
+        '[PIN] Fragment $index locked at ${frag.realStart.toStringAsFixed(3)}–${frag.realEnd.toStringAsFixed(3)}',
+      );
     }
 
     value = value.copyWith(fragments: frags);
+    await savePinsFile();
   }
 
   // --- Waveform Logic ---
