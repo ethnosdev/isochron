@@ -316,12 +316,17 @@ class HomeManager extends ValueNotifier<AppState> {
       // -----------------------
 
       // Run existing service with potentially new path
+      final activePinsPath = _pinsPath;
+      final passPins =
+          activePinsPath != null && await File(activePinsPath).exists();
+
       List<Fragment> fragments = await _alignmentService.runIsochron(
         textPath: actualTextPath,
         audioPath: value.audioPath!,
         dictPath: value.dictPath,
         ffmpegPath: ffmpeg,
         espeakPath: espeak,
+        pinsPath: passPins ? activePinsPath : null,
         onProgress: (status, prog) {
           value = value.copyWith(statusMessage: status, progress: prog);
         },

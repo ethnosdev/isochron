@@ -10,6 +10,7 @@ class AlignmentService {
     required String ffmpegPath,
     required String espeakPath,
     String? dictPath,
+    String? pinsPath,
     bool hasIds = false,
     bool generateIds = false,
     String? generatedIdPrefix,
@@ -23,12 +24,18 @@ class AlignmentService {
       rulesJson = await File(dictPath).readAsString();
     }
 
+    String? pinsJson;
+    if (pinsPath != null && await File(pinsPath).exists()) {
+      pinsJson = await File(pinsPath).readAsString();
+    }
+
     try {
       await Isolate.spawn(_isolateEntry, {
         'sendPort': receivePort.sendPort,
         'textPath': textPath,
         'audioPath': audioPath,
         'rulesJson': rulesJson,
+        'pinsJson': pinsJson,
         'ffmpeg': ffmpegPath,
         'espeak': espeakPath,
         'hasIds': hasIds,
@@ -95,6 +102,19 @@ class AlignmentService {
       }
 
       // 1. Run Alignment on CLEAN text
+      Map<int, ({double start, double end})>? pinnedTimings;
+      if (args['pinsJson'] != null) {
+        final raw = jsonDecode(args['pinsJson']) as Map<String, dynamic>;
+        pinnedTimings = {
+          for (final entry in raw.entries)
+            if (int.tryParse(entry.key) != null)
+              int.parse(entry.key): (
+                start: (entry.value['start'] as num).toDouble(),
+                end: (entry.value['end'] as num).toDouble(),
+              ),
+        };
+      }
+
       final List<Fragment> rawFragments = await IsochronProcessor.process(
         text: cleanTextForEngine,
         audioPath: args['audioPath'],
@@ -102,6 +122,7 @@ class AlignmentService {
         ffmpegPath: args['ffmpeg'],
         espeakPath: args['espeak'],
         transliterationRules: rules,
+        pinnedTimings: pinnedTimings,
         onProgress: (s, p) =>
             sendPort.send({'type': 'progress', 'status': s, 'value': p}),
       );
