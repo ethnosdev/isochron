@@ -113,10 +113,14 @@ class _FragmentListState extends State<FragmentList> {
                 children: [
                   CircleAvatar(
                     radius: 10,
-                    backgroundColor: isActive
+                    backgroundColor: f.isPinned
+                        ? const Color(0xFFFFC107)
+                        : isActive
                         ? colorScheme.primary
                         : colorScheme.surfaceContainerHighest,
-                    foregroundColor: isActive
+                    foregroundColor: f.isPinned
+                        ? Colors.black
+                        : isActive
                         ? colorScheme.onPrimary
                         : colorScheme.onSurfaceVariant,
                     child: Text(
@@ -127,6 +131,10 @@ class _FragmentListState extends State<FragmentList> {
                       ),
                     ),
                   ),
+                  if (f.isPinned) ...[
+                    const SizedBox(height: 4),
+                    const Icon(Icons.lock, size: 12, color: Color(0xFFFFC107)),
+                  ],
                 ],
               ),
               title: Row(
