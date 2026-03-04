@@ -25,6 +25,20 @@ class HomeManager extends ValueNotifier<AppState> {
   final _settings = UserSettingsService();
   VoidCallback? onSaveCallback;
 
+  /// Snapshot of pin state as of the last explicit save (or file load).
+  /// Used by discardChanges() to revert both in-memory and on-disk pins
+  /// without losing pins that were already saved.
+  /// Null means no pins were saved.
+  Map<int, ({double start, double end})>? _lastSavedPins;
+
+  /// Builds a snapshot map from the pinned fragments in [frags].
+  static Map<int, ({double start, double end})> _buildPinsSnapshot(
+    List<Fragment> frags,
+  ) => {
+        for (final f in frags.where((f) => f.isPinned))
+          f.index: (start: f.pinnedStart!, end: f.pinnedEnd!),
+      };
+
   static const String _keyLastDir = 'last_picked_directory';
 
   HomeManager() : super(AppState(zoomLevel: UserSettingsService().lastZoom)) {
@@ -47,6 +61,10 @@ class HomeManager extends ValueNotifier<AppState> {
     String projectRoot, {
     String? dictPath,
   }) async {
+    // Reset pin snapshot for the new file — prevents stale state from a
+    // previous file carrying over if this file has no alignment JSON yet.
+    _lastSavedPins = null;
+
     // 1. Pause audio if it was playing from previous file
     if (value.isPlaying) {
       await _audioService.pause();
@@ -82,6 +100,9 @@ class HomeManager extends ValueNotifier<AppState> {
 
       // Restore any previously saved pin locks from sidecar file
       await _pinsService.load(absJsonPath, loadedFragments);
+
+      // Snapshot what was actually persisted so discard can revert here
+      _lastSavedPins = _buildPinsSnapshot(loadedFragments);
     }
 
     // 3.5. Load Dictionary if not already loaded into memory
@@ -147,6 +168,10 @@ class HomeManager extends ValueNotifier<AppState> {
       final jsonString = const JsonEncoder.withIndent('  ').convert(jsonList);
       await File(value.autoSavePath!).writeAsString(jsonString);
 
+      // Persist pins and update snapshot so discard now targets this save
+      await savePinsFile();
+      _lastSavedPins = _buildPinsSnapshot(value.fragments);
+
       value = value.copyWith(statusMessage: "Saved.", hasUnsavedChanges: false);
       onSaveCallback?.call();
     } catch (e) {
@@ -154,8 +179,26 @@ class HomeManager extends ValueNotifier<AppState> {
     }
   }
 
-  void discardChanges() {
-    value = value.copyWith(hasUnsavedChanges: false);
+  Future<void> discardChanges() async {
+    // Revert in-memory fragment pins to the last-saved snapshot
+    final frags = List<Fragment>.from(value.fragments);
+    final snapshot = _lastSavedPins ?? {};
+
+    for (final f in frags) {
+      final saved = snapshot[f.index];
+      if (saved != null) {
+        f.setPinnedTiming(start: saved.start, end: saved.end);
+      } else {
+        f.clearPinnedTiming();
+      }
+    }
+
+    // Rewrite (or delete) the sidecar to match the reverted state
+    if (value.autoSavePath != null) {
+      await _pinsService.save(value.autoSavePath!, frags);
+    }
+
+    value = value.copyWith(fragments: frags, hasUnsavedChanges: false);
   }
 
   Future<void> pickAudio() async {
@@ -479,7 +522,7 @@ class HomeManager extends ValueNotifier<AppState> {
       );
     }
 
-    value = value.copyWith(fragments: frags);
+    value = value.copyWith(fragments: frags, hasUnsavedChanges: true);
     await savePinsFile();
   }
 

@@ -98,7 +98,7 @@ class _MainScreenState extends State<MainScreen> {
       await _controller.saveProject();
       return true; // Proceed after saving
     } else if (result == 'discard') {
-      _controller.discardChanges();
+      await _controller.discardChanges();
       return true; // Proceed and lose changes
     }
 
