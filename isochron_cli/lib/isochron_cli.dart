@@ -8,6 +8,7 @@ export 'src/core/text_parser.dart';
 export 'src/core/time_projector.dart';
 export 'src/core/isochron_processor.dart';
 export 'src/core/transliterator.dart';
+export 'src/core/pin_boundary_enforcer.dart';
 
 // Math
 export 'src/math/dsp_utils.dart';

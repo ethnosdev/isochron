@@ -16,12 +16,28 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'models/app_state.dart';
 import '../services/alignment_service.dart';
 import '../services/audio_service.dart';
+import '../services/pins_service.dart';
 
 class HomeManager extends ValueNotifier<AppState> {
   final AudioService _audioService = AudioService();
   final AlignmentService _alignmentService = AlignmentService();
+  final PinsService _pinsService = PinsService();
   final _settings = UserSettingsService();
   VoidCallback? onSaveCallback;
+
+  /// Snapshot of pin state as of the last explicit save (or file load).
+  /// Used by discardChanges() to revert both in-memory and on-disk pins
+  /// without losing pins that were already saved.
+  /// Null means no pins were saved.
+  Map<int, ({double start, double end})>? _lastSavedPins;
+
+  /// Builds a snapshot map from the pinned fragments in [frags].
+  static Map<int, ({double start, double end})> _buildPinsSnapshot(
+    List<Fragment> frags,
+  ) => {
+        for (final f in frags.where((f) => f.isPinned))
+          f.index: (start: f.pinnedStart!, end: f.pinnedEnd!),
+      };
 
   static const String _keyLastDir = 'last_picked_directory';
 
@@ -45,6 +61,10 @@ class HomeManager extends ValueNotifier<AppState> {
     String projectRoot, {
     String? dictPath,
   }) async {
+    // Reset pin snapshot for the new file — prevents stale state from a
+    // previous file carrying over if this file has no alignment JSON yet.
+    _lastSavedPins = null;
+
     // 1. Pause audio if it was playing from previous file
     if (value.isPlaying) {
       await _audioService.pause();
@@ -77,6 +97,12 @@ class HomeManager extends ValueNotifier<AppState> {
                   ),
           )
           .toList();
+
+      // Restore any previously saved pin locks from sidecar file
+      await _pinsService.load(absJsonPath, loadedFragments);
+
+      // Snapshot what was actually persisted so discard can revert here
+      _lastSavedPins = _buildPinsSnapshot(loadedFragments);
     }
 
     // 3.5. Load Dictionary if not already loaded into memory
@@ -142,6 +168,10 @@ class HomeManager extends ValueNotifier<AppState> {
       final jsonString = const JsonEncoder.withIndent('  ').convert(jsonList);
       await File(value.autoSavePath!).writeAsString(jsonString);
 
+      // Persist pins and update snapshot so discard now targets this save
+      await savePinsFile();
+      _lastSavedPins = _buildPinsSnapshot(value.fragments);
+
       value = value.copyWith(statusMessage: "Saved.", hasUnsavedChanges: false);
       onSaveCallback?.call();
     } catch (e) {
@@ -149,8 +179,26 @@ class HomeManager extends ValueNotifier<AppState> {
     }
   }
 
-  void discardChanges() {
-    value = value.copyWith(hasUnsavedChanges: false);
+  Future<void> discardChanges() async {
+    // Revert in-memory fragment pins to the last-saved snapshot
+    final frags = List<Fragment>.from(value.fragments);
+    final snapshot = _lastSavedPins ?? {};
+
+    for (final f in frags) {
+      final saved = snapshot[f.index];
+      if (saved != null) {
+        f.setPinnedTiming(start: saved.start, end: saved.end);
+      } else {
+        f.clearPinnedTiming();
+      }
+    }
+
+    // Rewrite (or delete) the sidecar to match the reverted state
+    if (value.autoSavePath != null) {
+      await _pinsService.save(value.autoSavePath!, frags);
+    }
+
+    value = value.copyWith(fragments: frags, hasUnsavedChanges: false);
   }
 
   Future<void> pickAudio() async {
@@ -311,12 +359,17 @@ class HomeManager extends ValueNotifier<AppState> {
       // -----------------------
 
       // Run existing service with potentially new path
+      final activePinsPath = _pinsPath;
+      final passPins =
+          activePinsPath != null && await File(activePinsPath).exists();
+
       List<Fragment> fragments = await _alignmentService.runIsochron(
         textPath: actualTextPath,
         audioPath: value.audioPath!,
         dictPath: value.dictPath,
         ffmpegPath: ffmpeg,
         espeakPath: espeak,
+        pinsPath: passPins ? activePinsPath : null,
         onProgress: (status, prog) {
           value = value.copyWith(statusMessage: status, progress: prog);
         },
@@ -426,6 +479,51 @@ class HomeManager extends ValueNotifier<AppState> {
     if (!value.isPlaying) {
       _audioService.play();
     }
+  }
+
+  /// Index of the fragment the mouse is currently hovering over in the
+  /// waveform view. Updated by WaveformView on every mouse-move; used by the
+  /// `L` keyboard shortcut so it doesn't require a prior double-click.
+  int? hoveredFragmentIndex;
+
+  void setHoveredFragmentIndex(int? idx) {
+    hoveredFragmentIndex = idx;
+  }
+
+  /// Path to the sidecar pins file: same directory as [autoSavePath] but with
+  /// a `-pins.json` suffix. Returns null when not in project mode.
+  String? get _pinsPath => value.autoSavePath == null
+      ? null
+      : PinsService.pinsPath(value.autoSavePath!);
+
+  /// Saves pinned fragments to the sidecar via [PinsService].
+  Future<void> savePinsFile() async {
+    final path = _pinsPath;
+    if (path == null) return;
+    await _pinsService.save(value.autoSavePath!, value.fragments);
+  }
+
+  /// Toggles the pin lock on a fragment.
+  /// When pinned, the fragment's current realStart/realEnd are locked in as
+  /// ground-truth boundaries — drag handles are disabled and the alignment
+  /// pipeline treats them as hard constraints on re-run.
+  void toggleFragmentPin(int index) async {
+    final frags = List<Fragment>.from(value.fragments);
+    if (index < 0 || index >= frags.length) return;
+
+    final frag = frags[index];
+    if (frag.isPinned) {
+      frag.clearPinnedTiming();
+      debugPrint('[PIN] Fragment $index unlocked');
+    } else {
+      frag.setPinnedTiming(start: frag.realStart, end: frag.realEnd);
+      debugPrint(
+        '[PIN] Fragment $index locked at ${frag.realStart.toStringAsFixed(3)}–${frag.realEnd.toStringAsFixed(3)}',
+      );
+    }
+
+    value = value.copyWith(fragments: frags, hasUnsavedChanges: true);
+    await savePinsFile();
   }
 
   // --- Waveform Logic ---

@@ -98,7 +98,7 @@ class _MainScreenState extends State<MainScreen> {
       await _controller.saveProject();
       return true; // Proceed after saving
     } else if (result == 'discard') {
-      _controller.discardChanges();
+      await _controller.discardChanges();
       return true; // Proceed and lose changes
     }
 
@@ -190,6 +190,13 @@ class _MainScreenState extends State<MainScreen> {
             _goToNextFile,
         const SingleActivator(LogicalKeyboardKey.keyN, control: true):
             _goToNextFile,
+
+        // L: Lock / unlock the hovered (or focused) fragment's timing pin
+        const SingleActivator(LogicalKeyboardKey.keyL): () {
+          final idx = _controller.hoveredFragmentIndex ??
+              _controller.value.focusedFragmentIndex;
+          if (idx != null) _controller.toggleFragmentPin(idx);
+        },
       },
       child: Focus(
         autofocus: true,

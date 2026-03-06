@@ -16,6 +16,11 @@ void main(List<String> arguments) async {
         help: 'Path to espeak-ng binary', defaultsTo: 'espeak-ng')
     ..addOption('dict',
         help: 'Path to a JSON file containing transliteration rules')
+    ..addOption('pins',
+        help:
+            'Path to a JSON file containing known-correct timings for specific fragments. '
+            'Keys are fragment indices (0-based strings), values are objects with "start" and "end" in seconds. '
+            'Example: {"0":{"start":0.0,"end":1.4},"7":{"start":12.3,"end":15.2}}')
     ..addFlag('verbose',
         abbr: 'v', help: 'Show detailed logs', defaultsTo: false)
     ..addFlag('help',
@@ -33,12 +38,14 @@ void main(List<String> arguments) async {
     final textPath = results['text'];
     final audioPath = results['audio'];
     final dictPath = results['dict'];
+    final pinsPath = results['pins'];
     final outputJsonPath = results['output'];
     final ffmpegPath = results['ffmpeg'];
     final espeakPath = results['espeak'];
     // final transliterate = results['transliterate'] as bool;
     final verbose = results['verbose'] as bool;
     Map<String, String>? rules;
+    Map<int, ({double start, double end})>? pinnedTimings;
 
     if (textPath == null || audioPath == null) {
       stderr.writeln('Error: Both --text and --audio are required.');
@@ -65,6 +72,36 @@ void main(List<String> arguments) async {
       }
     }
 
+    if (pinsPath != null) {
+      if (verbose) print('Loading pinned timings from: $pinsPath');
+      final pinsFile = File(pinsPath);
+      if (!pinsFile.existsSync()) {
+        stderr.writeln('Error: Pins file not found: $pinsPath');
+        exit(1);
+      }
+      try {
+        final rawMap =
+            jsonDecode(await pinsFile.readAsString()) as Map<String, dynamic>;
+        pinnedTimings = {};
+        for (final entry in rawMap.entries) {
+          final idx = int.tryParse(entry.key);
+          if (idx == null) {
+            stderr.writeln(
+                'Warning: Skipping invalid pin key "${entry.key}" (must be an integer index).');
+            continue;
+          }
+          final obj = entry.value as Map<String, dynamic>;
+          final start = (obj['start'] as num).toDouble();
+          final end = (obj['end'] as num).toDouble();
+          pinnedTimings[idx] = (start: start, end: end);
+        }
+        if (verbose) print('Loaded ${pinnedTimings.length} pinned timing(s).');
+      } catch (e) {
+        stderr.writeln('Error: Invalid JSON format in pins file: $e');
+        exit(1);
+      }
+    }
+
     // --- Setup Workspace ---
     final workDir = Directory.systemTemp.createTempSync('isochron_cli_');
     if (verbose) print('Workspace: ${workDir.path}');
@@ -82,6 +119,7 @@ void main(List<String> arguments) async {
         ffmpegPath: ffmpegPath,
         espeakPath: espeakPath,
         transliterationRules: rules,
+        pinnedTimings: pinnedTimings,
       );
       // ---------------------
 

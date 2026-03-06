@@ -19,6 +19,9 @@ class BoundarySnapper {
     noiseFloor = (noiseFloor / noiseSamples) * 1.5; // 1.5x average noise
 
     for (final frag in fragments) {
+      // Skip fragments whose timings were user-verified — don't move them.
+      if (frag.isPinned) continue;
+
       // 1. Snap Start Time
       int originalStartIndex = (frag.realStart * sampleRate).round();
       int searchStart = max(0, originalStartIndex - windowSamples);
