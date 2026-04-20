@@ -126,10 +126,12 @@ When you launch the app, you can:
 **B. Project Creation Wizard**
 1.  **Select Files:** Pick your audio files (mp3) and text transcripts (txt).
 2.  **Configuration:**
-    *   **IDs Checkbox:** Check *"Text files start with ID?"* if your transcripts look like `4001001 In the beginning...`. Isochron will strip the ID before alignment (so the robot doesn't read the numbers) and re-attach it to the output data automatically.
+    *   **Verse ID Strategy:** Choose how to generate IDs for your data:
+        *   *None:* Do not use IDs.
+        *   *IDs are in the text files:* Useful if your transcripts look like `40001001 In the beginning...`. Isochron will strip the ID before alignment and re-attach it to the output data automatically.
+        *   *Auto-Generate IDs:* Define a fixed book prefix (e.g., `40`). Isochron will generate sequential IDs automatically based on the file order and line number (e.g., `40001001`).
     *   **Transliteration:** Optionally select a JSON dictionary. The app will analyze all text files and warn you if any characters are missing from your dictionary.
 3.  **Pairing:** Drag and drop text files to align them with the correct audio files if the filenames don't match perfectly.
-
 
 **Example transliteration file (Koine Greek):**
 ```json
@@ -150,20 +152,28 @@ This is your command center.
 *   **Batch Processing:** Click **Run All Pending** to align every file in the queue sequentially.
 *   **Status Tracking:** Visual indicators show which files are Pending (Grey), Processing (Spinner), Done (Green), or Error (Red).
 *   **Editor Access:** Click the **Edit (Pencil)** icon on any item to open the Waveform Editor.
+*   **Project Settings:** Open the top right menu to change your ID strategy or dictionary. You can automatically apply a new ID strategy retroactively to already-aligned files.
 
 **D. The Waveform Editor**
-Fine-tune the alignment results visually.
+Fine-tune the alignment results visually or manually align difficult files.
+
+*   **Manual Setup & Capture:** If the automatic aligner is failing on a difficult file, you can define timings from scratch.
+    1. Click **Manual Setup** to load your text lines as "un-timed" fragments.
+    2. Play the audio. 
+    3. Every time you hear a new text line begin, press **Enter**. The app will capture that exact moment as the line's start time and automatically extend the previous line to create a gapless boundary.
+    4. You can also click the **Capture** button in the list, or **Right-Click** any boundary line on the waveform to delete it.
 
 ### 3. Keyboard Shortcuts
 
-| Shortcut        | Action                                                              |
-| :-------------- | :------------------------------------------------------------------ |
-| **Space**       | Play / Pause                                                        |
-| **Right Arrow** | Skip to next segment                                                |
-| **Left Arrow**  | Skip to previous segment                                            |
-| **Cmd + Right** | Nudge segment start **forward** (+0.15s)                            |
-| **Cmd + Left**  | Nudge segment start **backward** (-0.15s)                           |
-| **L**           | Lock / unlock the focused fragment's timing (pin). Requires a fragment to be focused (double-click a row in the list to focus it). |
+| Shortcut        | Action                                                                                                                                                       |
+| :-------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Space**       | Play / Pause                                                                                                                                                 |
+| **Enter**       | Capture current audio timestamp as the start time for the selected text line.                                                                                |
+| **Right Arrow** | Skip to next segment                                                                                                                                         |
+| **Left Arrow**  | Skip to previous segment                                                                                                                                     |
+| **Cmd + Right** | Nudge segment start **forward** (+0.15s)                                                                                                                     |
+| **Cmd + Left**  | Nudge segment start **backward** (-0.15s)                                                                                                                    |
+| **L**           | Lock / unlock a fragment's timing (pin). Works automatically if your mouse is hovering over a fragment, or if a fragment is focused (double-click the list). |
 
 ### 4. Export Options
 

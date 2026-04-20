@@ -193,10 +193,15 @@ class _MainScreenState extends State<MainScreen> {
 
         // L: Lock / unlock the hovered (or focused) fragment's timing pin
         const SingleActivator(LogicalKeyboardKey.keyL): () {
-          final idx = _controller.hoveredFragmentIndex ??
+          final idx =
+              _controller.hoveredFragmentIndex ??
               _controller.value.focusedFragmentIndex;
           if (idx != null) _controller.toggleFragmentPin(idx);
         },
+
+        // Enter: Capture timing manually
+        const SingleActivator(LogicalKeyboardKey.enter): () =>
+            _controller.captureFragmentTiming(context),
       },
       child: Focus(
         autofocus: true,
@@ -272,6 +277,11 @@ class _MainScreenState extends State<MainScreen> {
                         fragments: state.fragments,
                         currentPos: state.currentPlaybackPosition,
                         rules: state.transliterationRules,
+                        selectedIndex: state.selectedFragmentIndex,
+                        onSelect: _controller.selectFragment,
+                        onCapture: (i) =>
+                            _controller.captureFragmentTiming(context, i),
+                        onClear: _controller.clearFragmentTiming,
                         onJumpTo: (idx) {
                           _controller.exitFocusMode();
                           _jumpTo(idx, state);

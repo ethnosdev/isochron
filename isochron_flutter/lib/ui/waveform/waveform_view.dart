@@ -140,6 +140,11 @@ class _WaveformViewState extends State<WaveformView> {
                   contentWidth,
                   totalSec,
                 ),
+                onSecondaryTapDown: (d) => _handleRightClick(
+                  d.localPosition.dx,
+                  contentWidth,
+                  totalSec,
+                ),
                 onHorizontalDragStart: (d) => _handleDragStart(
                   d.localPosition.dx,
                   contentWidth,
@@ -221,6 +226,8 @@ class _WaveformViewState extends State<WaveformView> {
     // 3. Track which fragment the cursor is currently inside (for L key)
     int? hoveredIdx;
     for (final f in widget.state.fragments) {
+      if (f.realStart < 0) continue; // <--- CHANGED: Skip un-timed fragments
+
       if (hoverTime >= f.realStart && hoverTime <= f.realEnd) {
         hoveredIdx = f.index;
         break;
@@ -229,16 +236,15 @@ class _WaveformViewState extends State<WaveformView> {
     widget.controller.setHoveredFragmentIndex(hoveredIdx);
 
     // 4. Calculate the time difference equivalent to our pixel threshold.
-    // Logic: (Pixels / TotalWidth) * TotalSeconds
     final double thresholdSeconds =
         (_hoverThresholdPx / contentWidth) * totalSec;
 
     bool isNearBoundary = false;
 
-    // 5. Check non-pinned fragments only — pinned handles cannot be dragged
-    // so we suppress the resize cursor near them to avoid confusion.
+    // 5. Check boundaries to change mouse cursor
     for (final f in widget.state.fragments) {
-      if (f.isPinned) continue;
+      if (f.isPinned || f.realStart < 0) continue;
+
       if ((f.realStart - hoverTime).abs() < thresholdSeconds ||
           (f.realEnd - hoverTime).abs() < thresholdSeconds) {
         isNearBoundary = true;
@@ -274,10 +280,26 @@ class _WaveformViewState extends State<WaveformView> {
   // Double-tap anywhere inside a fragment region toggles its pin lock.
   void _handleDoubleTap(double x, double contentWidth, double totalSec) {
     for (final f in widget.state.fragments) {
+      if (f.realStart < 0) continue;
       final fragStartPx = (f.realStart / totalSec) * contentWidth + _hPadding;
       final fragEndPx = (f.realEnd / totalSec) * contentWidth + _hPadding;
       if (x >= fragStartPx && x <= fragEndPx) {
         widget.controller.toggleFragmentPin(f.index);
+        return;
+      }
+    }
+  }
+
+  void _handleRightClick(double x, double contentWidth, double totalSec) {
+    final time = _pxToSeconds(x, contentWidth, totalSec);
+    final double thresholdSeconds =
+        (_hoverThresholdPx / contentWidth) * totalSec;
+
+    for (var f in widget.state.fragments) {
+      if (f.realStart < 0 || f.isPinned) continue; // Skip un-timed and pinned
+
+      if ((f.realStart - time).abs() < thresholdSeconds) {
+        widget.controller.clearFragmentTiming(f.index);
         return;
       }
     }
@@ -295,7 +317,8 @@ class _WaveformViewState extends State<WaveformView> {
     // land within threshold of these, even if it belongs to a neighbour.
     final pinnedPositions = <double>{};
     for (final f in widget.state.fragments) {
-      if (f.isPinned) {
+      // SKIP un-timed fragments when checking pins
+      if (f.isPinned && f.realStart >= 0) {
         pinnedPositions.add(f.realStart);
         pinnedPositions.add(f.realEnd);
       }
@@ -305,8 +328,8 @@ class _WaveformViewState extends State<WaveformView> {
         pinnedPositions.any((p) => (p - t).abs() < thresholdSec);
 
     for (var f in widget.state.fragments) {
-      // Pinned fragments: both handles are fully locked
-      if (f.isPinned) continue;
+      // Pinned fragments and un-timed fragments cannot be dragged
+      if (f.isPinned || f.realStart < 0) continue; // <--- CHANGED HERE
 
       if ((f.realStart - time).abs() < thresholdSec &&
           !isNearPinned(f.realStart)) {

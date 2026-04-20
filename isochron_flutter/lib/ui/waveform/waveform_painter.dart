@@ -72,6 +72,7 @@ class IsochronWaveformPainter extends CustomPainter {
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
 
     for (final frag in fragments) {
+      if (frag.realStart < 0) continue;
       final bool pinned = frag.isPinned;
       final Color lineColor = pinned ? _pinnedColor : accentColor;
 

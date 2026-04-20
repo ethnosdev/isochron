@@ -19,6 +19,7 @@ class AppState {
   final String? autoSavePath;
   final bool hasUnsavedChanges;
   final Map<String, String>? transliterationRules;
+  final int? selectedFragmentIndex;
 
   const AppState({
     this.isProcessing = false,
@@ -38,6 +39,7 @@ class AppState {
     this.autoSavePath,
     this.hasUnsavedChanges = false,
     this.transliterationRules,
+    this.selectedFragmentIndex,
   });
 
   AppState copyWith({
@@ -60,6 +62,8 @@ class AppState {
     String? autoSavePath,
     bool? hasUnsavedChanges,
     Map<String, String>? transliterationRules,
+    int? selectedFragmentIndex,
+    bool clearSelection = false,
   }) {
     return AppState(
       isProcessing: isProcessing ?? this.isProcessing,
@@ -82,6 +86,9 @@ class AppState {
       autoSavePath: autoSavePath ?? this.autoSavePath,
       hasUnsavedChanges: hasUnsavedChanges ?? this.hasUnsavedChanges,
       transliterationRules: transliterationRules ?? this.transliterationRules,
+      selectedFragmentIndex: clearSelection
+          ? null
+          : (selectedFragmentIndex ?? this.selectedFragmentIndex),
     );
   }
 }

@@ -35,9 +35,9 @@ class HomeManager extends ValueNotifier<AppState> {
   static Map<int, ({double start, double end})> _buildPinsSnapshot(
     List<Fragment> frags,
   ) => {
-        for (final f in frags.where((f) => f.isPinned))
-          f.index: (start: f.pinnedStart!, end: f.pinnedEnd!),
-      };
+    for (final f in frags.where((f) => f.isPinned))
+      f.index: (start: f.pinnedStart!, end: f.pinnedEnd!),
+  };
 
   static const String _keyLastDir = 'last_picked_directory';
 
@@ -639,28 +639,31 @@ class HomeManager extends ValueNotifier<AppState> {
     frags[index].setRealTiming(start: s, end: e);
 
     // 5. Sync Previous Fragment (Magnetic Start)
-    // "Always update the end value of the previous fragment same as the start value of the current"
-    if (index > 0) {
-      final prev = frags[index - 1];
-
-      // Safety: If we dragged Start back so far it swallows the previous fragment,
-      // we collapse the previous fragment to its start point (0 duration effectively).
-      double prevStart = prev.realStart;
-      if (prevStart > s) prevStart = s;
-
-      prev.setRealTiming(start: prevStart, end: s);
+    Fragment? prevTimed;
+    for (int i = index - 1; i >= 0; i--) {
+      if (frags[i].realStart >= 0) {
+        prevTimed = frags[i];
+        break;
+      }
+    }
+    if (prevTimed != null) {
+      double prevStart = prevTimed.realStart;
+      if (prevStart > s) prevStart = s; // Safety collapse
+      prevTimed.setRealTiming(start: prevStart, end: s);
     }
 
     // 6. Sync Next Fragment (Magnetic End)
-    // Standard contiguous logic: If we move the End, the Next Start should follow.
-    if (index < frags.length - 1) {
-      final next = frags[index + 1];
-
-      // Safety: If we dragged End forward so far it swallows the next fragment.
-      double nextEnd = next.realEnd;
-      if (nextEnd < e) nextEnd = e;
-
-      next.setRealTiming(start: e, end: nextEnd);
+    Fragment? nextTimed;
+    for (int i = index + 1; i < frags.length; i++) {
+      if (frags[i].realStart >= 0) {
+        nextTimed = frags[i];
+        break;
+      }
+    }
+    if (nextTimed != null) {
+      double nextEnd = nextTimed.realEnd;
+      if (nextEnd < e) nextEnd = e; // Safety collapse
+      nextTimed.setRealTiming(start: e, end: nextEnd);
     }
 
     // 7. Trigger UI Update
@@ -728,6 +731,147 @@ class HomeManager extends ValueNotifier<AppState> {
     }
 
     return outPath;
+  }
+
+  // --- MANUAL ALIGNMENT LOGIC ---
+
+  void selectFragment(int? index) {
+    value = value.copyWith(selectedFragmentIndex: index);
+  }
+
+  Future<void> initManualAlignment() async {
+    if (value.textPath == null) return;
+
+    final lines = await File(value.textPath!).readAsLines();
+    List<Fragment> frags = [];
+    int idx = 0;
+
+    for (var line in lines) {
+      if (line.trim().isEmpty) continue;
+
+      String? id;
+      String text = line;
+
+      if (value.hasIds) {
+        final parts = line.trim().split(' ');
+        if (parts.length > 1) {
+          id = parts.first;
+          text = parts.sublist(1).join(' ');
+        } else {
+          id = "";
+          text = line;
+        }
+      }
+
+      final f = Fragment(index: idx++, id: id, text: text);
+      // Set to "un-timed" state
+      f.setRealTiming(start: -1.0, end: -1.0);
+      frags.add(f);
+    }
+
+    value = value.copyWith(
+      fragments: frags,
+      hasUnsavedChanges: true,
+      selectedFragmentIndex: 0, // Auto-select the first row
+      statusMessage: "Manual Setup Complete. Ready to capture.",
+    );
+  }
+
+  void clearFragmentTiming(int index) {
+    final frags = List<Fragment>.from(value.fragments);
+    final duration = value.audioDuration.inMilliseconds / 1000.0;
+
+    // Find nearest timed neighbors
+    Fragment? prevTimed;
+    for (int i = index - 1; i >= 0; i--) {
+      if (frags[i].realStart >= 0) {
+        prevTimed = frags[i];
+        break;
+      }
+    }
+    Fragment? nextTimed;
+    for (int i = index + 1; i < frags.length; i++) {
+      if (frags[i].realStart >= 0) {
+        nextTimed = frags[i];
+        break;
+      }
+    }
+
+    // Heal previous fragment to stretch across the deleted gap
+    if (prevTimed != null) {
+      double newEnd = nextTimed != null ? nextTimed.realStart : duration;
+      prevTimed.setRealTiming(start: prevTimed.realStart, end: newEnd);
+    }
+
+    frags[index].setRealTiming(start: -1.0, end: -1.0);
+    frags[index].clearPinnedTiming();
+
+    value = value.copyWith(fragments: frags, hasUnsavedChanges: true);
+  }
+
+  void captureFragmentTiming(BuildContext context, [int? specificIndex]) {
+    final index = specificIndex ?? value.selectedFragmentIndex;
+    if (index == null || index < 0 || index >= value.fragments.length) return;
+
+    final frags = List<Fragment>.from(value.fragments);
+    final t = value.currentPlaybackPosition.inMilliseconds / 1000.0;
+    final duration = value.audioDuration.inMilliseconds / 1000.0;
+
+    Fragment? prevTimed;
+    for (int i = index - 1; i >= 0; i--) {
+      if (frags[i].realStart >= 0) {
+        prevTimed = frags[i];
+        break;
+      }
+    }
+    Fragment? nextTimed;
+    for (int i = index + 1; i < frags.length; i++) {
+      if (frags[i].realStart >= 0) {
+        nextTimed = frags[i];
+        break;
+      }
+    }
+
+    // Safety Constraints
+    if (prevTimed != null && t <= prevTimed.realStart) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Cannot set time before the previous fragment."),
+        ),
+      );
+      return;
+    }
+    if (nextTimed != null && t >= nextTimed.realStart) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Cannot set time after the next fragment."),
+        ),
+      );
+      return;
+    }
+
+    // Snap times
+    double endT = nextTimed != null ? nextTimed.realStart : duration;
+    frags[index].setRealTiming(start: t, end: endT);
+
+    if (prevTimed != null) {
+      prevTimed.setRealTiming(start: prevTimed.realStart, end: t);
+    }
+
+    // Auto-advance to next un-timed fragment
+    int? nextIndex;
+    for (int i = index + 1; i < frags.length; i++) {
+      if (frags[i].realStart < 0) {
+        nextIndex = i;
+        break;
+      }
+    }
+
+    value = value.copyWith(
+      fragments: frags,
+      hasUnsavedChanges: true,
+      selectedFragmentIndex: nextIndex,
+    );
   }
 }
 

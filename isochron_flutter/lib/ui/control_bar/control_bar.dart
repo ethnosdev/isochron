@@ -43,12 +43,23 @@ class ControlBar extends StatelessWidget {
           ),
           ElevatedButton.icon(
             icon: const Icon(Icons.play_arrow),
-            label: const Text("Align"),
+            label: const Text("Auto-Align"),
             onPressed:
                 (!state.isProcessing &&
                     state.textPath != null &&
                     state.audioPath != null)
                 ? onRun
+                : null,
+          ),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.edit_note),
+            label: const Text("Manual Setup"),
+            onPressed:
+                (!state.isProcessing &&
+                    state.textPath != null &&
+                    state.audioPath != null &&
+                    state.fragments.isEmpty)
+                ? () => controller.initManualAlignment()
                 : null,
           ),
           const SizedBox(width: 8),
