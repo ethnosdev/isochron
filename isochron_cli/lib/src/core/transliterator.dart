@@ -9,16 +9,26 @@ class Transliterator {
     final diacriticsRegex =
         RegExp(r'[\u0300-\u036f\u1dc0-\u1dff\u20d0-\u20ff]');
 
+    // sort keys by length to ensure longer matches are checked first (e.g. "ñ" before "n")
+    final sortedKeys = dictionary.keys.toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+
+    // PRIORITY 1: Specific Override
+    // Example: User wants "ñ" to be "ny"
+    // FIRST, apply any direct string replacements from the dictionary (for multi-char mappings)
+    for (String key in sortedKeys) {
+      input = input.replaceAll(key, dictionary[key]!);
+    }
+
     // Iterate through characters.
     // Note: iterating by characters is safer for unicode, but for simplicity
     // in this scope, standard iteration usually works for European scripts.
     for (int i = 0; i < input.length; i++) {
       String char = input[i];
 
-      // PRIORITY 1: Specific Override
-      // Example: User wants "ñ" to be "ny"
-      if (dictionary.containsKey(char)) {
-        buffer.write(dictionary[char]);
+      // If the character was already converted to Latin above, just append it
+      if (RegExp(r'[a-zA-Z0-9\s\.,;!?\n\r]').hasMatch(char)) {
+        buffer.write(char);
         continue;
       }
 
@@ -32,9 +42,7 @@ class Transliterator {
       if (dictionary.containsKey(stripped)) {
         buffer.write(dictionary[stripped]);
       } else {
-        // Fallback: Just keep the stripped Latin/Base char
-        // Example: "é" -> "e" (if user didn't provide a rule for é or e)
-        buffer.write(stripped);
+        // skip characters that can't be transliterated
       }
     }
 
