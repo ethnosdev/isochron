@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
+import 'package:isochron_flutter/ui/dialogs/global_settings_dialog.dart';
 import 'package:isochron_flutter/ui/project/creation_wizard.dart';
 import 'package:isochron_flutter/ui/project/project_dashboard.dart';
 import 'package:isochron_flutter/ui/widgets/theme_toggle_button.dart';
@@ -28,7 +29,19 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        actions: const [ThemeToggleButton()],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: "App Settings",
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (_) => const GlobalSettingsDialog(),
+              );
+            },
+          ),
+          const ThemeToggleButton(),
+        ],
       ),
       body: Center(
         child: Container(
