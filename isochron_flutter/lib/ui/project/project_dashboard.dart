@@ -330,6 +330,14 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
       });
     } catch (e) {
       debugPrint("Error processing ${item.id}: $e");
+      // show error in UI
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error processing ${p.basename(item.audioPath)}: $e"),
+          ),
+        );
+      }
       setState(() {
         _project.items[index] = item.copyWith(status: ProjectItemStatus.error);
       });
