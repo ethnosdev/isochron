@@ -44,7 +44,13 @@ class AnchorGenerator {
         cleanWavPath
       ]);
 
-      final cleanFile = File(cleanWavPath);
+      File cleanFile;
+      try {
+        cleanFile = File(cleanWavPath);
+      } catch (e) {
+        throw Exception(
+            "Error accessing generated anchor clip for fragment ${frag.index}: ${e.toString()}");
+      }
 
       // C. Measure Duration
       final duration = await WavUtils.getDuration(cleanFile);

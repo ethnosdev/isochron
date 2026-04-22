@@ -244,6 +244,7 @@ class _MainScreenState extends State<MainScreen> {
                       controller: _controller,
                       state: state,
                       onRun: () => _controller.runAlignment(
+                        context,
                         _ffmpegCtrl.text,
                         _espeakCtrl.text,
                       ),

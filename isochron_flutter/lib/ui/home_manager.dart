@@ -311,7 +311,11 @@ class HomeManager extends ValueNotifier<AppState> {
     }
   }
 
-  Future<void> runAlignment(String ffmpeg, String espeak) async {
+  Future<void> runAlignment(
+    BuildContext context,
+    String ffmpeg,
+    String espeak,
+  ) async {
     if (value.audioPath == null || value.textPath == null) return;
 
     value = value.copyWith(
@@ -402,6 +406,22 @@ class HomeManager extends ValueNotifier<AppState> {
       );
     } catch (e) {
       value = value.copyWith(isProcessing: false, statusMessage: "Error: $e");
+      // show error dialog
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text("Alignment Error"),
+            content: Text(e.toString()),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("OK"),
+              ),
+            ],
+          ),
+        );
+      }
     } finally {
       if (tempCleanTextFile != null && await tempCleanTextFile.exists()) {
         await tempCleanTextFile.delete();
