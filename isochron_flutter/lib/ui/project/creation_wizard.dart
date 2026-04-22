@@ -89,7 +89,7 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
                       _textFiles,
                       FileType.custom,
                       (files) => setState(() => _textFiles = files),
-                      extensions: ['txt'],
+                      extensions: ['txt', 'phrases'],
                     ),
                     const SizedBox(height: 24),
 
