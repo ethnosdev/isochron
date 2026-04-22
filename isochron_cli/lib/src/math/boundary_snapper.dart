@@ -8,6 +8,8 @@ class BoundarySnapper {
   static void snap(List<dynamic> fragments, Float64List audio, int sampleRate) {
     const double windowSec = 0.25; // Look +/- 250ms
     final int windowSamples = (windowSec * sampleRate).round();
+    final int shiftTime =
+        200; // Shift by this amount of ms ahead of detected onset
 
     // Threshold: Calculate noise floor of the file to determine "Silence"
     double noiseFloor = 0.0;
@@ -33,11 +35,14 @@ class BoundarySnapper {
       for (int i = searchStart; i < searchEnd - 100; i++) {
         // Calculate local energy (short window)
         double localEnergy = 0.0;
-        for (int j = 0; j < 100; j++) localEnergy += audio[i + j].abs();
+        for (int j = 0; j < 100; j++) {
+          localEnergy += audio[i + j].abs();
+        }
         localEnergy /= 100;
 
         if (localEnergy > noiseFloor) {
           bestIndex = i;
+          bestIndex -= (shiftTime * sampleRate ~/ 1000); // Shift back
           break; // Found the onset!
         }
       }
