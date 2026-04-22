@@ -128,7 +128,80 @@ class _FragmentListState extends State<FragmentList> {
               if (hasTime) widget.onDoubleTap(i);
             },
             child: ListTile(
-              // ... existing leading/title ...
+              enabled: true,
+              onTap: null,
+              dense: true,
+              visualDensity: VisualDensity.compact,
+              isThreeLine: transliteratedText != null,
+
+              // --- 1. LEADING (The Circle Number) ---
+              leading: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircleAvatar(
+                    radius: 10,
+                    backgroundColor: f.isPinned
+                        ? const Color(0xFFFFC107)
+                        : isActive
+                        ? colorScheme.primary
+                        : colorScheme.surfaceContainerHighest,
+                    foregroundColor: f.isPinned
+                        ? Colors.black
+                        : isActive
+                        ? colorScheme.onPrimary
+                        : colorScheme.onSurfaceVariant,
+                    child: Text(
+                      "${f.index}",
+                      style: const TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  if (f.isPinned) ...[
+                    const SizedBox(height: 4),
+                    const Icon(Icons.lock, size: 12, color: Color(0xFFFFC107)),
+                  ],
+                ],
+              ),
+
+              // --- 2. TITLE (The Original Text & ID) ---
+              title: Row(
+                children: [
+                  if (f.id != null && f.id!.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainer,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: colorScheme.outlineVariant),
+                      ),
+                      child: Text(
+                        f.id!,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Expanded(
+                    child: Text(
+                      f.text, // <--- THIS IS THE ORIGINAL TEXT
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colorScheme.onSurface),
+                    ),
+                  ),
+                ],
+              ),
+
+              // --- 3. SUBTITLE (Transliteration & Timing/Capture) ---
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -150,7 +223,7 @@ class _FragmentListState extends State<FragmentList> {
                   ],
                   const SizedBox(height: 4),
 
-                  // NEW: Timing Data or Capture Button
+                  // Timing Data OR Capture Button
                   if (hasTime)
                     Row(
                       children: [
