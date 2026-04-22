@@ -212,7 +212,7 @@ class HomeManager extends ValueNotifier<AppState> {
       audioDuration: duration,
       statusMessage: "Audio loaded: ${p.basename(path)}",
       fragments: [],
-      waveform: null,
+      clearWaveform: true,
     );
 
     _generateWaveform(path);
@@ -533,8 +533,13 @@ class HomeManager extends ValueNotifier<AppState> {
       final tempDir = await getTemporaryDirectory();
       if (!await tempDir.exists()) await tempDir.create(recursive: true);
 
+      // Create a unique hash based on file size and last modified time
+      // This forces a new waveform if the file was updated/overwritten
+      final stat = await File(audioPath).stat();
+      final fileHash = '${stat.size}_${stat.modified.millisecondsSinceEpoch}';
+
       final waveFile = File(
-        p.join(tempDir.path, '${p.basename(audioPath)}.wave'),
+        p.join(tempDir.path, '${p.basename(audioPath)}_$fileHash.wave'),
       );
 
       JustWaveform.extract(
@@ -700,12 +705,17 @@ class HomeManager extends ValueNotifier<AppState> {
     if (originalPath.toLowerCase().endsWith('.wav')) return originalPath;
 
     final tempDir = await getTemporaryDirectory();
+
+    // Create a unique hash so updated files don't use old cached audio
+    final stat = await File(originalPath).stat();
+    final fileHash = '${stat.size}_${stat.modified.millisecondsSinceEpoch}';
+
     final outPath = p.join(
       tempDir.path,
-      '${p.basenameWithoutExtension(originalPath)}_playback.wav',
+      '${p.basenameWithoutExtension(originalPath)}_${fileHash}_playback.wav',
     );
 
-    // If we already converted this file previously, just return it
+    // If we already converted this specific version of the file, just return it
     if (await File(outPath).exists()) return outPath;
 
     // Convert to uncompressed WAV for frame-perfect seeking in just_audio
