@@ -196,6 +196,14 @@ class _MainScreenState extends State<MainScreen> {
           final idx =
               _controller.hoveredFragmentIndex ??
               _controller.value.focusedFragmentIndex;
+          if (idx != null) _controller.lockFragmentsUntil(idx);
+        },
+
+        // L: Lock / unlock the hovered (or focused) fragment's timing pin
+        const SingleActivator(LogicalKeyboardKey.keyL, shift: true): () {
+          final idx =
+              _controller.hoveredFragmentIndex ??
+              _controller.value.focusedFragmentIndex;
           if (idx != null) _controller.toggleFragmentPin(idx);
         },
 
