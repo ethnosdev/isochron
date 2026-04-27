@@ -546,6 +546,24 @@ class HomeManager extends ValueNotifier<AppState> {
     await savePinsFile();
   }
 
+  /// Locks all fragments up to and including the given index.
+  void lockFragmentsUntil(int index) async {
+    final frags = List<Fragment>.from(value.fragments);
+    if (index < 0 || index >= frags.length) return;
+
+    for (int i = 0; i <= index; i++) {
+      final frag = frags[i];
+
+      frag.setPinnedTiming(start: frag.realStart, end: frag.realEnd);
+      debugPrint(
+        '[PIN] Fragment $index locked at ${frag.realStart.toStringAsFixed(3)}–${frag.realEnd.toStringAsFixed(3)}',
+      );
+    }
+
+    value = value.copyWith(fragments: frags, hasUnsavedChanges: true);
+    await savePinsFile();
+  }
+
   // --- Waveform Logic ---
 
   Future<void> _generateWaveform(String audioPath) async {
