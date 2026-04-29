@@ -22,11 +22,11 @@ void main(List<String> arguments) async {
             'Keys are fragment indices (0-based strings), values are objects with "start" and "end" in seconds. '
             'Example: {"0":{"start":0.0,"end":1.4},"7":{"start":12.3,"end":15.2}}')
     ..addOption('snap-mode',
-        allowed: ['onset', 'gap-center'],
+        allowed: ['onset', 'gap'],
         help:
             'Controls how fragment boundaries are refined. '
             '"onset" snaps to the start of speech (legacy behaviour). '
-            '"gap-center" snaps to the middle of the detected silence gap.',
+            '"gap" snaps to the middle of the detected silence gap.',
         defaultsTo: 'onset')
     ..addFlag('verbose',
         abbr: 'v', help: 'Show detailed logs', defaultsTo: false)
@@ -132,7 +132,7 @@ void main(List<String> arguments) async {
     
     // Map CLI option to SnapMode enum. Default is conservative: onset.
     final SnapMode snapMode =
-        snapModeRaw == 'gap-center' ? SnapMode.gapCenter : SnapMode.onset;
+        snapModeRaw == 'gap' ? SnapMode.gapCenter : SnapMode.onset;
 
     // --- Setup Workspace ---
     final workDir = Directory.systemTemp.createTempSync('isochron_cli_');

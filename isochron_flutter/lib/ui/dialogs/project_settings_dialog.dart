@@ -176,14 +176,14 @@ class _ProjectSettingsDialogState extends State<ProjectSettingsDialog> {
                 child: Column(
                   children: [
                     RadioListTile<String>(
-                      title: const Text("Onset (where speech starts)"),
+                      title: const Text("Onset (where phrase starts)"),
                       value: 'onset',
                       groupValue: _snapMode,
                       onChanged: (v) => setState(() => _snapMode = v!),
                     ),
                     RadioListTile<String>(
-                      title: const Text("Gap center (in-between silences)"),
-                      value: 'gap-center',
+                      title: const Text("Gap (silence in-between phrases)"),
+                      value: 'gap',
                       groupValue: _snapMode,
                       onChanged: (v) => setState(() => _snapMode = v!),
                     ),

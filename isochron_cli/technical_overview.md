@@ -14,7 +14,7 @@
 8. [Step 5 — MFCC Feature Extraction](#step-5--mfcc-feature-extraction)
 9. [Step 6 — DTW Alignment](#step-6--dtw-alignment)
 10. [Step 7 — Time Projection & Boundary Snapping](#step-7--time-projection--boundary-snapping)
-11. [Snap Modes (Onset vs Gap-Center)](#snap-modes-onset-vs-gap-center)
+11. [Snap Modes (Onset vs Gap)](#snap-modes-onset-vs-gap)
 12. [Output Format](#output-format)
 13. [File Reference Summary](#file-reference-summary)
 
@@ -321,19 +321,19 @@ The noise floor is estimated from the first 0.5 seconds of the audio and multipl
 
 ---
 
-## Snap Modes (Onset vs Gap-Center)
+## Snap Modes (Onset vs Gap)
 
 Isochron now supports two boundary refinement modes:
 
 - `onset` (default): keeps original behaviour by moving each fragment start toward detected speech onset.
-- `gap-center`: moves shared boundaries toward the middle of a detected silence gap between neighbouring fragments.
+- `gap`: moves shared boundaries toward the middle of a detected silence gap between neighbouring fragments.
 
 ### Where the mode is selected
 
-- **CLI:** `--snap-mode onset|gap-center` (`bin/isochron_cli.dart`)
+- **CLI:** `--snap-mode onset|gap` (`bin/isochron_cli.dart`)
 - **Flutter Studio:** Project Settings -> Snap Mode (`project_settings_dialog.dart`)
 
-### How `gap-center` works
+### How `gap` works
 
 **Files:**  
 `isochron_cli/lib/src/core/boundary_strategy.dart`  
@@ -387,5 +387,5 @@ The final JSON output contains one object per fragment:
 | `lib/src/math/boundary_snapper.dart` | Refines start timestamps by detecting energy onsets in the real audio around each projected start time. |
 | `lib/src/core/boundary_strategy.dart` | Defines snap-mode abstractions (`SnapMode`, `BoundarySnapStrategy`) and the default onset strategy adapter. |
 | `lib/src/math/boundary_snapping/boundary_snapping_strategy.dart` | Implements `GapCenterBoundarySnapStrategy` and shared snapping configuration. |
-| `lib/src/math/boundary_snapping/normalized_peak_bins.dart` | Builds normalized peak bins and selects silence runs used by gap-centered snapping. |
+| `lib/src/math/boundary_snapping/normalized_peak_bins.dart` | Builds normalized peak bins and selects silence runs used by gap-based snapping. |
 | `lib/src/audio/wav_utils.dart` | Calculates the duration of a WAV file from its byte size (assumes 16kHz/mono/16-bit format). |

@@ -153,7 +153,7 @@ class IsochronProcessor {
 
     final BoundarySnapStrategy snapStrategy =
         snapMode == SnapMode.gapCenter
-            ? const GapCenterBoundarySnapStrategy()
+            ? const GapBasedBoundarySnapStrategy()
             : const OnsetBoundarySnapStrategy();
 
     snapStrategy.snap(

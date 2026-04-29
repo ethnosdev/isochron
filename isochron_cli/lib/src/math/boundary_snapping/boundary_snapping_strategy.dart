@@ -17,10 +17,10 @@ class BoundarySnappingConfig {
   static const double silenceThreshold = NormalizedPeakBins.defaultSilenceThreshold;
 }
 
-/// Gap-centered snapping: adjust boundaries toward the center of the
+/// Gap-based snapping: adjust boundaries toward the center of the
 /// lowest-energy region between neighbouring fragments.
-class GapCenterBoundarySnapStrategy implements BoundarySnapStrategy {
-  const GapCenterBoundarySnapStrategy();
+class GapBasedBoundarySnapStrategy implements BoundarySnapStrategy {
+  const GapBasedBoundarySnapStrategy();
 
   @override
   void snap({

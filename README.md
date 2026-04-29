@@ -65,7 +65,7 @@ dart run bin/isochron_cli.dart \
 *   `-o, --output`: JSON output path (default: `alignment.json`).
 *   `--dict`: Path to a JSON file for character transliteration rules.
 *   `--pins`: Path to a JSON file containing known-correct timings for specific fragments (see below).
-*   `--snap-mode`: Boundary refinement mode. `onset` (default) or `gap-center`.
+*   `--snap-mode`: Boundary refinement mode. `onset` (default) or `gap`.
 
 **Pinned Timings (`--pins`):**
 
@@ -97,12 +97,12 @@ Pins do **not** need to be contiguous or in order — you can lock in the first 
 dart run bin/isochron_cli.dart \
   --text transcript.txt \
   --audio recording.mp3 \
-  --snap-mode gap-center \
+  --snap-mode gap \
   --output result.json
 ```
 
 - `onset`: snaps each fragment toward speech onset (default behaviour).
-- `gap-center`: snaps boundaries toward the center of detected silences between neighboring fragments.
+- `gap`: snaps boundaries toward the center of detected silences between neighboring fragments.
 
 ## Isochron Studio (Flutter App)
 

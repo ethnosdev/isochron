@@ -74,7 +74,7 @@ class Project {
   /// Controls how fragment boundaries are refined during alignment.
   ///
   /// Stored as string to keep project files stable even if enum implementation
-  /// changes. Expected values: 'onset', 'gap-center'.
+  /// changes. Expected values: 'onset', 'gap'.
   String snapMode;
 
   final List<ProjectItem> items;

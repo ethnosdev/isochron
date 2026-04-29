@@ -131,7 +131,7 @@ class AlignmentService {
 
       final String snapModeRaw = (args['snapMode'] as String?) ?? 'onset';
       final SnapMode snapMode =
-          snapModeRaw == 'gap-center' ? SnapMode.gapCenter : SnapMode.onset;
+          snapModeRaw == 'gap' ? SnapMode.gapCenter : SnapMode.onset;
 
       // 2. Run Alignment on CLEAN text with Native Drivers
       final List<Fragment> rawFragments = await IsochronProcessor.process(
