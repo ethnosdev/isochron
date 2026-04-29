@@ -1,7 +1,8 @@
 import 'dart:developer';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:isochron_cli/src/math/boundary_snapper.dart';
+import 'package:isochron_cli/src/core/boundary_strategy.dart';
+import 'package:isochron_cli/src/math/boundary_snapping/boundary_snapping_strategy.dart';
 import 'package:path/path.dart' as p;
 import '../core/fragment.dart';
 import '../core/text_parser.dart';
@@ -22,6 +23,11 @@ class IsochronProcessor {
     required TtsDriver ttsDriver,
     Map<String, String>? transliterationRules,
     ProgressCallback? onProgress,
+    SnapMode snapMode = SnapMode.onset,
+
+    /// Optional map of fragment index → known-correct {start, end} in seconds.
+    /// Pinned fragments are used as hard boundaries; all other fragments are
+    /// aligned via DTW within the windows that pins define.
     Map<int, ({double start, double end})>? pinnedTimings,
   }) async {
     final stopwatch = Stopwatch()..start();
@@ -143,9 +149,22 @@ class IsochronProcessor {
     }
     logStep("DTW Alignment");
 
-    // 6. Post-Processing (0.95 - 1.0)
     onProgress?.call('Refining Timestamps...', 0.95);
-    BoundarySnapper.snap(fragments, audioBytes, 16000);
+
+    final BoundarySnapStrategy snapStrategy =
+        snapMode == SnapMode.gapCenter
+            ? const GapCenterBoundarySnapStrategy()
+            : const OnsetBoundarySnapStrategy();
+
+    snapStrategy.snap(
+      fragments: fragments,
+      audio: audioBytes,
+      sampleRate: 16000,
+    );
+
+    // When pins are present, re-enforce boundaries after snapping.
+    // BoundarySnapper can advance a start past a pin boundary (gap) or
+    // DTW can leave an end inside the next pin's window (overlap).
     if (pinnedTimings != null && pinnedTimings.isNotEmpty) {
       PinBoundaryEnforcer.enforce(fragments);
     }

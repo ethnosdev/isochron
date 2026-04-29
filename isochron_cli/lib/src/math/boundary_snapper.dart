@@ -5,7 +5,11 @@ class BoundarySnapper {
   /// Refines timestamps by looking for energy onsets in the real audio.
   /// [audio] should be the normalized float samples.
   /// [sampleRate] usually 16000.
-  static void snap(List<dynamic> fragments, Float64List audio, int sampleRate) {
+  static void snap(
+    List<dynamic> fragments,
+    Float64List audio,
+    int sampleRate,
+  ) {
     const double windowSec = 0.25; // Look +/- 250ms
     final int windowSamples = (windowSec * sampleRate).round();
 
@@ -17,7 +21,6 @@ class BoundarySnapper {
       noiseFloor += audio[i].abs();
     }
     noiseFloor = (noiseFloor / noiseSamples) * 1.5; // 1.5x average noise
-
     for (final frag in fragments) {
       // Skip fragments whose timings were user-verified — don't move them.
       if (frag.isPinned) continue;

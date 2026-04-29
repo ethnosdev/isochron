@@ -4,6 +4,7 @@ import 'package:args/args.dart';
 import 'package:isochron_cli/src/core/isochron_processor.dart';
 import 'package:isochron_cli/src/core/drivers.dart';
 import 'package:isochron_cli/src/platform/mac_drivers.dart';
+import 'package:isochron_cli/src/core/boundary_strategy.dart';
 
 void main(List<String> arguments) async {
   final parser = ArgParser()
@@ -20,6 +21,13 @@ void main(List<String> arguments) async {
             'Path to a JSON file containing known-correct timings for specific fragments. '
             'Keys are fragment indices (0-based strings), values are objects with "start" and "end" in seconds. '
             'Example: {"0":{"start":0.0,"end":1.4},"7":{"start":12.3,"end":15.2}}')
+    ..addOption('snap-mode',
+        allowed: ['onset', 'gap-center'],
+        help:
+            'Controls how fragment boundaries are refined. '
+            '"onset" snaps to the start of speech (legacy behaviour). '
+            '"gap-center" snaps to the middle of the detected silence gap.',
+        defaultsTo: 'onset')
     ..addFlag('verbose',
         abbr: 'v', help: 'Show detailed logs', defaultsTo: false)
     ..addFlag('help',
@@ -39,6 +47,7 @@ void main(List<String> arguments) async {
     final dictPath = results['dict'];
     final pinsPath = results['pins'];
     final outputJsonPath = results['output'];
+    final snapModeRaw = results['snap-mode'] as String? ?? 'onset';
     final verbose = results['verbose'] as bool;
 
     Map<String, String>? rules;
@@ -120,6 +129,10 @@ void main(List<String> arguments) async {
       stderr.writeln('Error: Unsupported Operating System.');
       exit(1);
     }
+    
+    // Map CLI option to SnapMode enum. Default is conservative: onset.
+    final SnapMode snapMode =
+        snapModeRaw == 'gap-center' ? SnapMode.gapCenter : SnapMode.onset;
 
     // --- Setup Workspace ---
     final workDir = Directory.systemTemp.createTempSync('isochron_cli_');
@@ -143,6 +156,7 @@ void main(List<String> arguments) async {
             ? (status, pct) =>
                 print('[${(pct * 100).toStringAsFixed(1)}%] $status')
             : null,
+        snapMode: snapMode,
       );
       // ---------------------
 
