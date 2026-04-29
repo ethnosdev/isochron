@@ -56,6 +56,7 @@ dart run bin/isochron_cli.dart \
   --text greek_text.txt \
   --audio greek_audio.mp3 \
   --dict greek_rules.json \
+  --snap-mode gap \
   --verbose
 ```
 
