@@ -71,6 +71,12 @@ class Project {
   bool generateIds;
   String? generatedIdPrefix;
 
+  /// Controls how fragment boundaries are refined during alignment.
+  ///
+  /// Stored as string to keep project files stable even if enum implementation
+  /// changes. Expected values: 'onset', 'gap-center'.
+  String snapMode;
+
   final List<ProjectItem> items;
 
   Project({
@@ -81,6 +87,7 @@ class Project {
     required this.hasIds,
     this.generateIds = false,
     this.generatedIdPrefix,
+    this.snapMode = 'onset',
     required this.items,
   });
 
@@ -92,6 +99,7 @@ class Project {
     'hasIds': hasIds,
     'generateIds': generateIds,
     'generatedIdPrefix': generatedIdPrefix,
+    'snapMode': snapMode,
     'items': items.map((i) => i.toJson()).toList(),
   };
 
@@ -104,6 +112,7 @@ class Project {
       hasIds: json['hasIds'] ?? false,
       generateIds: json['generateIds'] ?? false,
       generatedIdPrefix: json['generatedIdPrefix'],
+      snapMode: json['snapMode'] ?? 'onset',
       items: (json['items'] as List)
           .map((i) => ProjectItem.fromJson(i))
           .toList(),

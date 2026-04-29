@@ -45,6 +45,7 @@ class ProjectService {
       hasIds: hasIds,
       generateIds: generateIds,
       generatedIdPrefix: generatedIdPrefix,
+      snapMode: 'onset',
     );
 
     await project.save();

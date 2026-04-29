@@ -240,8 +240,10 @@ class _MainScreenState extends State<MainScreen> {
                     ControlBar(
                       controller: _controller,
                       state: state,
-                      // The FFmpeg/eSpeak args are removed here!
-                      onRun: () => _controller.runAlignment(context),
+                      onRun: () => _controller.runAlignment(
+                        context,
+                        snapMode: widget.project?.snapMode ?? 'onset',
+                      ),
                     ),
                     if (state.isProcessing)
                       LinearProgressIndicator(value: state.progress),

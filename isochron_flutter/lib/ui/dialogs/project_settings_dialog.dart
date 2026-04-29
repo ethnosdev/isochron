@@ -26,10 +26,12 @@ class _ProjectSettingsDialogState extends State<ProjectSettingsDialog> {
   late TextEditingController _prefixCtrl;
   String? _dictPath;
   int _idMode = 0;
+  late String _snapMode;
 
   // Track original settings to see if they changed
   late int _originalIdMode;
   late String _originalPrefix;
+  late String _originalSnapMode;
 
   @override
   void initState() {
@@ -39,6 +41,7 @@ class _ProjectSettingsDialogState extends State<ProjectSettingsDialog> {
       text: widget.project.generatedIdPrefix ?? "",
     );
     _dictPath = widget.project.dictionaryPath;
+    _snapMode = widget.project.snapMode;
 
     if (widget.project.hasIds) {
       _idMode = 1;
@@ -50,6 +53,7 @@ class _ProjectSettingsDialogState extends State<ProjectSettingsDialog> {
 
     _originalIdMode = _idMode;
     _originalPrefix = _prefixCtrl.text.trim();
+    _originalSnapMode = _snapMode;
   }
 
   @override
@@ -158,6 +162,34 @@ class _ProjectSettingsDialogState extends State<ProjectSettingsDialog> {
                   ],
                 ),
               ),
+              const SizedBox(height: 24),
+              const Text(
+                "Snap Mode",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  children: [
+                    RadioListTile<String>(
+                      title: const Text("Onset (where speech starts)"),
+                      value: 'onset',
+                      groupValue: _snapMode,
+                      onChanged: (v) => setState(() => _snapMode = v!),
+                    ),
+                    RadioListTile<String>(
+                      title: const Text("Gap center (in-between silences)"),
+                      value: 'gap-center',
+                      groupValue: _snapMode,
+                      onChanged: (v) => setState(() => _snapMode = v!),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -177,12 +209,14 @@ class _ProjectSettingsDialogState extends State<ProjectSettingsDialog> {
             }
 
             bool applyRetroactively = false;
-            bool strategyChanged =
+            final bool idStrategyChanged =
                 (_idMode != _originalIdMode) ||
                 (_prefixCtrl.text.trim() != _originalPrefix);
+            final bool settingsChanged =
+                idStrategyChanged || (_snapMode != _originalSnapMode);
 
             // If they changed the ID Strategy to something new, ask them if they want to apply it
-            if (strategyChanged && _idMode != 0) {
+            if (idStrategyChanged && _idMode != 0) {
               final confirm = await showDialog<bool>(
                 context: context,
                 builder: (ctx) => AlertDialog(
@@ -215,11 +249,12 @@ class _ProjectSettingsDialogState extends State<ProjectSettingsDialog> {
             widget.project.generatedIdPrefix = _idMode == 2
                 ? _prefixCtrl.text.trim()
                 : null;
+            widget.project.snapMode = _snapMode;
 
             if (mounted) {
               Navigator.of(
                 context,
-              ).pop(ProjectSettingsResult(true, applyRetroactively));
+              ).pop(ProjectSettingsResult(settingsChanged, applyRetroactively));
             }
           },
           child: const Text("Save"),

@@ -294,7 +294,10 @@ class HomeManager extends ValueNotifier<AppState> {
     }
   }
 
-  Future<void> runAlignment(BuildContext context) async {
+  Future<void> runAlignment(
+    BuildContext context, {
+    String snapMode = 'onset',
+  }) async {
     if (value.audioPath == null || value.textPath == null) return;
 
     value = value.copyWith(
@@ -345,6 +348,7 @@ class HomeManager extends ValueNotifier<AppState> {
         audioPath: value.audioPath!,
         dictPath: value.dictPath,
         pinsPath: passPins ? activePinsPath : null,
+        snapMode: snapMode,
         onProgress: (status, prog) {
           value = value.copyWith(statusMessage: status, progress: prog);
         },
@@ -367,11 +371,27 @@ class HomeManager extends ValueNotifier<AppState> {
 
       if (value.waveform == null) await _generateWaveform(value.audioPath!);
 
+      final previousFragments = value.fragments;
+      bool hasAlignmentChanges = previousFragments.length != fragments.length;
+      if (!hasAlignmentChanges) {
+        for (int i = 0; i < fragments.length; i++) {
+          final oldFrag = previousFragments[i];
+          final newFrag = fragments[i];
+          if (oldFrag.realStart != newFrag.realStart ||
+              oldFrag.realEnd != newFrag.realEnd ||
+              oldFrag.id != newFrag.id) {
+            hasAlignmentChanges = true;
+            break;
+          }
+        }
+      }
+
       value = value.copyWith(
         fragments: fragments,
         statusMessage: "Done.",
         progress: 1.0,
         isProcessing: false,
+        hasUnsavedChanges: hasAlignmentChanges || value.hasUnsavedChanges,
       );
     } catch (e) {
       value = value.copyWith(isProcessing: false, statusMessage: "Error: $e");
