@@ -65,6 +65,7 @@ dart run bin/isochron_cli.dart \
 *   `-o, --output`: JSON output path (default: `alignment.json`).
 *   `--dict`: Path to a JSON file for character transliteration rules.
 *   `--pins`: Path to a JSON file containing known-correct timings for specific fragments (see below).
+*   `--snap-mode`: Boundary refinement mode. `onset` (default) or `gap-center`.
 
 **Pinned Timings (`--pins`):**
 
@@ -90,6 +91,18 @@ dart run bin/isochron_cli.dart \
 ```
 
 Pins do **not** need to be contiguous or in order — you can lock in the first and eighth fragment while leaving everything else to the automatic aligner. The pipeline splits the audio into segments between pins and runs a separate DTW pass in each window, so non-pinned fragments are constrained to exactly the real-audio range their surrounding pins define.
+
+**Snap Mode Example:**
+```bash
+dart run bin/isochron_cli.dart \
+  --text transcript.txt \
+  --audio recording.mp3 \
+  --snap-mode gap-center \
+  --output result.json
+```
+
+- `onset`: snaps each fragment toward speech onset (default behaviour).
+- `gap-center`: snaps boundaries toward the center of detected silences between neighboring fragments.
 
 ## Isochron Studio (Flutter App)
 
@@ -140,7 +153,7 @@ This is your command center.
 *   **Batch Processing:** Click **Run All Pending** to align every file in the queue sequentially.
 *   **Status Tracking:** Visual indicators show which files are Pending (Grey), Processing (Spinner), Done (Green), or Error (Red).
 *   **Editor Access:** Click the **Edit (Pencil)** icon on any item to open the Waveform Editor.
-*   **Project Settings:** Open the top right menu to change your ID strategy or dictionary. You can automatically apply a new ID strategy retroactively to already-aligned files.
+*   **Project Settings:** Open the top right menu to change your ID strategy or dictionary. You can automatically apply a new ID strategy retroactively to already-aligned files or change the project's snap mode.
 
 **D. The Waveform Editor**
 Fine-tune the alignment results visually or manually align difficult files.
@@ -161,7 +174,8 @@ Fine-tune the alignment results visually or manually align difficult files.
 | **Left Arrow**  | Skip to previous segment                                                                                                                                     |
 | **Cmd + Right** | Nudge segment start **forward** (+0.15s)                                                                                                                     |
 | **Cmd + Left**  | Nudge segment start **backward** (-0.15s)                                                                                                                    |
-| **L**           | Lock / unlock a fragment's timing (pin). Works automatically if your mouse is hovering over a fragment, or if a fragment is focused (double-click the list). |
+| **L**           | Lock all fragments up to the hovered/focused fragment (bulk pin).                                                                                            |
+| **Shift + L**   | Toggle pin on the hovered/focused fragment only.                                                                                                             |
 
 ### 4. Export Options
 
