@@ -14,7 +14,8 @@ class BoundarySnappingConfig {
   static const double binSizeMs = NormalizedPeakBins.defaultBinSizeMs;
 
   /// Normalized silence threshold [0..1].
-  static const double silenceThreshold = NormalizedPeakBins.defaultSilenceThreshold;
+  static const double silenceThreshold =
+      NormalizedPeakBins.defaultSilenceThreshold;
 }
 
 /// Gap-based snapping: adjust boundaries toward the center of the
@@ -78,9 +79,10 @@ class GapBasedBoundarySnapStrategy implements BoundarySnapStrategy {
       );
       if (silenceRegion == null) continue;
 
-      final int midBin =
-          silenceRegion.startBin + ((silenceRegion.endBin - silenceRegion.startBin) ~/ 2);
-      final double snappedTimeSeconds = (midBin / peaks.length) * (audio.length / sampleRate);
+      final int midBin = silenceRegion.startBin +
+          ((silenceRegion.endBin - silenceRegion.startBin) ~/ 2);
+      final double snappedTimeSeconds =
+          (midBin / peaks.length) * (audio.length / sampleRate);
 
       // Resolve one shared boundary value, then apply it to whichever side can
       // move. This guarantees both fragment edges meet at exactly one time.
@@ -109,4 +111,3 @@ class GapBasedBoundarySnapStrategy implements BoundarySnapStrategy {
     }
   }
 }
-

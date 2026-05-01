@@ -13,7 +13,8 @@ class NormalizedPeakBins {
     double binSizeMs = defaultBinSizeMs,
   }) {
     if (audio.isEmpty || sampleRate <= 0) return const [];
-    final int samplesPerBin = max(1, ((binSizeMs / 1000.0) * sampleRate).round());
+    final int samplesPerBin =
+        max(1, ((binSizeMs / 1000.0) * sampleRate).round());
     final List<double> peaks = [];
 
     for (int i = 0; i < audio.length; i += samplesPerBin) {
@@ -97,4 +98,3 @@ class SilenceRunSelector {
     return bestAfter;
   }
 }
-
