@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
@@ -27,11 +28,13 @@ class _ProjectSettingsDialogState extends State<ProjectSettingsDialog> {
   String? _dictPath;
   int _idMode = 0;
   late String _snapMode;
+  late TextEditingController _snapOffsetCtrl;
 
   // Track original settings to see if they changed
   late int _originalIdMode;
   late String _originalPrefix;
   late String _originalSnapMode;
+  int? _originalSnapOffset;
 
   @override
   void initState() {
@@ -42,6 +45,12 @@ class _ProjectSettingsDialogState extends State<ProjectSettingsDialog> {
     );
     _dictPath = widget.project.dictionaryPath;
     _snapMode = widget.project.snapMode;
+    _snapOffsetCtrl = TextEditingController(
+      text: widget.project.snapOffset != null
+          ? '${widget.project.snapOffset}'
+          : '',
+    );
+    _originalSnapOffset = widget.project.snapOffset;
 
     if (widget.project.hasIds) {
       _idMode = 1;
@@ -54,6 +63,14 @@ class _ProjectSettingsDialogState extends State<ProjectSettingsDialog> {
     _originalIdMode = _idMode;
     _originalPrefix = _prefixCtrl.text.trim();
     _originalSnapMode = _snapMode;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _prefixCtrl.dispose();
+    _snapOffsetCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -176,17 +193,36 @@ class _ProjectSettingsDialogState extends State<ProjectSettingsDialog> {
                 child: Column(
                   children: [
                     RadioListTile<String>(
-                      title: const Text("Onset (where phrase starts)"),
-                      value: 'onset',
-                      groupValue: _snapMode,
-                      onChanged: (v) => setState(() => _snapMode = v!),
-                    ),
-                    RadioListTile<String>(
                       title: const Text("Gap (silence in-between phrases)"),
                       value: 'gap',
                       groupValue: _snapMode,
                       onChanged: (v) => setState(() => _snapMode = v!),
                     ),
+                    RadioListTile<String>(
+                      title: const Text("Onset (where phrase starts)"),
+                      value: 'onset',
+                      groupValue: _snapMode,
+                      onChanged: (v) => setState(() => _snapMode = v!),
+                    ),
+                    if (_snapMode == 'onset')
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                        child: TextField(
+                          controller: _snapOffsetCtrl,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: const InputDecoration(
+                            labelText: 'Snap offset',
+                            hintText: 'e.g 250',
+                            suffixText: 'ms',
+                            border: OutlineInputBorder(),
+                            helperText:
+                                'Lead-in before detected onset (ms). Leave blank for none.',
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -208,12 +244,46 @@ class _ProjectSettingsDialogState extends State<ProjectSettingsDialog> {
               return;
             }
 
+            int? newSnapOffset;
+            final snapTrim = _snapOffsetCtrl.text.trim();
+            if (_snapMode == 'onset') {
+              if (snapTrim.isEmpty) {
+                newSnapOffset = null;
+              } else {
+                final parsed = int.tryParse(snapTrim);
+                if (parsed == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Snap offset must be a whole number of ms.',
+                      ),
+                    ),
+                  );
+                  return;
+                }
+                if (parsed < 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Snap offset cannot be negative.'),
+                    ),
+                  );
+                  return;
+                }
+                newSnapOffset = parsed;
+              }
+            } else {
+              newSnapOffset = widget.project.snapOffset;
+            }
+
             bool applyRetroactively = false;
             final bool idStrategyChanged =
                 (_idMode != _originalIdMode) ||
                 (_prefixCtrl.text.trim() != _originalPrefix);
+            final bool snapOffsetChanged = newSnapOffset != _originalSnapOffset;
             final bool settingsChanged =
-                idStrategyChanged || (_snapMode != _originalSnapMode);
+                idStrategyChanged ||
+                (_snapMode != _originalSnapMode) ||
+                snapOffsetChanged;
 
             // If they changed the ID Strategy to something new, ask them if they want to apply it
             if (idStrategyChanged && _idMode != 0) {
@@ -250,6 +320,7 @@ class _ProjectSettingsDialogState extends State<ProjectSettingsDialog> {
                 ? _prefixCtrl.text.trim()
                 : null;
             widget.project.snapMode = _snapMode;
+            widget.project.snapOffset = newSnapOffset;
 
             if (mounted) {
               Navigator.of(

@@ -243,6 +243,7 @@ class _MainScreenState extends State<MainScreen> {
                       onRun: () => _controller.runAlignment(
                         context,
                         snapMode: widget.project?.snapMode ?? 'onset',
+                        snapOffsetMs: widget.project?.snapOffset ?? 0,
                       ),
                     ),
                     if (state.isProcessing)

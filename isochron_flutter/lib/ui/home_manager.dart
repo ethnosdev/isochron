@@ -297,6 +297,7 @@ class HomeManager extends ValueNotifier<AppState> {
   Future<void> runAlignment(
     BuildContext context, {
     String snapMode = 'onset',
+    int snapOffsetMs = 0,
   }) async {
     if (value.audioPath == null || value.textPath == null) return;
 
@@ -349,6 +350,7 @@ class HomeManager extends ValueNotifier<AppState> {
         dictPath: value.dictPath,
         pinsPath: passPins ? activePinsPath : null,
         snapMode: snapMode,
+        snapOffsetMs: snapOffsetMs,
         onProgress: (status, prog) {
           value = value.copyWith(statusMessage: status, progress: prog);
         },
