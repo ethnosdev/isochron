@@ -1,6 +1,6 @@
 # Isochron
 
-**Isochron** is a synthesis-based forced aligner, written in **Dart**.
+**Isochron** is a synthesis-based forced aligner, written in **Dart**. It currently only supports macOS."
 
 It aligns text transcripts to audio recordings by generating a synthetic "anchor" version of the text, analyzing the phonetic structures (MFCCs) of both, and warping time (DTW) to map the known synthetic timestamps onto the real user audio.
 
@@ -9,8 +9,8 @@ Although inspired by Aeneas, this project is not a port of Aeneas to Dart. Rathe
 ## Features
 
 - **Dart-Based Alignment Engine**: The core algorithm (MFCC extraction, Dynamic Time Warping, Pathfinding) is written entirely in Dart. Uses the Dart `fftea` package for FFT.
-- **External Pre-processing**: Uses FFmpeg to decode user audio (MP3, M4A, etc.) into raw PCM data.
-- **External Synthesis**: Uses eSpeak-ng to generate the phonetic reference ("Anchor") audio.
+- **External Pre-processing**: Uses macOS `afconvert` to normalize user audio to PCM WAV.
+- **External Synthesis**: Uses the native macOS `say` command for high-quality synthetic speech generation.
 - **Transliteration Support**: Supports custom JSON rules to align non-Latin scripts (e.g., Polytonic Greek, Cyrillic) via `unorm_dart` decomposition and mapping.
 -  **Dual Interface:**
     -   **CLI:** For batch processing and automation.
@@ -19,7 +19,7 @@ Although inspired by Aeneas, this project is not a port of Aeneas to Dart. Rathe
 ## Architecture
 
 1.  **Orchestration:** `IsochronProcessor` manages the pipeline.
-2.  **Synthesis:** Text is converted to a "perfect" audio anchor using an external TTS engine.
+2.  **Synthesis:** Text is converted to a "perfect" audio anchor the native macOS `say` utility.
 3.  **Signal Processing:**
     *   Audio is normalized to 16kHz Mono 16-bit PCM.
     *   **MFCCs** (Mel-Frequency Cepstral Coefficients) are extracted to represent the "timbre" of the speech.
@@ -32,15 +32,6 @@ Although inspired by Aeneas, this project is not a port of Aeneas to Dart. Rathe
 
 *   `isochron_cli/`: The core logic engine. Contains all DSP, Math, and Audio processing code.
 *   `isochron_flutter/`: A Flutter Desktop application that wraps the CLI logic with a user-friendly UI.
-
-## Prerequisites
-
-Isochron acts as an orchestrator. To respect licensing and keep the core pure, it does **not** bundle external binaries. You must have the following installed:
-
-1.  **FFmpeg:** For audio normalization.
-    *   `brew install ffmpeg` (macOS) or `apt install ffmpeg` (Linux).
-2.  **eSpeak-ng:** For text-to-speech synthesis.
-    *   `brew install espeak-ng` (macOS) or `apt install espeak-ng` (Linux).
 
 ## CLI Usage
 
@@ -65,8 +56,6 @@ dart run bin/isochron_cli.dart \
   --text greek_text.txt \
   --audio greek_audio.mp3 \
   --dict greek_rules.json \
-  --ffmpeg /opt/homebrew/bin/ffmpeg \
-  --espeak /opt/homebrew/bin/espeak-ng \
   --verbose
 ```
 
@@ -76,7 +65,6 @@ dart run bin/isochron_cli.dart \
 *   `-o, --output`: JSON output path (default: `alignment.json`).
 *   `--dict`: Path to a JSON file for character transliteration rules.
 *   `--pins`: Path to a JSON file containing known-correct timings for specific fragments (see below).
-*   `--ffmpeg` / `--espeak`: Custom paths to binaries (useful if they are not in your system PATH).
 
 **Pinned Timings (`--pins`):**
 
