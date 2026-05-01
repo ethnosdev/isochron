@@ -330,8 +330,8 @@ Isochron now supports two boundary refinement modes:
 
 ### Where the mode is selected
 
-- **CLI:** `--snap-mode onset|gap` (`bin/isochron_cli.dart`)
-- **Flutter Studio:** Project Settings -> Snap Mode (`project_settings_dialog.dart`)
+- **CLI:** `--snap-mode onset|gap` (`bin/isochron_cli.dart`); optional `--snap-offset` (integer **milliseconds**, onset only) subtracts that much from each snapped phrase start after onset detection.
+- **Flutter Studio:** Project Settings -> Snap Mode (`project_settings_dialog.dart`); optional **Snap offset** (ms) stored as `snapOffset` in `project.json` (milliseconds, unlike fragment `start`/`end` which are seconds).
 
 ### How `gap` works
 

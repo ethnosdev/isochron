@@ -67,6 +67,7 @@ dart run bin/isochron_cli.dart \
 *   `--dict`: Path to a JSON file for character transliteration rules.
 *   `--pins`: Path to a JSON file containing known-correct timings for specific fragments (see below).
 *   `--snap-mode`: Boundary refinement mode. `onset` (default) or `gap`.
+*   `--snap-offset`: Milliseconds subtracted from each onset-snapped phrase start (`snap-mode onset` only; default 0). Ignored for `gap`.
 
 **Pinned Timings (`--pins`):**
 
