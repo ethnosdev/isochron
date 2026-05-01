@@ -27,7 +27,7 @@ class MacTtsDriver implements TtsDriver {
     // 1. Synthesize to high-quality AIFF using macOS `say`
     final sayResult = await Process.run('/usr/bin/say', [
       '-v',
-      'Alex',
+      'Samantha',
       '-o',
       tempAiff,
       text,

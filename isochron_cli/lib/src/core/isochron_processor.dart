@@ -14,11 +14,6 @@ import '../math/dtw_aligner.dart';
 import 'transliterator.dart';
 
 class IsochronProcessor {
-  /// Runs the full alignment pipeline utilizing injected platform drivers.
-  ///
-  /// [workDir]: Temporary directory for intermediate files.
-  /// [audioDriver]: Handles audio normalization and concatenation.
-  /// [ttsDriver]: Handles synthetic speech generation.
   static Future<List<Fragment>> process({
     required String text,
     required String audioPath,
@@ -27,10 +22,6 @@ class IsochronProcessor {
     required TtsDriver ttsDriver,
     Map<String, String>? transliterationRules,
     ProgressCallback? onProgress,
-
-    /// Optional map of fragment index → known-correct {start, end} in seconds.
-    /// Pinned fragments are used as hard boundaries; all other fragments are
-    /// aligned via DTW within the windows that pins define.
     Map<int, ({double start, double end})>? pinnedTimings,
   }) async {
     final stopwatch = Stopwatch()..start();
@@ -40,75 +31,61 @@ class IsochronProcessor {
       stopwatch.reset();
     }
 
-    // 1. Text Parsing
-    onProgress?.call("Parsing Text...", 0.05);
+    // 1. Text Parsing (0.00 - 0.05)
+    onProgress?.call("Parsing Text...", 0.0);
     final fragments = TextParser.parse(text);
-    logStep("Text Parsing");
     if (fragments.isEmpty) throw Exception("No text found in file.");
 
-    // Apply transliteration rules if they exist
     if (transliterationRules != null && transliterationRules.isNotEmpty) {
       for (final frag in fragments) {
         frag.spokenText =
             Transliterator.convert(frag.text, transliterationRules);
       }
     }
+    logStep("Text Parsing");
 
-    // 2. Generate Anchor Audio
-    onProgress?.call("Generating Anchor Audio...", 0.1);
-    final anchorGen = AnchorGenerator(
-      audioDriver: audioDriver,
-      ttsDriver: ttsDriver,
-    );
-    final anchorFile = await anchorGen.generate(fragments, workDir);
+    // 2. Generate Anchor Audio (0.05 - 0.55)
+    onProgress?.call("Generating Anchor Audio...", 0.05);
+    final anchorGen =
+        AnchorGenerator(audioDriver: audioDriver, ttsDriver: ttsDriver);
+    final anchorFile =
+        await anchorGen.generate(fragments, workDir, onProgress: (pct) {
+      onProgress?.call("Generating Anchor Audio...", 0.05 + (pct * 0.50));
+    });
     logStep("Anchor Generation");
 
-    // 3. Normalize User Audio
-    onProgress?.call("Processing User Audio...", 0.2);
+    // 3. Normalize User Audio (0.55 - 0.60)
+    onProgress?.call("Processing User Audio...", 0.55);
     final userAudioWav = File(p.join(workDir.path, 'user_mono_16k.wav'));
-    // Use the injected driver to convert ANY audio format into 16kHz Mono WAV
     await audioDriver.normalize(audioPath, userAudioWav.path);
     logStep("User Audio Normalization");
 
-    // 4. Feature Extraction
-    onProgress?.call("Extracting Anchor Features...", 0.25);
-    final anchorMfcc = MfccExtractor.extract(
-      _readWavData(anchorFile),
-      onProgress: (pct) {
-        // Map 0.0-1.0 to 0.25-0.35
-        onProgress?.call("Extracting Anchor Features...", 0.25 + (pct * 0.10));
-      },
-    );
-    logStep("Anchor MFCC Extraction");
+    // 4. Feature Extraction (0.60 - 0.70)
+    onProgress?.call("Extracting Anchor Features...", 0.60);
+    final anchorMfcc =
+        MfccExtractor.extract(_readWavData(anchorFile), onProgress: (pct) {
+      onProgress?.call("Extracting Anchor Features...", 0.60 + (pct * 0.05));
+    });
 
-    onProgress?.call("Extracting User Features...", 0.35);
-    final userMfcc = MfccExtractor.extract(
-      _readWavData(userAudioWav),
-      onProgress: (pct) {
-        // Map 0.0-1.0 to 0.35-0.45
-        onProgress?.call("Extracting User Features...", 0.35 + (pct * 0.10));
-      },
-    );
-    logStep("User MFCC Extraction");
+    onProgress?.call("Extracting User Features...", 0.65);
+    final userMfcc =
+        MfccExtractor.extract(_readWavData(userAudioWav), onProgress: (pct) {
+      onProgress?.call("Extracting User Features...", 0.65 + (pct * 0.05));
+    });
+    logStep("Feature Extraction");
 
     const double frameStride = 0.010;
     final audioBytes = _readWavData(userAudioWav);
 
-    // 5. Dynamic Time Warping (DTW) Alignment
+    // 5. Dynamic Time Warping (DTW) Alignment (0.70 - 0.95)
+    onProgress?.call("Aligning...", 0.70);
     if (pinnedTimings == null || pinnedTimings.isEmpty) {
-      // ── Original single-pass path ──────────────────────────────────────────
       final path =
           DtwAligner.align(userMfcc, anchorMfcc, onProgress: (status, pct) {
-        final overall = 0.45 + (pct * 0.50);
-        onProgress?.call(status, overall);
+        onProgress?.call(status, 0.70 + (pct * 0.25));
       });
-      onProgress?.call('Finalizing...', 0.95);
-      logStep("DTW Alignment");
       TimeProjector.project(fragments, path);
     } else {
-      // ── Segmented DTW: one DTW pass per gap between pinned fragments ────────
-      //
-      // 1. Stamp each pinned fragment with its user-provided times.
       for (final entry in pinnedTimings.entries) {
         final idx = entry.key;
         if (idx >= 0 && idx < fragments.length) {
@@ -117,33 +94,22 @@ class IsochronProcessor {
         }
       }
 
-      // 2. Build the ordered list of boundary indices.
-      //    Sentinel -1 represents "before the first fragment" and
-      //    fragments.length represents "after the last fragment".
       final sortedPins = (pinnedTimings.keys.toList()..sort());
       final boundaries = <int>[-1, ...sortedPins, fragments.length];
 
-      onProgress?.call('Aligning segments...', 0.45);
-
-      // 3. For each gap between consecutive boundaries, run a scoped DTW.
       for (int b = 0; b < boundaries.length - 1; b++) {
-        final prevPin = boundaries[b]; // -1 or a pinned fragment index
-        final nextPin = boundaries[b + 1]; // pinned fragment index or length
-
-        // The unaligned fragments live strictly between the two pins.
+        final prevPin = boundaries[b];
+        final nextPin = boundaries[b + 1];
         final segFragStart = prevPin + 1;
-        final segFragEnd = nextPin - 1; // inclusive
-        if (segFragStart > segFragEnd) continue; // nothing between these pins
+        final segFragEnd = nextPin - 1;
+        if (segFragStart > segFragEnd) continue;
 
-        // Real-audio frame window.
         final int realFrameStart = prevPin == -1
             ? 0
             : (fragments[prevPin].pinnedEnd! / frameStride).round();
         final int realFrameEnd = nextPin == fragments.length
             ? userMfcc.length
             : (fragments[nextPin].pinnedStart! / frameStride).round();
-
-        // Anchor frame window.
         final int anchorFrameStart = prevPin == -1
             ? 0
             : (fragments[prevPin].anchorEnd / frameStride).round();
@@ -151,57 +117,37 @@ class IsochronProcessor {
             ? anchorMfcc.length
             : (fragments[nextPin].anchorStart / frameStride).round();
 
-        // Guard against degenerate slices.
         if (realFrameStart >= realFrameEnd ||
-            anchorFrameStart >= anchorFrameEnd) {
-          continue;
-        }
+            anchorFrameStart >= anchorFrameEnd) continue;
 
         final realSlice = userMfcc.sublist(
             realFrameStart, realFrameEnd.clamp(0, userMfcc.length));
         final anchorSlice = anchorMfcc.sublist(
             anchorFrameStart, anchorFrameEnd.clamp(0, anchorMfcc.length));
-        if (realSlice.isEmpty || anchorSlice.isEmpty) {
-          continue;
-        }
 
-        // Run DTW on the slice; indices are relative to slice start (0-based).
         final relativePath = DtwAligner.align(realSlice, anchorSlice);
-
-        // Offset path back to absolute frame indices before projecting.
         final offsetPath = relativePath
             .map((p) => AlignmentPoint(
-                  p.realIndex + realFrameStart,
-                  p.anchorIndex + anchorFrameStart,
-                ))
+                p.realIndex + realFrameStart, p.anchorIndex + anchorFrameStart))
             .toList();
 
-        final segFragments = fragments.sublist(segFragStart, segFragEnd + 1);
-        TimeProjector.project(segFragments, offsetPath,
+        TimeProjector.project(
+            fragments.sublist(segFragStart, segFragEnd + 1), offsetPath,
             frameStride: frameStride);
       }
 
-      // 4. Apply pinned timings directly — these override anything DTW set.
       for (final frag in fragments) {
-        if (frag.isPinned) {
+        if (frag.isPinned)
           frag.setRealTiming(start: frag.pinnedStart!, end: frag.pinnedEnd!);
-        }
       }
-
-      onProgress?.call('Finalizing...', 0.95);
     }
+    logStep("DTW Alignment");
 
-    // 6. Post-Processing
-    onProgress?.call('Refining Timestamps...', 0.98);
+    // 6. Post-Processing (0.95 - 1.0)
+    onProgress?.call('Refining Timestamps...', 0.95);
     BoundarySnapper.snap(fragments, audioBytes, 16000);
-    logStep("Boundary Snapping");
-
-    // When pins are present, re-enforce boundaries after snapping.
-    // BoundarySnapper can advance a start past a pin boundary (gap) or
-    // DTW can leave an end inside the next pin's window (overlap).
     if (pinnedTimings != null && pinnedTimings.isNotEmpty) {
       PinBoundaryEnforcer.enforce(fragments);
-      logStep("Pin Boundary Enforcement");
     }
 
     onProgress?.call("Done", 1.0);
@@ -209,10 +155,8 @@ class IsochronProcessor {
     return fragments;
   }
 
-  // Helper to read WAV bytes safely
   static Float64List _readWavData(File f) {
     final bytes = f.readAsBytesSync();
-    // Skip 44 byte header, view as Int16, convert to double
     if (bytes.length < 44) return Float64List(0);
     final int16Data = bytes.buffer.asInt16List(44);
     final floatData = Float64List(int16Data.length);
