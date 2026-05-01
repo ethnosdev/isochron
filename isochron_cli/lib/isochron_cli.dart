@@ -10,6 +10,10 @@ export 'src/core/isochron_processor.dart';
 export 'src/core/transliterator.dart';
 export 'src/core/pin_boundary_enforcer.dart';
 
+// Drivers
+export 'src/core/drivers.dart';
+export 'src/platform/mac_drivers.dart';
+
 // Math
 export 'src/math/dsp_utils.dart';
 export 'src/math/mfcc_extractor.dart';

@@ -1,13 +1,9 @@
 import 'dart:io';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:test/test.dart';
-import 'package:isochron_cli/src/core/fragment.dart';
 
 void main() {
   group('AnchorGenerator', () {
-    // NOTE: These tests require espeak-ng to be installed.
-    // If you are in an environment without it, these will fail.
-
     late Directory tempDir;
 
     setUp(() {
@@ -27,16 +23,24 @@ void main() {
         Fragment(index: 1, text: 'World'),
       ];
 
-      // 2. Run Generator
-      final generator = AnchorGenerator();
+      // 2. Initialize macOS Drivers
+      final audioDriver = MacAudioDriver();
+      final ttsDriver = MacTtsDriver();
+
+      // 3. Run Generator (Injecting the drivers)
+      final generator = AnchorGenerator(
+        audioDriver: audioDriver,
+        ttsDriver: ttsDriver,
+      );
+
       final File outputFile = await generator.generate(fragments, tempDir);
 
-      // 3. Verify File Exists
+      // 4. Verify File Exists
       expect(outputFile.existsSync(), isTrue);
       expect(
           outputFile.lengthSync(), greaterThan(100)); // Should have some data
 
-      // 4. Verify Timestamps
+      // 5. Verify Timestamps
       // Fragment 0 should start at 0
       expect(fragments[0].anchorStart, 0.0);
       expect(fragments[0].anchorEnd, greaterThan(0.0));
@@ -44,6 +48,9 @@ void main() {
       // Fragment 1 should start where Fragment 0 ended
       expect(fragments[1].anchorStart, fragments[0].anchorEnd);
       expect(fragments[1].anchorEnd, greaterThan(fragments[1].anchorStart));
-    });
+    },
+        skip: !Platform.isMacOS
+            ? 'Requires macOS native tools (afconvert, say).'
+            : false);
   });
 }

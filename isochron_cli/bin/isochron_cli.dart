@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:args/args.dart';
-import 'package:isochron_cli/isochron_cli.dart';
+import 'package:isochron_cli/src/core/isochron_processor.dart';
+import 'package:isochron_cli/src/core/drivers.dart';
+import 'package:isochron_cli/src/platform/mac_drivers.dart';
 
 void main(List<String> arguments) async {
   final parser = ArgParser()
@@ -11,9 +13,6 @@ void main(List<String> arguments) async {
         abbr: 'o',
         help: 'Path to save the alignment JSON',
         defaultsTo: 'alignment.json')
-    ..addOption('ffmpeg', help: 'Path to ffmpeg binary', defaultsTo: 'ffmpeg')
-    ..addOption('espeak',
-        help: 'Path to espeak-ng binary', defaultsTo: 'espeak-ng')
     ..addOption('dict',
         help: 'Path to a JSON file containing transliteration rules')
     ..addOption('pins',
@@ -30,7 +29,7 @@ void main(List<String> arguments) async {
     final results = parser.parse(arguments);
 
     if (results['help'] as bool) {
-      print('Isochron Aligner - Clean Room Implementation');
+      print('Isochron Aligner - Native Cross-Platform Architecture');
       print(parser.usage);
       exit(0);
     }
@@ -40,10 +39,8 @@ void main(List<String> arguments) async {
     final dictPath = results['dict'];
     final pinsPath = results['pins'];
     final outputJsonPath = results['output'];
-    final ffmpegPath = results['ffmpeg'];
-    final espeakPath = results['espeak'];
-    // final transliterate = results['transliterate'] as bool;
     final verbose = results['verbose'] as bool;
+
     Map<String, String>? rules;
     Map<int, ({double start, double end})>? pinnedTimings;
 
@@ -53,6 +50,7 @@ void main(List<String> arguments) async {
       exit(1);
     }
 
+    // --- Load Dictionary ---
     if (dictPath != null) {
       if (verbose) print('Loading transliteration rules from: $dictPath');
       final dictFile = File(dictPath);
@@ -63,7 +61,6 @@ void main(List<String> arguments) async {
 
       final jsonString = await dictFile.readAsString();
       try {
-        // Decode JSON to Map<String, dynamic>, then cast to Map<String, String>
         final rawMap = jsonDecode(jsonString) as Map<String, dynamic>;
         rules = rawMap.map((key, value) => MapEntry(key, value.toString()));
       } catch (e) {
@@ -72,6 +69,7 @@ void main(List<String> arguments) async {
       }
     }
 
+    // --- Load Pins ---
     if (pinsPath != null) {
       if (verbose) print('Loading pinned timings from: $pinsPath');
       final pinsFile = File(pinsPath);
@@ -102,6 +100,27 @@ void main(List<String> arguments) async {
       }
     }
 
+    // --- OS DETECTION & DRIVER INJECTION ---
+    late AudioDriver audioDriver;
+    late TtsDriver ttsDriver;
+
+    if (Platform.isMacOS) {
+      if (verbose) print('OS Detected: macOS. Using native Apple frameworks.');
+      audioDriver = MacAudioDriver();
+      ttsDriver = MacTtsDriver();
+    } else if (Platform.isWindows) {
+      stderr.writeln(
+          'Error: Windows is not yet supported natively. Implement WindowsDrivers first.');
+      exit(1);
+    } else if (Platform.isLinux) {
+      stderr.writeln(
+          'Error: Linux is not yet supported natively. Implement LinuxDrivers first.');
+      exit(1);
+    } else {
+      stderr.writeln('Error: Unsupported Operating System.');
+      exit(1);
+    }
+
     // --- Setup Workspace ---
     final workDir = Directory.systemTemp.createTempSync('isochron_cli_');
     if (verbose) print('Workspace: ${workDir.path}');
@@ -116,10 +135,14 @@ void main(List<String> arguments) async {
         text: rawText,
         audioPath: audioPath,
         workDir: workDir,
-        ffmpegPath: ffmpegPath,
-        espeakPath: espeakPath,
+        audioDriver: audioDriver,
+        ttsDriver: ttsDriver,
         transliterationRules: rules,
         pinnedTimings: pinnedTimings,
+        onProgress: verbose
+            ? (status, pct) =>
+                print('[${(pct * 100).toStringAsFixed(1)}%] $status')
+            : null,
       );
       // ---------------------
 
@@ -127,7 +150,7 @@ void main(List<String> arguments) async {
         print('Alignment complete. Found ${fragments.length} fragments.');
       }
 
-      // Output Generation
+      // --- Output Generation ---
       final jsonOutput = fragments
           .map((f) => {
                 'index': f.index,

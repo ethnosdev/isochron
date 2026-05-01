@@ -1,3 +1,4 @@
+import 'dart:developer';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:isochron_cli/src/math/boundary_snapper.dart';
@@ -6,23 +7,24 @@ import '../core/fragment.dart';
 import '../core/text_parser.dart';
 import '../core/time_projector.dart';
 import '../core/pin_boundary_enforcer.dart';
+import '../core/drivers.dart';
 import '../synthesis/anchor_generator.dart';
 import '../math/mfcc_extractor.dart';
 import '../math/dtw_aligner.dart';
 import 'transliterator.dart';
 
 class IsochronProcessor {
-  /// Runs the full alignment pipeline.
+  /// Runs the full alignment pipeline utilizing injected platform drivers.
   ///
   /// [workDir]: Temporary directory for intermediate files.
-  /// [ffmpegPath]: Path or command for FFmpeg (default 'ffmpeg').
-  /// [espeakPath]: Path or command for eSpeak (default 'espeak-ng').
+  /// [audioDriver]: Handles audio normalization and concatenation.
+  /// [ttsDriver]: Handles synthetic speech generation.
   static Future<List<Fragment>> process({
     required String text,
     required String audioPath,
     required Directory workDir,
-    String ffmpegPath = 'ffmpeg',
-    String espeakPath = 'espeak-ng',
+    required AudioDriver audioDriver,
+    required TtsDriver ttsDriver,
     Map<String, String>? transliterationRules,
     ProgressCallback? onProgress,
 
@@ -31,11 +33,20 @@ class IsochronProcessor {
     /// aligned via DTW within the windows that pins define.
     Map<int, ({double start, double end})>? pinnedTimings,
   }) async {
+    final stopwatch = Stopwatch()..start();
+
+    void logStep(String step) {
+      log('[Isochron] $step took ${stopwatch.elapsedMilliseconds}ms');
+      stopwatch.reset();
+    }
+
+    // 1. Text Parsing
     onProgress?.call("Parsing Text...", 0.05);
     final fragments = TextParser.parse(text);
+    logStep("Text Parsing");
     if (fragments.isEmpty) throw Exception("No text found in file.");
 
-    // Apply rules if they exist
+    // Apply transliteration rules if they exist
     if (transliterationRules != null && transliterationRules.isNotEmpty) {
       for (final frag in fragments) {
         frag.spokenText =
@@ -43,36 +54,23 @@ class IsochronProcessor {
       }
     }
 
-    // Generate Anchor (Pass custom binary path)
+    // 2. Generate Anchor Audio
     onProgress?.call("Generating Anchor Audio...", 0.1);
-    final anchorGen = AnchorGenerator(binaryPath: espeakPath);
+    final anchorGen = AnchorGenerator(
+      audioDriver: audioDriver,
+      ttsDriver: ttsDriver,
+    );
     final anchorFile = await anchorGen.generate(fragments, workDir);
+    logStep("Anchor Generation");
 
-    // Normalize User Audio (Pass custom binary path)
+    // 3. Normalize User Audio
     onProgress?.call("Processing User Audio...", 0.2);
     final userAudioWav = File(p.join(workDir.path, 'user_mono_16k.wav'));
+    // Use the injected driver to convert ANY audio format into 16kHz Mono WAV
+    await audioDriver.normalize(audioPath, userAudioWav.path);
+    logStep("User Audio Normalization");
 
-    // We execute FFmpeg manually here to ensure we use the dynamic path
-    final result = await Process.run(ffmpegPath, [
-      '-y',
-      '-i',
-      audioPath,
-      '-ac',
-      '1',
-      '-ar',
-      '16000',
-      '-f',
-      'wav',
-      '-acodec',
-      'pcm_s16le',
-      userAudioWav.path
-    ]);
-
-    if (result.exitCode != 0) {
-      throw Exception('FFmpeg failed: ${result.stderr}');
-    }
-
-    // Feature Extraction
+    // 4. Feature Extraction
     onProgress?.call("Extracting Anchor Features...", 0.25);
     final anchorMfcc = MfccExtractor.extract(
       _readWavData(anchorFile),
@@ -81,6 +79,7 @@ class IsochronProcessor {
         onProgress?.call("Extracting Anchor Features...", 0.25 + (pct * 0.10));
       },
     );
+    logStep("Anchor MFCC Extraction");
 
     onProgress?.call("Extracting User Features...", 0.35);
     final userMfcc = MfccExtractor.extract(
@@ -90,10 +89,12 @@ class IsochronProcessor {
         onProgress?.call("Extracting User Features...", 0.35 + (pct * 0.10));
       },
     );
+    logStep("User MFCC Extraction");
 
     const double frameStride = 0.010;
     final audioBytes = _readWavData(userAudioWav);
 
+    // 5. Dynamic Time Warping (DTW) Alignment
     if (pinnedTimings == null || pinnedTimings.isEmpty) {
       // ── Original single-pass path ──────────────────────────────────────────
       final path =
@@ -102,6 +103,7 @@ class IsochronProcessor {
         onProgress?.call(status, overall);
       });
       onProgress?.call('Finalizing...', 0.95);
+      logStep("DTW Alignment");
       TimeProjector.project(fragments, path);
     } else {
       // ── Segmented DTW: one DTW pass per gap between pinned fragments ────────
@@ -189,17 +191,21 @@ class IsochronProcessor {
       onProgress?.call('Finalizing...', 0.95);
     }
 
+    // 6. Post-Processing
     onProgress?.call('Refining Timestamps...', 0.98);
     BoundarySnapper.snap(fragments, audioBytes, 16000);
+    logStep("Boundary Snapping");
 
     // When pins are present, re-enforce boundaries after snapping.
     // BoundarySnapper can advance a start past a pin boundary (gap) or
     // DTW can leave an end inside the next pin's window (overlap).
     if (pinnedTimings != null && pinnedTimings.isNotEmpty) {
       PinBoundaryEnforcer.enforce(fragments);
+      logStep("Pin Boundary Enforcement");
     }
 
     onProgress?.call("Done", 1.0);
+    logStep("Full Pipeline Cleanup");
     return fragments;
   }
 
