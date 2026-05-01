@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/waveform/fragment_list.dart';
 import 'package:isochron_flutter/ui/widgets/theme_toggle_button.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
 import 'home_manager.dart';
 import 'models/app_state.dart';
@@ -30,8 +29,6 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   final HomeManager _controller = HomeManager();
   final ScrollController _waveScroll = ScrollController();
-  final TextEditingController _ffmpegCtrl = TextEditingController();
-  final TextEditingController _espeakCtrl = TextEditingController();
 
   int? _currentIndex;
 
@@ -47,8 +44,6 @@ class _MainScreenState extends State<MainScreen> {
       }
     };
 
-    _loadSettings();
-
     // Load initial item
     if (widget.project != null && _currentIndex != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -59,12 +54,6 @@ class _MainScreenState extends State<MainScreen> {
         );
       });
     }
-  }
-
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    _ffmpegCtrl.text = prefs.getString('ffmpeg') ?? 'ffmpeg';
-    _espeakCtrl.text = prefs.getString('espeak') ?? 'espeak-ng';
   }
 
   Future<bool> _handleUnsavedChanges() async {
@@ -199,7 +188,7 @@ class _MainScreenState extends State<MainScreen> {
           if (idx != null) _controller.lockFragmentsUntil(idx);
         },
 
-        // L: Lock / unlock the hovered (or focused) fragment's timing pin
+        // Shift + L: Toggle individual pin
         const SingleActivator(LogicalKeyboardKey.keyL, shift: true): () {
           final idx =
               _controller.hoveredFragmentIndex ??
@@ -251,11 +240,8 @@ class _MainScreenState extends State<MainScreen> {
                     ControlBar(
                       controller: _controller,
                       state: state,
-                      onRun: () => _controller.runAlignment(
-                        context,
-                        _ffmpegCtrl.text,
-                        _espeakCtrl.text,
-                      ),
+                      // The FFmpeg/eSpeak args are removed here!
+                      onRun: () => _controller.runAlignment(context),
                     ),
                     if (state.isProcessing)
                       LinearProgressIndicator(value: state.progress),
@@ -310,7 +296,7 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // --- Keyboard Nav Handlers (Unchanged internally) ---
+  // --- Keyboard Nav Handlers ---
   void _handleNudge(double deltaSeconds) {
     final state = _controller.value;
     if (state.fragments.isEmpty) return;

@@ -3,15 +3,13 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:isochron_cli/isochron_cli.dart';
-import 'package:isochron_flutter/ui/dialogs/global_settings_dialog.dart';
 import 'package:isochron_flutter/ui/dialogs/project_settings_dialog.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/widgets/theme_toggle_button.dart';
 import 'package:path/path.dart' as p;
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/alignment_service.dart';
-import '../home_screen.dart'; // The Editor
+import '../home_screen.dart';
 
 class ProjectDashboard extends StatefulWidget {
   final Project project;
@@ -26,7 +24,6 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
   late Project _project;
   final AlignmentService _alignmentService = AlignmentService();
 
-  // Track active batch processing
   bool _isBatchRunning = false;
   String _batchStatus = "";
   double _currentProgress = 0.0;
@@ -37,15 +34,13 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
     _project = widget.project;
   }
 
-  /// Saves the project metadata (status updates) to disk
   Future<void> _saveProjectState() async {
     await _project.save();
-    setState(() {}); // Refresh UI
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    // 1. Grab the dynamic color scheme for the current theme
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -59,12 +54,12 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
               style: TextStyle(
                 fontSize: 12,
                 color: colorScheme.onSurfaceVariant,
-              ), // <-- Dynamic color
+              ),
             ),
           ],
         ),
         actions: [
-          const ThemeToggleButton(), // Assuming you added this earlier!
+          const ThemeToggleButton(),
           if (_isBatchRunning)
             Center(
               child: Padding(
@@ -94,11 +89,6 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
                     await _applyIdStrategyToSavedFiles();
                   }
                 }
-              } else if (v == 'app_settings') {
-                await showDialog(
-                  context: context,
-                  builder: (_) => const GlobalSettingsDialog(),
-                );
               }
             },
             itemBuilder: (ctx) => [
@@ -113,20 +103,6 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
                     ),
                     const SizedBox(width: 8),
                     const Text("Project Settings"),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: 'app_settings',
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.settings,
-                      color: colorScheme.onSurfaceVariant,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    const Text("App Settings (Paths)"),
                   ],
                 ),
               ),
@@ -166,17 +142,11 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
                     item.status == ProjectItemStatus.reviewed;
 
                 return ListTile(
-                  // 1. ADD THIS: Makes the whole row clickable to open the editor
                   onTap: () => _openEditor(item),
-
-                  // 2. ADD THIS: Explicitly sets a beautiful, theme-aware hover color
-                  // (0.04 opacity is the Material Design standard for hover states)
                   hoverColor: colorScheme.onSurface.withValues(alpha: 0.04),
-
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
-
                   leading: _buildStatusIcon(item.status, colorScheme),
                   title: Text(p.basename(item.audioPath)),
                   subtitle: Text(
@@ -233,42 +203,31 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
     }
   }
 
-  // --- ACTIONS ---
-
   Future<void> _openEditor(ProjectItem item) async {
     final index = _project.items.indexOf(item);
 
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => MainScreen(
-          project: _project, // Passed the whole project
-          initialItemIndex: index, // Passed the starting index
+          project: _project,
+          initialItemIndex: index,
           onNotifySaved: (savedIndex) async {
-            // Update the status of whichever file was just saved
             setState(() {
               _project.items[savedIndex] = _project.items[savedIndex].copyWith(
                 status: ProjectItemStatus.reviewed,
               );
             });
-            // Persist the status change to project.json
             await _project.save();
           },
         ),
       ),
     );
-
-    // Refresh UI when returning to Dashboard
     setState(() {});
   }
 
   Future<void> _runBatch() async {
     setState(() => _isBatchRunning = true);
 
-    final prefs = await SharedPreferences.getInstance();
-    final ffmpeg = prefs.getString('ffmpeg') ?? 'ffmpeg';
-    final espeak = prefs.getString('espeak') ?? 'espeak-ng';
-
-    // Filter for pending items
     final pendingIndices = _project.items
         .asMap()
         .entries
@@ -278,7 +237,7 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
 
     for (int idx in pendingIndices) {
       if (!mounted) break;
-      await _processItem(idx, ffmpeg, espeak);
+      await _processItem(idx);
     }
 
     if (mounted) {
@@ -292,16 +251,13 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
 
   Future<void> _runSingleItem(int index) async {
     setState(() => _isBatchRunning = true);
-    final prefs = await SharedPreferences.getInstance();
-    final ffmpeg = prefs.getString('ffmpeg') ?? 'ffmpeg';
-    final espeak = prefs.getString('espeak') ?? 'espeak-ng'; // Fixed typo
 
-    await _processItem(index, ffmpeg, espeak);
+    await _processItem(index);
 
     if (mounted) setState(() => _isBatchRunning = false);
   }
 
-  Future<void> _processItem(int index, String ffmpeg, String espeak) async {
+  Future<void> _processItem(int index) async {
     final item = _project.items[index];
 
     setState(() {
@@ -312,18 +268,14 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
     });
 
     try {
-      // Pass the new ID generation parameters. Recording number is index + 1
       final fragments = await _alignmentService.runIsochron(
         textPath: item.textPath,
         audioPath: item.audioPath,
-        ffmpegPath: ffmpeg,
-        espeakPath: espeak,
         dictPath: _project.dictionaryPath,
         hasIds: _project.hasIds,
         generateIds: _project.generateIds,
         generatedIdPrefix: _project.generatedIdPrefix,
-        recordingNumber:
-            index + 1, // <--- Passes the recording number based on list order
+        recordingNumber: index + 1,
         onProgress: (status, prog) {
           if (mounted) setState(() => _currentProgress = prog);
         },
@@ -351,7 +303,6 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
       });
     } catch (e) {
       debugPrint("Error processing ${item.id}: $e");
-      // show error in UI
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -368,7 +319,6 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
   }
 
   Future<void> _exportBatchCsv() async {
-    // 1. Filter for DONE and REVIEWED items
     final exportableItems = _project.items
         .where(
           (i) =>
@@ -384,7 +334,6 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
       return;
     }
 
-    // 2. Ask for Save Location
     final String? outputFile = await FilePicker.platform.saveFile(
       dialogTitle: 'Export Combined CSV',
       fileName: '${_project.name.replaceAll(" ", "_")}_full.csv',
@@ -399,7 +348,6 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
 
     try {
       final masterBuffer = StringBuffer();
-      // Write Header Once
       masterBuffer.writeln('id,verse_id,recording_id,start,end');
 
       for (var item in exportableItems) {
@@ -407,7 +355,6 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
         final file = File(absJsonPath);
 
         if (await file.exists()) {
-          // A. Parse JSON
           final content = await file.readAsString();
           final List<dynamic> jsonList = jsonDecode(content);
 
@@ -422,14 +369,12 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
               )
               .toList();
 
-          /// Could ask user for this
           final recId = 'xxx';
 
-          // C. Append Lines (Skip header logic in helper, do manually here for speed)
           for (final f in fragments) {
             masterBuffer.write('${f.index},');
             masterBuffer.write('${f.id ?? ""},');
-            masterBuffer.write('$recId,'); // Automatic ID
+            masterBuffer.write('$recId,');
             masterBuffer.write('${f.realStart.toStringAsFixed(3)},');
             masterBuffer.write(f.realEnd.toStringAsFixed(3));
             masterBuffer.writeln();
@@ -437,7 +382,6 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
         }
       }
 
-      // 3. Write File
       await File(outputFile).writeAsString(masterBuffer.toString());
 
       if (mounted) {
@@ -470,13 +414,11 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
 
     int updatedCount = 0;
 
-    // Loop through all project items
     for (int index = 0; index < _project.items.length; index++) {
       final item = _project.items[index];
       final absPath = item.getAbsoluteOutputPath(_project.directoryPath);
       final file = File(absPath);
 
-      // Only touch files that already exist (already aligned)
       if (await file.exists()) {
         try {
           final content = await file.readAsString();
@@ -486,25 +428,16 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
           for (int j = 0; j < jsonList.length; j++) {
             final Map<String, dynamic> frag = jsonList[j];
 
-            // Strategy: Auto-Generate
             if (_project.generateIds && _project.generatedIdPrefix != null) {
-              final recStr = (index + 1).toString().padLeft(
-                3,
-                '0',
-              ); // file index + 1
-              final verseStr = (j + 1).toString().padLeft(
-                3,
-                '0',
-              ); // verse index + 1
+              final recStr = (index + 1).toString().padLeft(3, '0');
+              final verseStr = (j + 1).toString().padLeft(3, '0');
               final newId = '${_project.generatedIdPrefix}$recStr$verseStr';
 
               if (frag['id'] != newId) {
                 frag['id'] = newId;
                 modified = true;
               }
-            }
-            // Strategy: IDs are in Text
-            else if (_project.hasIds) {
+            } else if (_project.hasIds) {
               final textLines = await File(item.textPath).readAsLines();
               final cleanLines = textLines
                   .where((l) => l.trim().isNotEmpty)
@@ -523,7 +456,6 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
             }
           }
 
-          // Save the JSON back to disk ONLY if it actually changed
           if (modified) {
             final jsonString = const JsonEncoder.withIndent(
               '  ',

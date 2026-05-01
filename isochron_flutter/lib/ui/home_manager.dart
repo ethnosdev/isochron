@@ -65,24 +65,17 @@ class HomeManager extends ValueNotifier<AppState> {
     // previous file carrying over if this file has no alignment JSON yet.
     _lastSavedPins = null;
 
-    // 1. Pause audio if it was playing from previous file
     if (value.isPlaying) {
       await _audioService.pause();
     }
 
     final absJsonPath = item.getAbsoluteOutputPath(projectRoot);
 
-    final prefs = await SharedPreferences.getInstance();
-    final ffmpegPath = prefs.getString('ffmpeg') ?? 'ffmpeg';
-    final playbackPath = await _ensureWavForPlayback(
-      item.audioPath,
-      ffmpegPath,
-    );
+    // Optimized for just_audio playback using macOS native afconvert
+    final playbackPath = await _ensureWavForPlayback(item.audioPath);
 
-    // 2. Load Audio Duration
     final duration = await _audioService.load(playbackPath);
 
-    // 3. Load Existing JSON if available
     List<Fragment> loadedFragments = [];
     if (await File(absJsonPath).exists()) {
       final content = await File(absJsonPath).readAsString();
@@ -105,7 +98,6 @@ class HomeManager extends ValueNotifier<AppState> {
       _lastSavedPins = _buildPinsSnapshot(loadedFragments);
     }
 
-    // 3.5. Load Dictionary if not already loaded into memory
     final actualDictPath = dictPath ?? value.dictPath;
     Map<String, String>? rules = value.transliterationRules;
 
@@ -121,7 +113,6 @@ class HomeManager extends ValueNotifier<AppState> {
       }
     }
 
-    // 4. Reset State Completely for the new file
     value = value.copyWith(
       audioPath: item.audioPath,
       textPath: item.textPath,
@@ -132,19 +123,16 @@ class HomeManager extends ValueNotifier<AppState> {
       audioDuration: duration,
       statusMessage: "Loaded ${p.basename(item.audioPath)}",
       hasUnsavedChanges: false,
-      clearWaveform: true, // Clears the old waveform
-      clearFocus: true, // Clears focus
+      clearWaveform: true,
+      clearFocus: true,
       currentPlaybackPosition: Duration.zero,
     );
 
-    // 5. Initialize Waveform (Background)
     _generateWaveform(item.audioPath);
   }
 
-  /// Saves to the project file immediately without a dialog
   Future<void> saveProject() async {
     if (value.autoSavePath == null) {
-      // Fallback to export if not in project mode
       return exportJson();
     }
 
@@ -234,10 +222,8 @@ class HomeManager extends ValueNotifier<AppState> {
         ),
       );
 
-      if (hasIds == null) return; // User canceled
+      if (hasIds == null) return;
 
-      // Store the path AND the formatting choice in AppState
-      // You'll need to add `final bool hasIds;` to your AppState class first!
       value = value.copyWith(
         textPath: path,
         hasIds: hasIds,
@@ -250,7 +236,6 @@ class HomeManager extends ValueNotifier<AppState> {
     final path = await _pickFile(type: FileType.custom, extensions: ['json']);
     if (path == null) return;
 
-    // 1. Load Rules immediately
     Map<String, String>? rules;
     try {
       final jsonString = await File(path).readAsString();
@@ -278,13 +263,11 @@ class HomeManager extends ValueNotifier<AppState> {
       final textFile = File(value.textPath!);
       final fullText = await textFile.readAsString();
 
-      // 2. Run Analysis in Background (compute)
       final analysis = await compute(
         _analyzeTransliteration,
         _AnalysisRequest(fullText, rules, value.hasIds),
       );
 
-      // 3. Show Dialog
       if (!context.mounted) return;
       final bool? confirm = await showDialog<bool>(
         context: context,
@@ -311,11 +294,7 @@ class HomeManager extends ValueNotifier<AppState> {
     }
   }
 
-  Future<void> runAlignment(
-    BuildContext context,
-    String ffmpeg,
-    String espeak,
-  ) async {
+  Future<void> runAlignment(BuildContext context) async {
     if (value.audioPath == null || value.textPath == null) return;
 
     value = value.copyWith(
@@ -332,7 +311,6 @@ class HomeManager extends ValueNotifier<AppState> {
 
       // --- PRE-PROCESSING ---
       if (value.hasIds) {
-        // Assuming you added this to AppState
         value = value.copyWith(statusMessage: "Preprocessing text...");
 
         final lines = await File(value.textPath!).readAsLines();
@@ -341,28 +319,23 @@ class HomeManager extends ValueNotifier<AppState> {
         for (var line in lines) {
           if (line.trim().isEmpty) continue;
 
-          // Split by first space
           final parts = line.trim().split(' ');
           if (parts.length > 1) {
-            extractedIds.add(parts.first); // Store ID
-            cleanLines.add(parts.sublist(1).join(' ')); // Join rest as text
+            extractedIds.add(parts.first);
+            cleanLines.add(parts.sublist(1).join(' '));
           } else {
-            // Fallback if no space found
             extractedIds.add("");
             cleanLines.add(line);
           }
         }
 
-        // Create temp file
         final tempDir = await getTemporaryDirectory();
         tempCleanTextFile = File(p.join(tempDir.path, 'clean_transcript.txt'));
         await tempCleanTextFile.writeAsString(cleanLines.join('\n'));
 
         actualTextPath = tempCleanTextFile.path;
       }
-      // -----------------------
 
-      // Run existing service with potentially new path
       final activePinsPath = _pinsPath;
       final passPins =
           activePinsPath != null && await File(activePinsPath).exists();
@@ -371,8 +344,6 @@ class HomeManager extends ValueNotifier<AppState> {
         textPath: actualTextPath,
         audioPath: value.audioPath!,
         dictPath: value.dictPath,
-        ffmpegPath: ffmpeg,
-        espeakPath: espeak,
         pinsPath: passPins ? activePinsPath : null,
         onProgress: (status, prog) {
           value = value.copyWith(statusMessage: status, progress: prog);
@@ -381,8 +352,6 @@ class HomeManager extends ValueNotifier<AppState> {
 
       // --- POST-PROCESSING ---
       if (value.hasIds && extractedIds.isNotEmpty) {
-        // Merge IDs back into fragments.
-        // We assume 1-to-1 mapping (Line = Fragment).
         final mergedFragments = <Fragment>[];
 
         for (int i = 0; i < fragments.length; i++) {
@@ -406,7 +375,6 @@ class HomeManager extends ValueNotifier<AppState> {
       );
     } catch (e) {
       value = value.copyWith(isProcessing: false, statusMessage: "Error: $e");
-      // show error dialog
       if (context.mounted) {
         showDialog(
           context: context,
@@ -433,13 +401,11 @@ class HomeManager extends ValueNotifier<AppState> {
     if (value.fragments.isEmpty) return;
 
     final currentMs = value.currentPlaybackPosition.inMilliseconds;
-    // Find the first fragment that starts *after* current position + small buffer
     final nextFrag = value.fragments.firstWhere(
       (f) => (f.realStart * 1000) > currentMs + 100,
       orElse: () => value.fragments.last,
     );
 
-    // Only seek if we actually found a different spot
     if ((nextFrag.realStart * 1000) > currentMs + 100) {
       seekTo(Duration(milliseconds: (nextFrag.realStart * 1000).toInt()));
     }
@@ -449,7 +415,6 @@ class HomeManager extends ValueNotifier<AppState> {
     if (value.fragments.isEmpty) return;
 
     final currentMs = value.currentPlaybackPosition.inMilliseconds;
-    // Find last fragment that started *before* current position - small buffer
     final prevFrag = value.fragments.lastWhere(
       (f) => (f.realStart * 1000) < currentMs - 100,
       orElse: () => value.fragments.first,
@@ -462,10 +427,6 @@ class HomeManager extends ValueNotifier<AppState> {
     if (value.audioDuration.inMilliseconds == 0) return;
 
     final totalSeconds = value.audioDuration.inMilliseconds / 1000.0;
-
-    // Calculate Zoom: We want exactly 10.0 seconds visible on screen.
-    // Logic: zoomLevel = TotalDuration / DesiredVisibleDuration
-    // We cap it at 500x to prevent memory/performance issues on extremely long files.
     final targetZoom = (totalSeconds / 10.0).clamp(1.0, 500.0);
 
     final startSeconds = value.fragments[index].realStart;
@@ -475,58 +436,38 @@ class HomeManager extends ValueNotifier<AppState> {
   }
 
   void exitFocusMode() {
-    // Reset focus. Optionally reset zoom to 1.0 if you prefer.
-    value = value.copyWith(
-      clearFocus: true,
-      // zoomLevel: 1.0, // Uncomment if you want to zoom out automatically
-    );
+    value = value.copyWith(clearFocus: true);
   }
 
-  /// Specialized method: Updates start time and immediately plays from there.
   void setFragmentStartAndPlay(int index, double newStartTime) {
     final frag = value.fragments[index];
 
-    // Safety check: Start cannot be after End
     if (newStartTime >= frag.realEnd) return;
 
-    // 1. Update the data
     updateFragment(index, newStartTime, frag.realEnd);
-
-    // 2. Seek to new start
     seekTo(Duration(milliseconds: (newStartTime * 1000).toInt()));
 
-    // 3. Ensure playing
     if (!value.isPlaying) {
       _audioService.play();
     }
   }
 
-  /// Index of the fragment the mouse is currently hovering over in the
-  /// waveform view. Updated by WaveformView on every mouse-move; used by the
-  /// `L` keyboard shortcut so it doesn't require a prior double-click.
   int? hoveredFragmentIndex;
 
   void setHoveredFragmentIndex(int? idx) {
     hoveredFragmentIndex = idx;
   }
 
-  /// Path to the sidecar pins file: same directory as [autoSavePath] but with
-  /// a `-pins.json` suffix. Returns null when not in project mode.
   String? get _pinsPath => value.autoSavePath == null
       ? null
       : PinsService.pinsPath(value.autoSavePath!);
 
-  /// Saves pinned fragments to the sidecar via [PinsService].
   Future<void> savePinsFile() async {
     final path = _pinsPath;
     if (path == null) return;
     await _pinsService.save(value.autoSavePath!, value.fragments);
   }
 
-  /// Toggles the pin lock on a fragment.
-  /// When pinned, the fragment's current realStart/realEnd are locked in as
-  /// ground-truth boundaries — drag handles are disabled and the alignment
-  /// pipeline treats them as hard constraints on re-run.
   void toggleFragmentPin(int index) async {
     final frags = List<Fragment>.from(value.fragments);
     if (index < 0 || index >= frags.length) return;
@@ -546,7 +487,6 @@ class HomeManager extends ValueNotifier<AppState> {
     await savePinsFile();
   }
 
-  /// Locks all fragments up to and including the given index.
   void lockFragmentsUntil(int index) async {
     final frags = List<Fragment>.from(value.fragments);
     if (index < 0 || index >= frags.length) return;
@@ -564,15 +504,11 @@ class HomeManager extends ValueNotifier<AppState> {
     await savePinsFile();
   }
 
-  // --- Waveform Logic ---
-
   Future<void> _generateWaveform(String audioPath) async {
     try {
       final tempDir = await getTemporaryDirectory();
       if (!await tempDir.exists()) await tempDir.create(recursive: true);
 
-      // Create a unique hash based on file size and last modified time
-      // This forces a new waveform if the file was updated/overwritten
       final stat = await File(audioPath).stat();
       final fileHash = '${stat.size}_${stat.modified.millisecondsSinceEpoch}';
 
@@ -599,7 +535,6 @@ class HomeManager extends ValueNotifier<AppState> {
       return;
     }
 
-    // 1. Open Save Dialog
     final String? outputFile = await FilePicker.platform.saveFile(
       dialogTitle: 'Export Alignment',
       fileName: 'alignment.json',
@@ -608,13 +543,11 @@ class HomeManager extends ValueNotifier<AppState> {
       lockParentWindow: true,
     );
 
-    if (outputFile == null) return; // User canceled
+    if (outputFile == null) return;
 
     try {
       value = value.copyWith(statusMessage: "Exporting...");
 
-      // 2. Convert Fragments to JSON List
-      // We manually map fields to ensure clean output (e.g. 3 decimal places)
       final List<Map<String, dynamic>> jsonList = value.fragments
           .map(
             (f) => {
@@ -627,10 +560,7 @@ class HomeManager extends ValueNotifier<AppState> {
           )
           .toList();
 
-      // 3. Encode with indentation for readability
       final jsonString = const JsonEncoder.withIndent('  ').convert(jsonList);
-
-      // 4. Write to file
       await File(outputFile).writeAsString(jsonString);
 
       value = value.copyWith(
@@ -640,8 +570,6 @@ class HomeManager extends ValueNotifier<AppState> {
       value = value.copyWith(statusMessage: "Export failed: $e");
     }
   }
-
-  // --- Playback & Transport ---
 
   void togglePlay() =>
       value.isPlaying ? _audioService.pause() : _audioService.play();
@@ -653,35 +581,23 @@ class HomeManager extends ValueNotifier<AppState> {
     _settings.setLastZoom(clampedZoom);
   }
 
-  /// Updates a fragment's timing and automatically synchronizes neighbors
-  /// to ensure continuous alignment (no gaps, no overlaps).
   void updateFragment(int index, double newStart, double newEnd) {
-    // 1. Get a shallow copy of the list (to pass as a new reference later)
     final frags = List<Fragment>.from(value.fragments);
     final duration = value.audioDuration.inMilliseconds / 1000.0;
 
-    // 2. Validate File Bounds
-    // Ensure we don't drag outside the file's duration.
     double s = newStart.clamp(0.0, duration);
     double e = newEnd.clamp(0.0, duration);
 
-    // 3. Validate Minimum Duration (e.g. 10ms)
-    // Prevents "inverting" a fragment (start > end).
     if (e <= s + 0.01) {
-      // Decide which handle was moved by checking current state
       if (s != frags[index].realStart) {
-        // Start was moved -> push Start back or limit it
         s = e - 0.01;
       } else {
-        // End was moved -> push End forward
         e = s + 0.01;
       }
     }
 
-    // 4. Update Current Fragment
     frags[index].setRealTiming(start: s, end: e);
 
-    // 5. Sync Previous Fragment (Magnetic Start)
     Fragment? prevTimed;
     for (int i = index - 1; i >= 0; i--) {
       if (frags[i].realStart >= 0) {
@@ -691,11 +607,10 @@ class HomeManager extends ValueNotifier<AppState> {
     }
     if (prevTimed != null) {
       double prevStart = prevTimed.realStart;
-      if (prevStart > s) prevStart = s; // Safety collapse
+      if (prevStart > s) prevStart = s;
       prevTimed.setRealTiming(start: prevStart, end: s);
     }
 
-    // 6. Sync Next Fragment (Magnetic End)
     Fragment? nextTimed;
     for (int i = index + 1; i < frags.length; i++) {
       if (frags[i].realStart >= 0) {
@@ -705,15 +620,12 @@ class HomeManager extends ValueNotifier<AppState> {
     }
     if (nextTimed != null) {
       double nextEnd = nextTimed.realEnd;
-      if (nextEnd < e) nextEnd = e; // Safety collapse
+      if (nextEnd < e) nextEnd = e;
       nextTimed.setRealTiming(start: e, end: nextEnd);
     }
 
-    // 7. Trigger UI Update
     value = value.copyWith(fragments: frags, hasUnsavedChanges: true);
   }
-
-  // --- Helper ---
 
   Future<String?> _pickFile({
     required FileType type,
@@ -735,16 +647,11 @@ class HomeManager extends ValueNotifier<AppState> {
     return null;
   }
 
-  Future<String> _ensureWavForPlayback(
-    String originalPath,
-    String ffmpegPath,
-  ) async {
-    // If it's already a WAV, we don't need to do anything
+  Future<String> _ensureWavForPlayback(String originalPath) async {
     if (originalPath.toLowerCase().endsWith('.wav')) return originalPath;
 
     final tempDir = await getTemporaryDirectory();
 
-    // Create a unique hash so updated files don't use old cached audio
     final stat = await File(originalPath).stat();
     final fileHash = '${stat.size}_${stat.modified.millisecondsSinceEpoch}';
 
@@ -753,35 +660,29 @@ class HomeManager extends ValueNotifier<AppState> {
       '${p.basenameWithoutExtension(originalPath)}_${fileHash}_playback.wav',
     );
 
-    // If we already converted this specific version of the file, just return it
     if (await File(outPath).exists()) return outPath;
 
-    // Convert to uncompressed WAV for frame-perfect seeking in just_audio
     value = value.copyWith(statusMessage: "Optimizing audio for playback...");
 
-    final result = await Process.run(ffmpegPath, [
-      '-y',
-      '-i',
-      originalPath,
-      '-vn',
-      '-acodec',
-      'pcm_s16le',
-      '-ar',
-      '44100',
-      '-ac',
+    // Using native macOS afconvert for 44.1kHz Stereo PCM WAV
+    final result = await Process.run('/usr/bin/afconvert', [
+      '-f',
+      'WAVE',
+      '-d',
+      'LEI16@44100',
+      '-c',
       '2',
+      originalPath,
       outPath,
     ]);
 
     if (result.exitCode != 0) {
-      debugPrint("FFmpeg conversion failed: ${result.stderr}");
+      debugPrint("afconvert conversion failed: ${result.stderr}");
       return originalPath; // Fallback to original if it fails
     }
 
     return outPath;
   }
-
-  // --- MANUAL ALIGNMENT LOGIC ---
 
   void selectFragment(int? index) {
     value = value.copyWith(selectedFragmentIndex: index);
@@ -812,7 +713,6 @@ class HomeManager extends ValueNotifier<AppState> {
       }
 
       final f = Fragment(index: idx++, id: id, text: text);
-      // Set to "un-timed" state
       f.setRealTiming(start: -1.0, end: -1.0);
       frags.add(f);
     }
@@ -820,7 +720,7 @@ class HomeManager extends ValueNotifier<AppState> {
     value = value.copyWith(
       fragments: frags,
       hasUnsavedChanges: true,
-      selectedFragmentIndex: 0, // Auto-select the first row
+      selectedFragmentIndex: 0,
       statusMessage: "Manual Setup Complete. Ready to capture.",
     );
   }
@@ -829,7 +729,6 @@ class HomeManager extends ValueNotifier<AppState> {
     final frags = List<Fragment>.from(value.fragments);
     final duration = value.audioDuration.inMilliseconds / 1000.0;
 
-    // Find nearest timed neighbors
     Fragment? prevTimed;
     for (int i = index - 1; i >= 0; i--) {
       if (frags[i].realStart >= 0) {
@@ -845,7 +744,6 @@ class HomeManager extends ValueNotifier<AppState> {
       }
     }
 
-    // Heal previous fragment to stretch across the deleted gap
     if (prevTimed != null) {
       double newEnd = nextTimed != null ? nextTimed.realStart : duration;
       prevTimed.setRealTiming(start: prevTimed.realStart, end: newEnd);
@@ -880,7 +778,6 @@ class HomeManager extends ValueNotifier<AppState> {
       }
     }
 
-    // Safety Constraints
     if (prevTimed != null && t <= prevTimed.realStart) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -898,7 +795,6 @@ class HomeManager extends ValueNotifier<AppState> {
       return;
     }
 
-    // Snap times
     double endT = nextTimed != null ? nextTimed.realStart : duration;
     frags[index].setRealTiming(start: t, end: endT);
 
@@ -906,7 +802,6 @@ class HomeManager extends ValueNotifier<AppState> {
       prevTimed.setRealTiming(start: prevTimed.realStart, end: t);
     }
 
-    // Auto-advance to next un-timed fragment
     int? nextIndex;
     for (int i = index + 1; i < frags.length; i++) {
       if (frags[i].realStart < 0) {
@@ -936,15 +831,11 @@ class _AnalysisResult {
   _AnalysisResult(this.previewLines, this.unknownChars);
 }
 
-// Top-level function for compute()
 _AnalysisResult _analyzeTransliteration(_AnalysisRequest req) {
   final List<String> previewLines = [];
   final Set<String> unknownSet = {};
 
-  // Regex to find non-Latin characters (anything outside ASCII 0-127)
   final nonLatinRegex = RegExp(r'[^\x00-\x7F]');
-
-  // Split text into lines for processing
   final lines = const LineSplitter().convert(req.text);
 
   int lineCount = 0;
@@ -953,7 +844,6 @@ _AnalysisResult _analyzeTransliteration(_AnalysisRequest req) {
 
     String textToProcess = line;
 
-    // Handle ID stripping logic
     if (req.hasIds) {
       final parts = line.trim().split(' ');
       if (parts.length > 1) {
@@ -961,26 +851,19 @@ _AnalysisResult _analyzeTransliteration(_AnalysisRequest req) {
       }
     }
 
-    // --- USE CLI LIBRARY HERE ---
     final converted = Transliterator.convert(textToProcess, req.rules);
 
-    // 1. Populate Preview (first 5 lines)
     if (lineCount < 5) {
       previewLines.add(converted);
       lineCount++;
     }
 
-    // 2. Detect Unknowns in the RESULT
-    // We scan the *output* string. If there are still non-Latin characters,
-    // it means they weren't handled by the dictionary or the stripper.
-    // This is actually better for the user: it shows the "base" char they need to map.
     final matches = nonLatinRegex.allMatches(converted);
     for (var m in matches) {
       unknownSet.add(m.group(0)!);
     }
   }
 
-  // Sort list for clean display
   final sortedUnknowns = unknownSet.toList()..sort();
   return _AnalysisResult(previewLines, sortedUnknowns);
 }

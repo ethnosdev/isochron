@@ -7,8 +7,7 @@ class AlignmentService {
   Future<List<Fragment>> runIsochron({
     required String textPath,
     required String audioPath,
-    required String ffmpegPath,
-    required String espeakPath,
+    // REMOVED: ffmpegPath and espeakPath
     String? dictPath,
     String? pinsPath,
     bool hasIds = false,
@@ -36,8 +35,6 @@ class AlignmentService {
         'audioPath': audioPath,
         'rulesJson': rulesJson,
         'pinsJson': pinsJson,
-        'ffmpeg': ffmpegPath,
-        'espeak': espeakPath,
         'hasIds': hasIds,
         'generateIds': generateIds,
         'generatedIdPrefix': generatedIdPrefix,
@@ -66,6 +63,20 @@ class AlignmentService {
     final workDir = Directory.systemTemp.createTempSync('iso_bg_');
 
     try {
+      // 1. Setup OS Drivers INSIDE the Isolate
+      late AudioDriver audioDriver;
+      late TtsDriver ttsDriver;
+
+      if (Platform.isMacOS) {
+        audioDriver = MacAudioDriver();
+        ttsDriver = MacTtsDriver();
+      } else {
+        // Fallback for future platform implementations
+        throw Exception(
+          "Unsupported OS. Only macOS is currently supported by Isochron native drivers.",
+        );
+      }
+
       Map<String, String>? rules;
       if (args['rulesJson'] != null) {
         final rawMap = jsonDecode(args['rulesJson']) as Map<String, dynamic>;
@@ -101,7 +112,7 @@ class AlignmentService {
         cleanTextForEngine = await textFile.readAsString();
       }
 
-      // 1. Run Alignment on CLEAN text
+      // Prepare Pinned Timings
       Map<int, ({double start, double end})>? pinnedTimings;
       if (args['pinsJson'] != null) {
         final raw = jsonDecode(args['pinsJson']) as Map<String, dynamic>;
@@ -115,19 +126,20 @@ class AlignmentService {
         };
       }
 
+      // 2. Run Alignment on CLEAN text with Native Drivers
       final List<Fragment> rawFragments = await IsochronProcessor.process(
         text: cleanTextForEngine,
         audioPath: args['audioPath'],
         workDir: workDir,
-        ffmpegPath: args['ffmpeg'],
-        espeakPath: args['espeak'],
+        audioDriver: audioDriver, // Injected macOS driver
+        ttsDriver: ttsDriver, // Injected macOS driver
         transliterationRules: rules,
         pinnedTimings: pinnedTimings,
         onProgress: (s, p) =>
             sendPort.send({'type': 'progress', 'status': s, 'value': p}),
       );
 
-      // 2. Merge IDs back (if applicable)
+      // 3. Merge IDs back (if applicable)
       List<Fragment> finalFragments = rawFragments;
 
       if (hasIds && extractedIds.isNotEmpty) {
