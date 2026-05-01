@@ -25,6 +25,10 @@ class IsochronProcessor {
     ProgressCallback? onProgress,
     SnapMode snapMode = SnapMode.onset,
 
+    /// Milliseconds subtracted from each onset-snapped phrase start (ignored in
+    /// gap snap mode).
+    int snapOffsetMs = 0,
+
     /// Optional map of fragment index → known-correct {start, end} in seconds.
     /// Pinned fragments are used as hard boundaries; all other fragments are
     /// aligned via DTW within the windows that pins define.
@@ -151,10 +155,11 @@ class IsochronProcessor {
 
     onProgress?.call('Refining Timestamps...', 0.95);
 
-    final BoundarySnapStrategy snapStrategy =
-        snapMode == SnapMode.gapCenter
-            ? const GapBasedBoundarySnapStrategy()
-            : const OnsetBoundarySnapStrategy();
+    final BoundarySnapStrategy snapStrategy = snapMode == SnapMode.gapCenter
+        ? const GapBasedBoundarySnapStrategy()
+        : OnsetBoundarySnapStrategy(
+            snapOffsetMs: snapOffsetMs,
+          );
 
     snapStrategy.snap(
       fragments: fragments,

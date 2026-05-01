@@ -36,7 +36,9 @@ abstract class BoundarySnapStrategy {
 /// Existing comments and behaviour in [BoundarySnapper] are preserved and this
 /// strategy acts only as a thin adapter.
 class OnsetBoundarySnapStrategy implements BoundarySnapStrategy {
-  const OnsetBoundarySnapStrategy();
+  final int snapOffsetMs;
+
+  const OnsetBoundarySnapStrategy({this.snapOffsetMs = 0});
 
   @override
   void snap({
@@ -44,7 +46,11 @@ class OnsetBoundarySnapStrategy implements BoundarySnapStrategy {
     required Float64List audio,
     required int sampleRate,
   }) {
-    BoundarySnapper.snap(fragments, audio, sampleRate);
+    BoundarySnapper.snap(
+      fragments,
+      audio,
+      sampleRate,
+      snapOffsetMs: snapOffsetMs,
+    );
   }
 }
-
