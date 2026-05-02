@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:isochron_flutter/services/alignment_service.dart';
 import 'package:isochron_flutter/ui/home_manager.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
@@ -562,64 +563,67 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_project == null) {
-      return MacosWindow(
-        key: const ValueKey('welcome_window'),
-        child: MacosScaffold(
-          children: [
-            ContentArea(
-              builder: (context, scrollController) => Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const MacosIcon(
-                      CupertinoIcons.waveform_path_ecg,
-                      size: 80,
-                      color: CupertinoColors.activeBlue,
+  // ---------------------------------------------------------------------------
+  // BUILD HELPERS
+  // ---------------------------------------------------------------------------
+
+  Widget _buildWelcomeWindow(BuildContext context) {
+    return MacosWindow(
+      key: const ValueKey('welcome_window'),
+      child: MacosScaffold(
+        children: [
+          ContentArea(
+            builder: (context, scrollController) => Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const MacosIcon(
+                    CupertinoIcons.waveform_path_ecg,
+                    size: 80,
+                    color: CupertinoColors.activeBlue,
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    "Isochron Studio",
+                    style: MacosTheme.of(context).typography.largeTitle
+                        .copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "Synthesis-Based Forced Aligner",
+                    style: MacosTheme.of(context).typography.title3.copyWith(
+                      color: CupertinoColors.systemGrey,
                     ),
-                    const SizedBox(height: 24),
-                    Text(
-                      "Isochron Studio",
-                      style: MacosTheme.of(context).typography.largeTitle
-                          .copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 48),
+                  PushButton(
+                    controlSize: ControlSize.large,
+                    onPressed: _createNewProject,
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 24.0),
+                      child: Text("Create New Project"),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      "Synthesis-Based Forced Aligner",
-                      style: MacosTheme.of(context).typography.title3.copyWith(
-                        color: CupertinoColors.systemGrey,
-                      ),
+                  ),
+                  const SizedBox(height: 16),
+                  PushButton(
+                    controlSize: ControlSize.large,
+                    secondary: true,
+                    onPressed: _openProject,
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 24.0),
+                      child: Text("Open Existing Project"),
                     ),
-                    const SizedBox(height: 48),
-                    PushButton(
-                      controlSize: ControlSize.large,
-                      onPressed: _createNewProject,
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 24.0),
-                        child: Text("Create New Project"),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    PushButton(
-                      controlSize: ControlSize.large,
-                      secondary: true,
-                      onPressed: _openProject,
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 24.0),
-                        child: Text("Open Existing Project"),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      );
-    }
+          ),
+        ],
+      ),
+    );
+  }
 
+  Widget _buildMainWindow(BuildContext context) {
     return MacosWindow(
       key: const ValueKey('main_workspace_window'),
       sidebar: Sidebar(
@@ -709,6 +713,98 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget activeScreen = _project == null
+        ? _buildWelcomeWindow(context)
+        : _buildMainWindow(context);
+
+    // --- NATIVE MACOS MENU BAR ---
+    return PlatformMenuBar(
+      menus: [
+        const PlatformMenu(
+          label: 'Isochron Studio',
+          menus: [
+            PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.about),
+            PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.quit),
+          ],
+        ),
+        PlatformMenu(
+          label: 'File',
+          menus: [
+            // Group 1: Creating/Opening Projects
+            PlatformMenuItemGroup(
+              members: [
+                PlatformMenuItem(
+                  label: 'New Project...',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.keyN,
+                    meta: true,
+                  ),
+                  onSelected: _createNewProject,
+                ),
+                PlatformMenuItem(
+                  label: 'Open Project...',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.keyO,
+                    meta: true,
+                  ),
+                  onSelected: _openProject,
+                ),
+              ],
+            ),
+            // Group 2: Exporting (Flutter automatically adds a divider above this group)
+            if (_project != null)
+              PlatformMenuItemGroup(
+                members: [
+                  PlatformMenuItem(
+                    label: 'Export CSV...',
+                    shortcut: const SingleActivator(
+                      LogicalKeyboardKey.keyE,
+                      meta: true,
+                      shift: true,
+                    ),
+                    onSelected: _exportCsv,
+                  ),
+                ],
+              ),
+            // Group 3: Closing (Flutter automatically adds a divider above this group)
+            if (_project != null)
+              PlatformMenuItemGroup(
+                members: [
+                  PlatformMenuItem(
+                    label: 'Close Project',
+                    shortcut: const SingleActivator(
+                      LogicalKeyboardKey.keyW,
+                      meta: true,
+                    ),
+                    onSelected: () => setState(() => _project = null),
+                  ),
+                ],
+              ),
+          ],
+        ),
+        if (_project != null)
+          PlatformMenu(
+            label: 'View',
+            menus: [
+              PlatformMenuItem(
+                label: 'Toggle Inspector',
+                shortcut: const SingleActivator(
+                  LogicalKeyboardKey.keyI,
+                  meta: true,
+                  alt: true,
+                ),
+                onSelected: () =>
+                    setState(() => _showInspector = !_showInspector),
+              ),
+            ],
+          ),
+      ],
+      child: activeScreen,
     );
   }
 }

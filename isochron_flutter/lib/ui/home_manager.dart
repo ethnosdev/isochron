@@ -36,8 +36,6 @@ class HomeManager extends ValueNotifier<AppState> {
       f.index: (start: f.pinnedStart!, end: f.pinnedEnd!),
   };
 
-  static const String _keyLastDir = 'last_picked_directory';
-
   HomeManager() : super(AppState(zoomLevel: UserSettingsService().lastZoom)) {
     _audioService.positionStream.listen((pos) {
       value = value.copyWith(currentPlaybackPosition: pos);
