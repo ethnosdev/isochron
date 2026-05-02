@@ -398,14 +398,18 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     for (var pair in pendingPairs) {
       if (!_isBatchRunning) break; // Check if user clicked Stop
 
-      setState(() {
-        pair.status = AlignmentStatus.processing;
-        _batchStatus = "Processing ${pair.id}...";
-      });
-
       final audioAsset = _project!.audioPool
           .where((a) => a.id == pair.audioAssetId)
           .firstOrNull;
+      final displayTitle = audioAsset != null
+          ? p.basenameWithoutExtension(audioAsset.path)
+          : pair.id;
+
+      setState(() {
+        pair.status = AlignmentStatus.processing;
+        _batchStatus = "Processing $displayTitle...";
+      });
+
       final textAsset = _project!.textPool
           .where((a) => a.id == pair.textAssetId)
           .firstOrNull;
@@ -570,6 +574,14 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         final absJsonPath = pair.getAbsoluteOutputPath(_project!.directoryPath);
         final file = File(absJsonPath);
 
+        // Resolve the nice title
+        final audioAsset = _project!.audioPool
+            .where((a) => a.id == pair.audioAssetId)
+            .firstOrNull;
+        final displayTitle = audioAsset != null
+            ? p.basenameWithoutExtension(audioAsset.path)
+            : pair.id;
+
         if (await file.exists()) {
           final content = await file.readAsString();
           final List<dynamic> jsonList = jsonDecode(content);
@@ -577,7 +589,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           for (var j in jsonList) {
             masterBuffer.write('${j['index']},');
             masterBuffer.write('${j['id'] ?? ""},');
-            masterBuffer.write('${pair.id},');
+            masterBuffer.write('$displayTitle,');
             masterBuffer.write('${j['start']},');
             masterBuffer.write('${j['end']}\n');
           }
@@ -637,8 +649,15 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   ToolBar _buildToolBar(BuildContext context) {
     if (_activePair != null) {
+      final audioAsset = _project!.audioPool
+          .where((a) => a.id == _activePair!.audioAssetId)
+          .firstOrNull;
+      final displayTitle = audioAsset != null
+          ? p.basenameWithoutExtension(audioAsset.path)
+          : _activePair!.id;
+
       return ToolBar(
-        title: Text(_activePair!.id),
+        title: Text(displayTitle),
         titleWidth: 200.0,
         leading: MacosTooltip(
           message: 'Close Editor',
@@ -859,6 +878,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       case 0:
         return _BatchProcessorView(
           pairs: _project!.alignments,
+          audioPool: _project!.audioPool,
           isRunning: _isBatchRunning,
           status: _batchStatus,
           progress: _batchProgress,
@@ -866,6 +886,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       case 1:
         return _RealAlignmentList(
           pairs: _project!.alignments,
+          audioPool: _project!.audioPool,
           selectedPair: _selectedPair,
           onSelect: (pair) {
             setState(() {
@@ -1227,12 +1248,14 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
 class _BatchProcessorView extends StatefulWidget {
   final List<AlignmentPair> pairs;
+  final List<ProjectAsset> audioPool;
   final bool isRunning;
   final String status;
   final double progress;
 
   const _BatchProcessorView({
     required this.pairs,
+    required this.audioPool,
     required this.isRunning,
     required this.status,
     required this.progress,
@@ -1281,6 +1304,13 @@ class _BatchProcessorViewState extends State<_BatchProcessorView> {
                   ? macBlue
                   : CupertinoColors.systemGrey;
 
+              final audioAsset = widget.audioPool
+                  .where((a) => a.id == pair.audioAssetId)
+                  .firstOrNull;
+              final displayTitle = audioAsset != null
+                  ? p.basenameWithoutExtension(audioAsset.path)
+                  : pair.id;
+
               return GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () => setState(() => _selectedPair = pair),
@@ -1302,7 +1332,7 @@ class _BatchProcessorViewState extends State<_BatchProcessorView> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          pair.id,
+                          displayTitle,
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: textColor,
@@ -1470,6 +1500,7 @@ class _RealAssetPoolState extends State<_RealAssetPool> {
 
 class _RealAlignmentList extends StatelessWidget {
   final List<AlignmentPair> pairs;
+  final List<ProjectAsset> audioPool;
   final AlignmentPair? selectedPair;
   final Function(AlignmentPair) onSelect;
   final Function(AlignmentPair) onOpenPair;
@@ -1477,6 +1508,7 @@ class _RealAlignmentList extends StatelessWidget {
 
   const _RealAlignmentList({
     required this.pairs,
+    required this.audioPool,
     required this.selectedPair,
     required this.onSelect,
     required this.onOpenPair,
@@ -1512,6 +1544,13 @@ class _RealAlignmentList extends StatelessWidget {
         final textColor = theme.typography.body.color;
         final iconColor = isSelected ? macBlue : CupertinoColors.systemGrey;
 
+        final audioAsset = audioPool
+            .where((a) => a.id == pair.audioAssetId)
+            .firstOrNull;
+        final displayTitle = audioAsset != null
+            ? p.basenameWithoutExtension(audioAsset.path)
+            : pair.id;
+
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => onSelect(pair),
@@ -1535,7 +1574,7 @@ class _RealAlignmentList extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        pair.id,
+                        displayTitle,
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: textColor,
