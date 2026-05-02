@@ -4,8 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:isochron_flutter/ui/app_manager.dart';
 import 'package:isochron_flutter/ui/models/app_state.dart';
 import 'package:macos_ui/macos_ui.dart';
-import 'package:isochron_cli/isochron_cli.dart';
 import 'waveform_painter.dart';
+import 'dart:math' as math;
 
 class WaveformView extends StatefulWidget {
   final AppManager controller;
@@ -129,51 +129,6 @@ class _WaveformViewState extends State<WaveformView> {
     }
   }
 
-  // void _maintainCenterOnZoom() {
-  //   if (!widget.scrollController.hasClients ||
-  //       widget.state.audioDuration.inMilliseconds == 0) {
-  //     return;
-  //   }
-
-  //   double anchorTime = 0.0;
-
-  //   if (widget.state.focusedFragmentIndex != null) {
-  //     final idx = widget.state.focusedFragmentIndex!;
-  //     if (idx < widget.state.fragments.length) {
-  //       anchorTime = widget.state.fragments[idx].realStart;
-  //     }
-  //   } else {
-  //     final pos = widget.playbackNotifier.value.inMilliseconds / 1000.0;
-  //     final currentFrag = widget.state.fragments.firstWhere(
-  //       (f) => pos >= f.realStart && pos <= f.realEnd,
-  //       orElse: () => widget.state.fragments.firstWhere(
-  //         (f) => f.realStart > pos,
-  //         orElse: () => widget.state.fragments.isEmpty
-  //             ? Fragment(index: 0, text: "")
-  //             : widget.state.fragments.last,
-  //       ),
-  //     );
-  //     anchorTime = currentFrag.realStart;
-  //   }
-
-  //   WidgetsBinding.instance.addPostFrameCallback((_) {
-  //     if (!widget.scrollController.hasClients) return;
-
-  //     final viewportWidth = widget.scrollController.position.viewportDimension;
-  //     final totalDuration = widget.state.audioDuration.inMilliseconds / 1000.0;
-  //     final contentWidth = viewportWidth * widget.state.zoomLevel;
-  //     final targetPixel = (anchorTime / totalDuration) * contentWidth;
-  //     final centerOffset = targetPixel - (viewportWidth / 2);
-
-  //     widget.scrollController.jumpTo(
-  //       centerOffset.clamp(
-  //         0.0,
-  //         widget.scrollController.position.maxScrollExtent,
-  //       ),
-  //     );
-  //   });
-  // }
-
   @override
   Widget build(BuildContext context) {
     final wf = widget.state.waveform;
@@ -197,39 +152,44 @@ class _WaveformViewState extends State<WaveformView> {
 
         final theme = MacosTheme.of(context);
 
-        // --- HELPER: Handles the math for zooming anchored to the mouse ---
-        void applyZoom(double zoomDelta, double viewportX) {
-          if (zoomDelta == 0) return;
+        // --- HELPER: Perfectly Anchored Exponential Zoom ---
+        void applyZoom(double zoomIntensity, double viewportX) {
+          if (zoomIntensity == 0) return;
 
           final currentZoom = widget.state.zoomLevel;
-          final newZoom = (currentZoom - zoomDelta).clamp(1.0, 500.0);
+
+          // Exponential zoom ensures the visual scale change feels identical
+          // whether you are at 1x or 100x zoom.
+          final multiplier = math.exp(zoomIntensity);
+          final newZoom = (currentZoom * multiplier).clamp(1.0, 500.0);
 
           if (newZoom != currentZoom) {
+            // 1. Where exactly is the mouse hovering as a percentage of the audio?
             final absoluteX = widget.scrollController.offset + viewportX;
             final effectiveX = absoluteX - _hPadding;
-            final timeAtMouse = (effectiveX / contentWidth) * totalSec;
+            final hoverRatio = effectiveX / contentWidth;
 
+            // 2. What will the dimensions be AFTER the zoom?
+            final newContentWidth = viewportWidth * newZoom;
+            final newEffectiveX = hoverRatio * newContentWidth;
+            final newAbsoluteX = newEffectiveX + _hPadding;
+
+            // 3. Calculate the offset required to keep that exact spot under the mouse
+            final newScrollOffset = newAbsoluteX - viewportX;
+
+            // 4. Predict the new max scroll extent manually so we can jump IMMEDIATELY
+            final newMaxScrollExtent =
+                (newContentWidth + (_hPadding * 2) - viewportWidth);
+
+            // 5. Apply zoom and jump simultaneously! (No post-frame jitter)
             widget.controller.setZoom(newZoom);
-
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!widget.scrollController.hasClients) return;
-
-              final newContentWidth = viewportWidth * newZoom;
-              final newEffectiveX = (timeAtMouse / totalSec) * newContentWidth;
-              final newAbsoluteX = newEffectiveX + _hPadding;
-
-              final newScrollOffset = newAbsoluteX - viewportX;
-              widget.scrollController.jumpTo(
-                newScrollOffset.clamp(
-                  0.0,
-                  widget.scrollController.position.maxScrollExtent,
-                ),
-              );
-            });
+            widget.scrollController.jumpTo(
+              newScrollOffset.clamp(0.0, math.max(0.0, newMaxScrollExtent)),
+            );
           }
         }
 
-        // --- HELPER: Handles the math for horizontal panning ---
+        // --- HELPER: Handles horizontal panning ---
         void applyPan(double panDelta) {
           if (panDelta == 0) return;
           final currentOffset = widget.scrollController.offset;
@@ -254,17 +214,17 @@ class _WaveformViewState extends State<WaveformView> {
                   keys.contains(LogicalKeyboardKey.metaLeft) ||
                   keys.contains(LogicalKeyboardKey.metaRight);
 
-              // Mouse wheel up/down (dy) or holding control = ZOOM
               if (isControl ||
                   event.scrollDelta.dy.abs() > event.scrollDelta.dx.abs()) {
-                applyZoom(event.scrollDelta.dy * 0.02, event.localPosition.dx);
+                // Negative dy means scrolling UP. We want wheel up = Zoom IN.
+                applyZoom(-event.scrollDelta.dy * 0.01, event.localPosition.dx);
               } else {
                 applyPan(event.scrollDelta.dx);
               }
             }
           },
 
-          // 2. MAC TRACKPADS (Two-finger swipe & Pinch)
+          // 2. MAC TRACKPADS (Two-finger swipe)
           onPointerPanZoomUpdate: (event) {
             final keys = HardwareKeyboard.instance.logicalKeysPressed;
             final isControl =
@@ -273,16 +233,11 @@ class _WaveformViewState extends State<WaveformView> {
                 keys.contains(LogicalKeyboardKey.metaLeft) ||
                 keys.contains(LogicalKeyboardKey.metaRight);
 
-            // Native Pinch-to-Zoom
-            if (event.scale != 1.0) {
-              // scale > 1.0 means zooming in
-              final zoomDelta = (1.0 - event.scale) * 2.0;
-              applyZoom(zoomDelta, event.localPosition.dx);
-            }
             // Vertical 2-finger swipe OR holding control = ZOOM
-            else if (isControl ||
+            if (isControl ||
                 event.panDelta.dy.abs() > event.panDelta.dx.abs()) {
-              applyZoom(event.panDelta.dy * 0.05, event.localPosition.dx);
+              // Negative dy means pushing fingers UP. We want up = Zoom IN.
+              applyZoom(-event.panDelta.dy * 0.015, event.localPosition.dx);
             }
             // Horizontal 2-finger swipe = PAN
             else if (event.panDelta.dx.abs() > 0) {
@@ -296,7 +251,6 @@ class _WaveformViewState extends State<WaveformView> {
             child: SingleChildScrollView(
               controller: widget.scrollController,
               scrollDirection: Axis.horizontal,
-              // We take total control of trackpad events, so disable native physics
               physics: const NeverScrollableScrollPhysics(),
               child: MouseRegion(
                 cursor: _cursor,
