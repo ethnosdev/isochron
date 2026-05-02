@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  cupertino_icons: ^1.0.9
   file_picker: ^11.0.2
   path_provider: ^2.1.5
   shared_preferences: ^2.5.4
