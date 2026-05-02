@@ -1,41 +1,69 @@
 # Isochron
 
-**Isochron** is a synthesis-based forced aligner, written in **Dart**. It currently only supports macOS."
+**Isochron** is a synthesis-based forced aligner and professional alignment studio, written in **Dart** and optimized natively for **macOS**. 
 
-It aligns text transcripts to audio recordings by generating a synthetic "anchor" version of the text, analyzing the phonetic structures (MFCCs) of both, and warping time (DTW) to map the known synthetic timestamps onto the real user audio.
+It automatically aligns text transcripts to audio recordings. It works by generating a synthetic "anchor" version of your text using macOS's native `say` command, analyzing the phonetic structures (MFCCs) of both the synthetic and real audio, and using Dynamic Time Warping (DTW) to map the exact timestamps onto the real user audio.
 
-Although inspired by Aeneas, this project is not a port of Aeneas to Dart. Rather, the implementation is based on DSP (Digital Signal Processing) theory with the help of Gemini AI and confirmed with human verification. This allows the code to be released to the public domain rather than being limited to Aeneas's more restrictive (though still open-source) license. 
+The core engine is 100% Dart, based on open-domain DSP theory, and completely free to use.
 
-## Features
+---
 
-- **Dart-Based Alignment Engine**: The core algorithm (MFCC extraction, Dynamic Time Warping, Pathfinding) is written entirely in Dart. Uses the Dart `fftea` package for FFT.
-- **External Pre-processing**: Uses macOS `afconvert` to normalize user audio to PCM WAV.
-- **External Synthesis**: Uses the native macOS `say` command for high-quality synthetic speech generation.
-- **Transliteration Support**: Supports custom JSON rules to align non-Latin scripts (e.g., Polytonic Greek, Cyrillic) via `unorm_dart` decomposition and mapping.
--  **Dual Interface:**
-    -   **CLI:** For batch processing and automation.
-    -   **Flutter Desktop:** A macOS GUI for visual interaction and configuration. (Windows or Linux could easily be added if there is interest.)
+## Getting Started: Isochron Studio (macOS GUI)
 
-## Architecture
+Isochron Studio is a native macOS desktop application for batch-aligning and manually editing audio/text pairs. It uses a non-linear, professional studio layout (similar to Xcode or Logic Pro) consisting of **Asset Pools**, a **Main Editor**, and an **Inspector**.
 
-1.  **Orchestration:** `IsochronProcessor` manages the pipeline.
-2.  **Synthesis:** Text is converted to a "perfect" audio anchor the native macOS `say` utility.
-3.  **Signal Processing:**
-    *   Audio is normalized to 16kHz Mono 16-bit PCM.
-    *   **MFCCs** (Mel-Frequency Cepstral Coefficients) are extracted to represent the "timbre" of the speech.
-4.  **Alignment:**
-    *   **DTW (Dynamic Time Warping)** finds the optimal path between the User MFCCs and Anchor MFCCs.
-    *   Uses a **Sliding Window** approach to reduce memory complexity from $O(N^2)$ to $O(N)$.
-5.  **Projection:** The known timestamps from the synthetic audio are projected onto the user audio via the DTW path.
+### Running the App
+Ensure you have Flutter installed, then navigate to the `isochron_flutter` directory:
 
-## Project Structure
+```bash
+cd isochron_flutter
+flutter pub get
+flutter run -d macos
+```
 
-*   `isochron_cli/`: The core logic engine. Contains all DSP, Math, and Audio processing code.
-*   `isochron_flutter/`: A Flutter Desktop application that wraps the CLI logic with a user-friendly UI.
+### The Basic Workflow (5 Steps to Auto-Align)
 
-## CLI Usage
+Isochron uses a flexible **Asset Pool** architecture. You don't have to pair files perfectly before importing them.
 
-Navigate to the `isochron_cli` directory:
+1. **Create a Project:** On the welcome screen, click "Create New Project" and select an empty folder on your Mac.
+2. **Import Assets:** Use the left sidebar to navigate to the **Audio Pool** and **Text Pool**. Click the `+` icon in the top toolbar to import your `.mp3`/`.wav` and `.txt` files.
+3. **Create a Pair:** Navigate to **Alignments** in the sidebar. Click the `+` icon to create a new Alignment Pair.
+4. **Link the Files:** Click your new pair. Look at the **Inspector** on the right side of the screen and use the dropdown menus to link your desired Audio and Text files to this pair.
+5. **Align:** Double-click the pair to open the **Studio Editor**. Click the **Auto-Align** wand icon in the toolbar. Watch the waveform generate and the text magically snap to the audio!
+
+---
+
+## Studio Interface Guide
+
+### The 3-Pane Layout
+* **The Navigator (Left Sidebar):** Manage your workflow. Switch between the Batch Processor, your Alignment queue, and your raw Asset Pools (Audio, Text, Dictionaries).
+* **The Inspector (Right Sidebar):** Contextual settings. If you have nothing selected, it shows **Global Project Settings** (Snap Mode, default ID strategies). If you select a pair, it shows linking options for that specific pair.
+* **The Main Workspace (Center):** Where the magic happens. Contains data grids for your pools and the Waveform Editor for your pairs.
+
+### Studio Editor Keyboard Shortcuts
+When inside the Studio Editor, keep your hands on the keyboard to fly through manual adjustments:
+
+| Shortcut        | Action                                                                                                          |
+| :-------------- | :-------------------------------------------------------------------------------------------------------------- |
+| **Space**       | Play / Pause                                                                                                    |
+| **Right Arrow** | Skip to next text segment                                                                                       |
+| **Left Arrow**  | Skip to previous text segment                                                                                   |
+| **Cmd + Right** | Nudge segment start **forward** (+0.15s)                                                                        |
+| **Cmd + Left**  | Nudge segment start **backward** (-0.15s)                                                                       |
+| **Enter**       | **Capture Mode:** Instantly capture the current playback time as the start time for the currently selected row. |
+| **L**           | Lock (Pin) all fragments up to the selected fragment.                                                           |
+| **Shift + L**   | Toggle the Pin lock on just the selected fragment.                                                              |
+
+### Batch Processing & Exporting
+Once you have created multiple Alignment Pairs, click **Batch Processor** in the left sidebar. 
+* Click **Run All Pending** to process massive queues sequentially.
+* Click **Export CSV** to combine all of your completed `.json` alignments into a single spreadsheet database.
+
+---
+
+## Isochron CLI (Command Line Interface)
+
+If you prefer terminal automation, Isochron can be run head-less. Navigate to the `isochron_cli` directory:
 
 ```bash
 cd isochron_cli
@@ -57,136 +85,30 @@ dart run bin/isochron_cli.dart \
   --audio greek_audio.mp3 \
   --dict greek_rules.json \
   --snap-mode gap \
-  --verbose
+  --pins pins.json
 ```
 
-**Options:**
-*   `-t, --text`: Path to input text file.
-*   `-a, --audio`: Path to input audio file.
-*   `-o, --output`: JSON output path (default: `alignment.json`).
-*   `--dict`: Path to a JSON file for character transliteration rules.
-*   `--pins`: Path to a JSON file containing known-correct timings for specific fragments (see below).
-*   `--snap-mode`: Boundary refinement mode. `onset` (default) or `gap`.
-*   `--snap-offset`: Milliseconds subtracted from each onset-snapped phrase start (`snap-mode onset` only; default 0). Ignored for `gap`.
+### CLI Options Explained
+* **`--snap-mode` (`onset` or `gap`):** Boundary refinement mode. `onset` snaps the fragment toward the speech start. `gap` snaps boundaries toward the center of detected silences.
+* **`--snap-offset`:** Milliseconds subtracted from each onset-snapped phrase start (e.g. `250`).
+* **`--dict` (Transliteration):** Provide a JSON map of non-Latin characters to Latin characters. The CLI strips diacritics automatically via `unorm_dart`.
+* **`--pins` (Pinned Timings):** Pass a JSON file of known-correct fragment timings (e.g. `{"0": {"start": 0.0, "end": 1.4}}`). The engine will lock these in and only perform DTW in the spaces *between* your pins.
 
-**Pinned Timings (`--pins`):**
+---
 
-If you have listened to the audio and verified that certain fragments are mis-aligned, you can lock those timestamps in and have the aligner re-compute everything else around them.
+## Features & Architecture
 
-Create a JSON file where each key is a **fragment index** (0-based, as a string) and each value is an object with `start` and `end` in seconds:
+* **Dart-Based Alignment Engine:** The core algorithm (MFCC extraction, Dynamic Time Warping, Pathfinding) is written entirely in Dart. Uses the `fftea` package for fast FFT.
+* **O(N) DTW Complexity:** Uses a sliding window approach to reduce the memory complexity of Dynamic Time Warping from $O(N^2)$ to $O(N)$, allowing it to process long audio files smoothly.
+* **macOS Integration:** 
+    * UI built with `macos_ui` for a 100% native desktop feel.
+    * Uses `afconvert` natively to normalize user audio to PCM WAV quickly.
+    * Uses the native `say` command for high-quality synthetic speech generation.
 
-```json
-{
-  "0": { "start": 0.0,  "end": 1.4  },
-  "7": { "start": 12.3, "end": 15.2 }
-}
-```
+## Project Structure
 
-Then pass it with `--pins`:
-
-```bash
-dart run bin/isochron_cli.dart \
-  --text transcript.txt \
-  --audio recording.mp3 \
-  --pins pins.json \
-  --output result.json
-```
-
-Pins do **not** need to be contiguous or in order — you can lock in the first and eighth fragment while leaving everything else to the automatic aligner. The pipeline splits the audio into segments between pins and runs a separate DTW pass in each window, so non-pinned fragments are constrained to exactly the real-audio range their surrounding pins define.
-
-**Snap Mode Example:**
-```bash
-dart run bin/isochron_cli.dart \
-  --text transcript.txt \
-  --audio recording.mp3 \
-  --snap-mode gap \
-  --output result.json
-```
-
-- `onset`: snaps each fragment toward speech onset (default behaviour).
-- `gap`: snaps boundaries toward the center of detected silences between neighboring fragments.
-
-## Isochron Studio (Flutter App)
-
-Isochron Studio is a macOS desktop application for batch-aligning audio and text. It uses a **Project-based workflow**, allowing you to manage, align, and edit dozens of files simultaneously without losing your progress.
-
-### 1. Running the App
-Navigate to the `isochron_flutter` directory:
-
-```bash
-cd isochron_flutter
-flutter pub get
-flutter run -d macos
-```
-
-### 2. Project Workflow
-
-**A. Welcome Screen**
-When you launch the app, you can:
-*   **Create New Project:** Starts the setup wizard.
-*   **Open Project:** Loads an existing `.json` project file. 
-
-**B. Project Creation Wizard**
-1.  **Select Files:** Pick your audio files (mp3) and text transcripts (txt).
-2.  **Configuration:**
-    *   **Verse ID Strategy:** Choose how to generate IDs for your data:
-        *   *None:* Do not use IDs.
-        *   *IDs are in the text files:* Useful if your transcripts look like `40001001 In the beginning...`. Isochron will strip the ID before alignment and re-attach it to the output data automatically.
-        *   *Auto-Generate IDs:* Define a fixed book prefix (e.g., `40`). Isochron will generate sequential IDs automatically based on the file order and line number (e.g., `40001001`).
-    *   **Transliteration:** Optionally select a JSON dictionary. The app will analyze all text files and warn you if any characters are missing from your dictionary.
-3.  **Pairing:** Drag and drop text files to align them with the correct audio files if the filenames don't match perfectly.
-
-**Example transliteration file (Koine Greek):**
-```json
-{
-  "α": "a",
-  "β": "b",
-  "γ": "g",
-  "θ": "th",
-  "φ": "ph"
-}
-```
-*Input:* `ἀρχῇ` -> *Stripped:* `αρχη` -> *Mapped:* `arche` -> *Spoken by Robot:* "arche".
-
-Because the diacritics are stripped by Isochron, there is no need to include diacritics in your JSON map.
-
-**C. The Dashboard**
-This is your command center.
-*   **Batch Processing:** Click **Run All Pending** to align every file in the queue sequentially.
-*   **Status Tracking:** Visual indicators show which files are Pending (Grey), Processing (Spinner), Done (Green), or Error (Red).
-*   **Editor Access:** Click the **Edit (Pencil)** icon on any item to open the Waveform Editor.
-*   **Project Settings:** Open the top right menu to change your ID strategy or dictionary. You can automatically apply a new ID strategy retroactively to already-aligned files or change the project's snap mode.
-
-**D. The Waveform Editor**
-Fine-tune the alignment results visually or manually align difficult files.
-
-*   **Manual Setup & Capture:** If the automatic aligner is failing on a difficult file, you can define timings from scratch.
-    1. Click **Manual Setup** to load your text lines as "un-timed" fragments.
-    2. Play the audio. 
-    3. Every time you hear a new text line begin, press **Enter**. The app will capture that exact moment as the line's start time and automatically extend the previous line to create a gapless boundary.
-    4. You can also click the **Capture** button in the list, or **Right-Click** any boundary line on the waveform to delete it.
-
-### 3. Keyboard Shortcuts
-
-| Shortcut        | Action                                                                                                                                                       |
-| :-------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Space**       | Play / Pause                                                                                                                                                 |
-| **Enter**       | Capture current audio timestamp as the start time for the selected text line.                                                                                |
-| **Right Arrow** | Skip to next segment                                                                                                                                         |
-| **Left Arrow**  | Skip to previous segment                                                                                                                                     |
-| **Cmd + Right** | Nudge segment start **forward** (+0.15s)                                                                                                                     |
-| **Cmd + Left**  | Nudge segment start **backward** (-0.15s)                                                                                                                    |
-| **L**           | Lock all fragments up to the hovered/focused fragment (bulk pin).                                                                                            |
-| **Shift + L**   | Toggle pin on the hovered/focused fragment only.                                                                                                             |
-
-### 4. Export Options
-
-Isochron Studio supports flexible data export from both the Dashboard and the Editor.
-
-*   **JSON:** The standard Isochron format containing IDs, text, start, and end times.
-*   **CSV:** Export timing data for databases or spreadsheets.
-    *   **Columns:** `id`, `verse_id`, `xxx` (Recording ID), `start`, `end`.
-    *   **Batch Export:** From the Dashboard, you can export **all** completed files into a single master CSV.
+*   `isochron_cli/`: The core logic engine. Contains all DSP, Math, and Audio processing code.
+*   `isochron_flutter/`: The native macOS studio application that wraps the CLI logic with a professional workspace GUI.
 
 ## License
 
