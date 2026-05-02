@@ -33,24 +33,30 @@ class StudioFragmentList extends StatefulWidget {
 
 class _StudioFragmentListState extends State<StudioFragmentList> {
   final ScrollController _scrollController = ScrollController();
-
-  // Row height is fixed for native feeling lists
   final double _rowHeight = 56.0;
+  int _lastActiveIndex = -1;
 
   @override
-  void didUpdateWidget(StudioFragmentList oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final oldIndex = _getActiveIndex(
-      oldWidget.fragments,
-      oldWidget.playbackNotifier.value,
-    );
+  void initState() {
+    super.initState();
+    // Listen directly to the playhead for auto-scrolling
+    widget.playbackNotifier.addListener(_onPlaybackPositionChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.playbackNotifier.removeListener(_onPlaybackPositionChanged);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onPlaybackPositionChanged() {
     final newIndex = _getActiveIndex(
       widget.fragments,
       widget.playbackNotifier.value,
     );
-
-    // Auto-scroll to the currently playing fragment
-    if (newIndex != -1 && newIndex != oldIndex) {
+    if (newIndex != -1 && newIndex != _lastActiveIndex) {
+      _lastActiveIndex = newIndex;
       _scrollToIndex(newIndex);
     }
   }
@@ -64,9 +70,9 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
 
   void _scrollToIndex(int index) {
     if (!_scrollController.hasClients) return;
-    final targetIndex = index > 2
-        ? index - 2
-        : 0; // Keep active item slightly down from top
+
+    // Put the active item exactly at the top (or 1 row down for slight context)
+    final targetIndex = index > 0 ? index - 1 : 0;
     final idealOffset = targetIndex * _rowHeight;
     final min = _scrollController.position.minScrollExtent;
     final max = _scrollController.position.maxScrollExtent;
@@ -76,12 +82,6 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOut,
     );
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
   }
 
   @override
@@ -125,21 +125,23 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
 
             final isSelected = widget.selectedIndex == i;
 
-            // macOS selection styling:
+            // Highlight if it's currently playing OR if it's selected manually
+            final bool isHighlighted = isPlaying || isSelected;
+
+            // NEW MAC-LIKE SOFT COLORS
             final macBlue = CupertinoColors.systemBlue.resolveFrom(context);
-            final bgColor = isSelected
+            final bgColor = isHighlighted
                 ? macBlue.withValues(alpha: 0.15)
                 : CupertinoColors.transparent;
 
-            // Text stays its normal color regardless of selection
             final textColor = theme.typography.body.color;
             final subTextColor = CupertinoColors.systemGrey;
 
-            // Badges stay a consistent soft blue
             final badgeBgColor = macBlue.withValues(alpha: 0.15);
             final badgeTextColor = macBlue;
 
             return GestureDetector(
+              behavior: HitTestBehavior.opaque,
               onTap: () {
                 widget.onSelect(i);
                 if (hasTime) widget.onJumpTo(i);
@@ -169,7 +171,7 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                               color: macBlue,
                             )
                           else if (f.isPinned)
-                            Icon(
+                            const Icon(
                               CupertinoIcons.lock_fill,
                               size: 12,
                               color: CupertinoColors.systemYellow,
@@ -224,9 +226,6 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                                   style: TextStyle(
                                     color: textColor,
                                     fontSize: 13,
-                                    fontWeight: isPlaying
-                                        ? FontWeight.w600
-                                        : FontWeight.normal,
                                   ),
                                 ),
                               ),
@@ -268,7 +267,7 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                             ),
                             const SizedBox(width: 8),
                             MacosIconButton(
-                              icon: Icon(
+                              icon: const Icon(
                                 CupertinoIcons.clear_circled_solid,
                                 color: CupertinoColors.destructiveRed,
                                 size: 16,
