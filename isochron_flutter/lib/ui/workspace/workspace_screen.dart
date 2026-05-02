@@ -32,6 +32,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   AlignmentPair? _selectedPair;
   late final AppManager _homeManager;
   final Uuid _uuid = const Uuid();
+  bool _hasUnsavedChanges = false;
 
   // --- Batch State ---
   bool _isBatchRunning = false;
@@ -48,6 +49,13 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         _project?.save();
       }
     };
+    _homeManager.addListener(() {
+      if (_homeManager.value.hasUnsavedChanges != _hasUnsavedChanges) {
+        setState(() {
+          _hasUnsavedChanges = _homeManager.value.hasUnsavedChanges;
+        });
+      }
+    });
   }
 
   @override
@@ -467,8 +475,25 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         ),
         actions: [
           ToolBarIconButton(
+            label: 'Save',
+            icon: MacosIcon(
+              CupertinoIcons.floppy_disk,
+              color: _hasUnsavedChanges
+                  ? MacosTheme.of(context).typography.body.color
+                  : CupertinoColors.systemGrey.withValues(alpha: 0.5),
+            ),
+            showLabel: true,
+            tooltipMessage: 'Save Alignment (Cmd + S)',
+            onPressed: _hasUnsavedChanges
+                ? () => _homeManager.saveProject()
+                : null,
+          ),
+          ToolBarIconButton(
             label: 'Auto-Align',
-            icon: const MacosIcon(CupertinoIcons.wand_rays),
+            icon: MacosIcon(
+              CupertinoIcons.wand_rays,
+              color: MacosTheme.of(context).typography.body.color,
+            ),
             showLabel: true,
             onPressed: () async {
               try {
@@ -864,7 +889,29 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                 ),
               ],
             ),
-            // Group 2: Exporting (Flutter automatically adds a divider above this group)
+            // Group 2: Saving
+            if (_project != null)
+              PlatformMenuItemGroup(
+                members: [
+                  PlatformMenuItem(
+                    label: 'Save',
+                    shortcut: const SingleActivator(
+                      LogicalKeyboardKey.keyS,
+                      meta: true,
+                    ),
+                    onSelected: (_activePair != null && !_hasUnsavedChanges)
+                        ? null // Disabled if editing but no changes
+                        : () {
+                            if (_activePair != null) {
+                              _homeManager.saveProject();
+                            } else {
+                              _project!.save();
+                            }
+                          },
+                  ),
+                ],
+              ),
+            // Group 3: Exporting
             if (_project != null)
               PlatformMenuItemGroup(
                 members: [

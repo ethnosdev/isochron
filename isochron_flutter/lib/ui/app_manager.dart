@@ -115,6 +115,8 @@ class AppManager extends ValueNotifier<AppState> {
       }
     }
 
+    final pairHasIds = pair.overrideHasIds ?? project.defaultHasIds;
+
     value = value.copyWith(
       audioPath: audioAsset.path,
       textPath: textAsset.path,
@@ -122,6 +124,7 @@ class AppManager extends ValueNotifier<AppState> {
       transliterationRules: rules,
       autoSavePath: absJsonPath,
       fragments: loadedFragments,
+      hasIds: pairHasIds,
       audioDuration: duration,
       statusMessage: "Loaded ${audioAsset.filename}",
       hasUnsavedChanges: false,
@@ -131,6 +134,10 @@ class AppManager extends ValueNotifier<AppState> {
     playbackPosition.value = Duration.zero;
 
     _generateWaveform(audioAsset.path);
+
+    if (loadedFragments.isEmpty) {
+      await initManualAlignment();
+    }
   }
 
   Future<void> saveProject() async {
@@ -603,7 +610,7 @@ class AppManager extends ValueNotifier<AppState> {
 
     value = value.copyWith(
       fragments: frags,
-      hasUnsavedChanges: true,
+      hasUnsavedChanges: false,
       selectedFragmentIndex: 0,
       statusMessage: "Manual Setup Complete. Ready to capture.",
     );
