@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
+import 'package:uuid/uuid.dart';
 
 enum AlignmentStatus { pending, processing, done, reviewed, error }
 
@@ -29,7 +30,7 @@ class AlignmentPair {
   final String outputFilename;
   AlignmentStatus status;
 
-  // Local overrides (allows one file to use a different strategy than the rest of the project)
+  // Local overrides
   bool? overrideHasIds;
 
   AlignmentPair({
@@ -42,7 +43,6 @@ class AlignmentPair {
     this.overrideHasIds,
   });
 
-  /// Helper to get the full absolute path of the output JSON
   String getAbsoluteOutputPath(String projectDir) {
     return p.join(projectDir, 'alignments', outputFilename);
   }
@@ -121,6 +121,16 @@ class Project {
   };
 
   factory Project.fromJson(Map<String, dynamic> json) {
+    // -------------------------------------------------------------------------
+    // LEGACY MIGRATION: Upgrades old v1 projects automatically on open
+    // -------------------------------------------------------------------------
+    if (json.containsKey('items')) {
+      return _migrateLegacyProject(json);
+    }
+
+    // -------------------------------------------------------------------------
+    // NEW PARSER
+    // -------------------------------------------------------------------------
     return Project(
       id: json['id'],
       name: json['name'],
@@ -148,6 +158,83 @@ class Project {
       defaultHasIds: json['defaultHasIds'] ?? false,
       defaultGenerateIds: json['defaultGenerateIds'] ?? false,
       defaultIdPrefix: json['defaultIdPrefix'],
+      snapMode: json['snapMode'] ?? 'onset',
+      snapOffset: json['snapOffset'],
+    );
+  }
+
+  static Project _migrateLegacyProject(Map<String, dynamic> json) {
+    final audioPool = <ProjectAsset>[];
+    final textPool = <ProjectAsset>[];
+    final dictPool = <ProjectAsset>[];
+    final alignments = <AlignmentPair>[];
+    const uuid = Uuid();
+
+    // 1. Migrate Dictionary
+    String? dictAssetId;
+    if (json['dictionaryPath'] != null) {
+      dictAssetId = uuid.v4();
+      dictPool.add(ProjectAsset(id: dictAssetId, path: json['dictionaryPath']));
+    }
+
+    // 2. Iterate old items and populate pools and pairings
+    final items = json['items'] as List? ?? [];
+    for (var item in items) {
+      // Find or create Audio Asset
+      String? audioId;
+      if (item['audioPath'] != null) {
+        final existing = audioPool
+            .where((a) => a.path == item['audioPath'])
+            .firstOrNull;
+        if (existing != null) {
+          audioId = existing.id;
+        } else {
+          audioId = uuid.v4();
+          audioPool.add(ProjectAsset(id: audioId, path: item['audioPath']));
+        }
+      }
+
+      // Find or create Text Asset
+      String? textId;
+      if (item['textPath'] != null) {
+        final existing = textPool
+            .where((a) => a.path == item['textPath'])
+            .firstOrNull;
+        if (existing != null) {
+          textId = existing.id;
+        } else {
+          textId = uuid.v4();
+          textPool.add(ProjectAsset(id: textId, path: item['textPath']));
+        }
+      }
+
+      // Create Alignment Link
+      alignments.add(
+        AlignmentPair(
+          id: item['id'] ?? uuid.v4(),
+          audioAssetId: audioId,
+          textAssetId: textId,
+          dictAssetId: dictAssetId,
+          outputFilename:
+              item['outputFilename'] ??
+              'alignment_${uuid.v4().substring(0, 4)}.json',
+          status: AlignmentStatus.values[item['status'] ?? 0],
+          overrideHasIds: item['hasIds'],
+        ),
+      );
+    }
+
+    return Project(
+      id: json['id'] ?? uuid.v4(),
+      name: json['name'] ?? 'Legacy Project',
+      directoryPath: json['directoryPath'] ?? '',
+      audioPool: audioPool,
+      textPool: textPool,
+      dictPool: dictPool,
+      alignments: alignments,
+      defaultHasIds: json['hasIds'] ?? false,
+      defaultGenerateIds: json['generateIds'] ?? false,
+      defaultIdPrefix: json['generatedIdPrefix'],
       snapMode: json['snapMode'] ?? 'onset',
       snapOffset: json['snapOffset'],
     );

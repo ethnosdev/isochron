@@ -396,6 +396,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     // MAIN WORKSPACE (Project Loaded)
     // -------------------------------------------------------------------------
     return MacosWindow(
+      key: const ValueKey('main_workspace_window'),
       sidebar: Sidebar(
         minWidth: 200,
         bottom: Padding(
