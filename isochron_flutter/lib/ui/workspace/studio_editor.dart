@@ -25,16 +25,38 @@ class _StudioEditorState extends State<StudioEditor> {
     final state = widget.homeManager.value;
     if (state.fragments.isEmpty) return;
 
-    final currentMs = widget.homeManager.playbackPosition.value.inMilliseconds;
-    final index = state.fragments.indexWhere(
-      (f) =>
-          currentMs >= (f.realStart * 1000) && currentMs <= (f.realEnd * 1000),
+    final currentSec =
+        widget.homeManager.playbackPosition.value.inMilliseconds / 1000.0;
+
+    final activeIndex = state.fragments.indexWhere(
+      (f) => currentSec >= f.realStart && currentSec < f.realEnd,
     );
 
-    if (index != -1) {
-      final frag = state.fragments[index];
+    if (activeIndex != -1) {
+      final frag = state.fragments[activeIndex];
+
+      // Distance to the boundary BEFORE the cursor
+      final distToStart = currentSec - frag.realStart;
+      // Distance to the boundary AFTER the cursor
+      final distToEnd = frag.realEnd - currentSec;
+
+      // If the playhead is sitting right on the UPCOMING timing (closer to the end,
+      // and within 0.5s of it), nudge that upcoming timing instead.
+      if (distToEnd < distToStart &&
+          distToEnd <= 0.5 &&
+          activeIndex + 1 < state.fragments.length) {
+        final nextFrag = state.fragments[activeIndex + 1];
+        widget.homeManager.updateFragment(
+          activeIndex + 1,
+          nextFrag.realStart + deltaSeconds,
+          nextFrag.realEnd,
+        );
+        return;
+      }
+
+      // Normally, move the timing BEFORE the cursor (the start of the current fragment)
       widget.homeManager.updateFragment(
-        index,
+        activeIndex,
         frag.realStart + deltaSeconds,
         frag.realEnd,
       );
