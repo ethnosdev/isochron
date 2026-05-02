@@ -184,23 +184,20 @@ class _StudioEditorState extends State<StudioEditor> {
                 ),
 
                 // --- 2. Waveform View ---
-                Expanded(
-                  flex: 2,
-                  child: Container(
-                    width: double.infinity,
-                    color: MacosTheme.of(context).canvasColor,
-                    child: WaveformView(
-                      controller: widget.homeManager,
-                      state: state,
-                      scrollController: _waveScroll,
-                      playbackNotifier: widget.homeManager.playbackPosition,
-                    ),
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  width: double.infinity,
+                  color: MacosTheme.of(context).canvasColor,
+                  child: WaveformView(
+                    controller: widget.homeManager,
+                    state: state,
+                    scrollController: _waveScroll,
+                    playbackNotifier: widget.homeManager.playbackPosition,
                   ),
                 ),
 
                 // --- 3. Fragment List ---
                 Expanded(
-                  flex: 3,
                   child: Container(
                     decoration: BoxDecoration(
                       border: Border(
