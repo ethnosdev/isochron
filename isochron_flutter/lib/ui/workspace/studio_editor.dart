@@ -25,7 +25,7 @@ class _StudioEditorState extends State<StudioEditor> {
     final state = widget.homeManager.value;
     if (state.fragments.isEmpty) return;
 
-    final currentMs = state.currentPlaybackPosition.inMilliseconds;
+    final currentMs = widget.homeManager.playbackPosition.value.inMilliseconds;
     final index = state.fragments.indexWhere(
       (f) =>
           currentMs >= (f.realStart * 1000) && currentMs <= (f.realEnd * 1000),
@@ -180,6 +180,7 @@ class _StudioEditorState extends State<StudioEditor> {
                       controller: widget.homeManager,
                       state: state,
                       scrollController: _waveScroll,
+                      playbackNotifier: widget.homeManager.playbackPosition,
                     ),
                   ),
                 ),
@@ -198,7 +199,7 @@ class _StudioEditorState extends State<StudioEditor> {
                     ),
                     child: StudioFragmentList(
                       fragments: state.fragments,
-                      currentPos: state.currentPlaybackPosition,
+                      playbackNotifier: widget.homeManager.playbackPosition,
                       rules: state.transliterationRules,
                       selectedIndex: state.selectedFragmentIndex,
                       onSelect: widget.homeManager.selectFragment,

@@ -10,12 +10,14 @@ class WaveformView extends StatefulWidget {
   final AppManager controller;
   final AppState state;
   final ScrollController scrollController;
+  final ValueNotifier<Duration> playbackNotifier;
 
   const WaveformView({
     super.key,
     required this.controller,
     required this.state,
     required this.scrollController,
+    required this.playbackNotifier,
   });
 
   @override
@@ -51,7 +53,7 @@ class _WaveformViewState extends State<WaveformView> {
         anchorTime = widget.state.fragments[idx].realStart;
       }
     } else {
-      final pos = widget.state.currentPlaybackPosition.inMilliseconds / 1000.0;
+      final pos = widget.playbackNotifier.value.inMilliseconds / 1000.0;
       final currentFrag = widget.state.fragments.firstWhere(
         (f) => pos >= f.realStart && pos <= f.realEnd,
         orElse: () => widget.state.fragments.firstWhere(
@@ -147,30 +149,31 @@ class _WaveformViewState extends State<WaveformView> {
                 }),
                 child: Stack(
                   children: [
-                    CustomPaint(
-                      size: Size(fullPainterWidth, constraints.maxHeight),
-                      painter: IsochronWaveformPainter(
-                        waveform: wf,
-                        fragments: widget.state.fragments,
-                        playbackPosSeconds:
-                            widget
-                                .state
-                                .currentPlaybackPosition
-                                .inMilliseconds /
-                            1000.0,
-                        totalSeconds: totalSec,
-                        zoomLevel: widget.state.zoomLevel,
+                    ValueListenableBuilder<Duration>(
+                      valueListenable: widget.playbackNotifier,
+                      builder: (context, currentPos, _) {
+                        return CustomPaint(
+                          size: Size(fullPainterWidth, constraints.maxHeight),
+                          painter: IsochronWaveformPainter(
+                            waveform: wf,
+                            fragments: widget.state.fragments,
+                            playbackPosSeconds:
+                                currentPos.inMilliseconds / 1000.0,
+                            totalSeconds: totalSec,
+                            zoomLevel: widget.state.zoomLevel,
 
-                        // Pass macOS colors into your existing painter
-                        accentColor: theme.primaryColor,
-                        waveColor: CupertinoColors.systemGrey.withValues(
-                          alpha: 0.5,
-                        ),
-                        playheadColor: CupertinoColors.destructiveRed,
+                            // Pass macOS colors into your existing painter
+                            accentColor: theme.primaryColor,
+                            waveColor: CupertinoColors.systemGrey.withValues(
+                              alpha: 0.5,
+                            ),
+                            playheadColor: CupertinoColors.destructiveRed,
 
-                        contentWidth: contentWidth,
-                        padding: _hPadding,
-                      ),
+                            contentWidth: contentWidth,
+                            padding: _hPadding,
+                          ),
+                        );
+                      },
                     ),
                     for (final f in widget.state.fragments)
                       if (f.isPinned)

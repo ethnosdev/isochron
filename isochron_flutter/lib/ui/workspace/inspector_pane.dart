@@ -61,7 +61,10 @@ class InspectorPane extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: MacosPopupButton<String?>(
-            value: activePair!.audioAssetId,
+            value:
+                project.audioPool.any((a) => a.id == activePair!.audioAssetId)
+                ? activePair!.audioAssetId
+                : null,
             hint: const Text('Select Audio...'),
             items: [
               const MacosPopupMenuItem<String?>(
@@ -98,7 +101,9 @@ class InspectorPane extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: MacosPopupButton<String?>(
-            value: activePair!.textAssetId,
+            value: project.textPool.any((t) => t.id == activePair!.textAssetId)
+                ? activePair!.textAssetId
+                : null,
             hint: const Text('Select Text...'),
             items: [
               const MacosPopupMenuItem<String?>(
@@ -135,7 +140,9 @@ class InspectorPane extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: MacosPopupButton<String?>(
-            value: activePair!.dictAssetId,
+            value: project.dictPool.any((d) => d.id == activePair!.dictAssetId)
+                ? activePair!.dictAssetId
+                : null,
             hint: const Text('Default or Select...'),
             items: [
               const MacosPopupMenuItem<String?>(

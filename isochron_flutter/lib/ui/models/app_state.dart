@@ -12,7 +12,6 @@ class AppState {
   final List<Fragment> fragments;
   final Waveform? waveform;
   final Duration audioDuration;
-  final Duration currentPlaybackPosition;
   final bool isPlaying;
   final double zoomLevel;
   final int? focusedFragmentIndex;
@@ -32,7 +31,6 @@ class AppState {
     this.fragments = const [],
     this.waveform,
     this.audioDuration = Duration.zero,
-    this.currentPlaybackPosition = Duration.zero,
     this.isPlaying = false,
     this.zoomLevel = 1.0,
     this.focusedFragmentIndex,
@@ -54,7 +52,6 @@ class AppState {
     Waveform? waveform,
     bool clearWaveform = false,
     Duration? audioDuration,
-    Duration? currentPlaybackPosition,
     bool? isPlaying,
     double? zoomLevel,
     int? focusedFragmentIndex,
@@ -76,8 +73,6 @@ class AppState {
       fragments: fragments ?? this.fragments,
       waveform: clearWaveform ? null : (waveform ?? this.waveform),
       audioDuration: audioDuration ?? this.audioDuration,
-      currentPlaybackPosition:
-          currentPlaybackPosition ?? this.currentPlaybackPosition,
       isPlaying: isPlaying ?? this.isPlaying,
       zoomLevel: zoomLevel ?? this.zoomLevel,
       focusedFragmentIndex: clearFocus

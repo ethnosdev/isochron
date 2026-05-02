@@ -21,6 +21,7 @@ class AppManager extends ValueNotifier<AppState> {
   final PinsService _pinsService = PinsService();
   final _settings = UserSettingsService();
   VoidCallback? onSaveCallback;
+  final playbackPosition = ValueNotifier(Duration.zero);
 
   /// Snapshot of pin state as of the last explicit save (or file load).
   /// Used by discardChanges() to revert both in-memory and on-disk pins
@@ -38,7 +39,7 @@ class AppManager extends ValueNotifier<AppState> {
 
   AppManager() : super(AppState(zoomLevel: UserSettingsService().lastZoom)) {
     _audioService.positionStream.listen((pos) {
-      value = value.copyWith(currentPlaybackPosition: pos);
+      playbackPosition.value = pos;
     });
     _audioService.stateStream.listen((s) {
       value = value.copyWith(isPlaying: s.playing);
@@ -126,8 +127,8 @@ class AppManager extends ValueNotifier<AppState> {
       hasUnsavedChanges: false,
       clearWaveform: true,
       clearFocus: true,
-      currentPlaybackPosition: Duration.zero,
     );
+    playbackPosition.value = Duration.zero;
 
     _generateWaveform(audioAsset.path);
   }
@@ -318,7 +319,7 @@ class AppManager extends ValueNotifier<AppState> {
   void skipToNext() {
     if (value.fragments.isEmpty) return;
 
-    final currentMs = value.currentPlaybackPosition.inMilliseconds;
+    final currentMs = playbackPosition.value.inMilliseconds;
     final nextFrag = value.fragments.firstWhere(
       (f) => (f.realStart * 1000) > currentMs + 100,
       orElse: () => value.fragments.last,
@@ -332,7 +333,7 @@ class AppManager extends ValueNotifier<AppState> {
   void skipToPrevious() {
     if (value.fragments.isEmpty) return;
 
-    final currentMs = value.currentPlaybackPosition.inMilliseconds;
+    final currentMs = playbackPosition.value.inMilliseconds;
     final prevFrag = value.fragments.lastWhere(
       (f) => (f.realStart * 1000) < currentMs - 100,
       orElse: () => value.fragments.first,
@@ -658,7 +659,7 @@ class AppManager extends ValueNotifier<AppState> {
     if (index == null || index < 0 || index >= value.fragments.length) return;
 
     final frags = List<Fragment>.from(value.fragments);
-    final t = value.currentPlaybackPosition.inMilliseconds / 1000.0;
+    final t = playbackPosition.value.inMilliseconds / 1000.0;
     final duration = value.audioDuration.inMilliseconds / 1000.0;
 
     Fragment? prevTimed;
