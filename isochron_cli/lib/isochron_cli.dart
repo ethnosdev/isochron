@@ -9,6 +9,7 @@ export 'src/core/time_projector.dart';
 export 'src/core/isochron_processor.dart';
 export 'src/core/transliterator.dart';
 export 'src/core/pin_boundary_enforcer.dart';
+export 'src/core/boundary_strategy.dart';
 
 // Drivers
 export 'src/core/drivers.dart';

@@ -1,14 +1,13 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart'; // Still needed for GestureDetector and MouseRegion
 import 'package:flutter/services.dart';
-import 'package:isochron_flutter/ui/home_manager.dart';
+import 'package:isochron_flutter/ui/app_manager.dart';
 import 'package:isochron_flutter/ui/models/app_state.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'waveform_painter.dart';
 
 class WaveformView extends StatefulWidget {
-  final HomeManager controller;
+  final AppManager controller;
   final AppState state;
   final ScrollController scrollController;
 
@@ -164,7 +163,9 @@ class _WaveformViewState extends State<WaveformView> {
 
                         // Pass macOS colors into your existing painter
                         accentColor: theme.primaryColor,
-                        waveColor: CupertinoColors.systemGrey.withOpacity(0.5),
+                        waveColor: CupertinoColors.systemGrey.withValues(
+                          alpha: 0.5,
+                        ),
                         playheadColor: CupertinoColors.destructiveRed,
 
                         contentWidth: contentWidth,

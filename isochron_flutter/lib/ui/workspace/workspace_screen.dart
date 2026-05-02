@@ -3,10 +3,9 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:isochron_flutter/services/alignment_service.dart';
-import 'package:isochron_flutter/ui/home_manager.dart';
+import 'package:isochron_flutter/ui/app_manager.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:path/path.dart' as p;
@@ -30,7 +29,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   Project? _project;
   AlignmentPair? _activePair;
-  late final HomeManager _homeManager;
+  late final AppManager _homeManager;
   final Uuid _uuid = const Uuid();
 
   // --- Batch State ---
@@ -41,7 +40,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   @override
   void initState() {
     super.initState();
-    _homeManager = HomeManager();
+    _homeManager = AppManager();
     _homeManager.onSaveCallback = () {
       if (_activePair != null) {
         setState(() => _activePair!.status = AlignmentStatus.reviewed);
@@ -847,7 +846,7 @@ class _BatchProcessorView extends StatelessWidget {
           child: ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: pairs.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
             itemBuilder: (context, i) {
               final pair = pairs[i];
               return Container(
@@ -879,7 +878,9 @@ class _BatchProcessorView extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: _getStatusColor(pair.status).withOpacity(0.2),
+                        color: _getStatusColor(
+                          pair.status,
+                        ).withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
@@ -910,7 +911,6 @@ class _BatchProcessorView extends StatelessWidget {
       case AlignmentStatus.error:
         return CupertinoColors.destructiveRed;
       case AlignmentStatus.pending:
-      default:
         return CupertinoColors.systemYellow;
     }
   }
@@ -934,7 +934,7 @@ class _RealAssetPool extends StatelessWidget {
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: pool.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, i) {
         final asset = pool[i];
         return Container(
@@ -997,17 +997,18 @@ class _RealAlignmentList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (pairs.isEmpty)
+    if (pairs.isEmpty) {
       return const Center(
         child: Text(
           "Click the + icon in the toolbar to create an Alignment Pair.",
         ),
       );
+    }
 
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: pairs.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, i) {
         final pair = pairs[i];
         final bool isReady =
@@ -1055,8 +1056,8 @@ class _RealAlignmentList extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: pair.status == AlignmentStatus.reviewed
-                        ? CupertinoColors.activeGreen.withOpacity(0.2)
-                        : CupertinoColors.systemYellow.withOpacity(0.2),
+                        ? CupertinoColors.activeGreen.withValues(alpha: 0.2)
+                        : CupertinoColors.systemYellow.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(

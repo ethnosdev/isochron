@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:isochron_flutter/ui/home_manager.dart';
+import 'package:isochron_flutter/ui/app_manager.dart';
 import 'package:isochron_flutter/ui/models/app_state.dart';
 import 'package:macos_ui/macos_ui.dart';
 
@@ -8,7 +8,7 @@ import '../waveform/waveform_view.dart';
 import 'studio_fragment_list.dart';
 
 class StudioEditor extends StatefulWidget {
-  final HomeManager homeManager;
+  final AppManager homeManager;
 
   const StudioEditor({super.key, required this.homeManager});
 

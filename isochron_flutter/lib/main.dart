@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:macos_ui/macos_ui.dart';
-import 'package:macos_window_utils/macos_window_utils.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'ui/workspace/workspace_screen.dart';
 

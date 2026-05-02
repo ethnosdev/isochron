@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'package:isochron_cli/isochron_cli.dart';
-import 'package:isochron_cli/src/core/boundary_strategy.dart';
 
 class AlignmentService {
   Future<List<Fragment>> runIsochron({

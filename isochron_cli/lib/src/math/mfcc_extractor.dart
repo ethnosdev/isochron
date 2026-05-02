@@ -12,7 +12,7 @@ class MfccExtractor {
   static const int fftSize = 512; // Nearest power of 2 for 20ms (320 samples)
 
   /// Takes raw audio samples and returns a sequence of feature vectors.
-  /// Result: List of Frames, where each Frame is a List<double> of size 13.
+  /// Result: List of Frames, where each Frame is a List`<`double`>` of size 13.
   static List<List<double>> extract(Float64List audioData,
       {Function(double)? onProgress}) {
     final processedAudio = Float64List.fromList(audioData);

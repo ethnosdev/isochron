@@ -15,7 +15,7 @@ import '../services/alignment_service.dart';
 import '../services/audio_service.dart';
 import '../services/pins_service.dart';
 
-class HomeManager extends ValueNotifier<AppState> {
+class AppManager extends ValueNotifier<AppState> {
   final AudioService _audioService = AudioService();
   final AlignmentService _alignmentService = AlignmentService();
   final PinsService _pinsService = PinsService();
@@ -36,7 +36,7 @@ class HomeManager extends ValueNotifier<AppState> {
       f.index: (start: f.pinnedStart!, end: f.pinnedEnd!),
   };
 
-  HomeManager() : super(AppState(zoomLevel: UserSettingsService().lastZoom)) {
+  AppManager() : super(AppState(zoomLevel: UserSettingsService().lastZoom)) {
     _audioService.positionStream.listen((pos) {
       value = value.copyWith(currentPlaybackPosition: pos);
     });

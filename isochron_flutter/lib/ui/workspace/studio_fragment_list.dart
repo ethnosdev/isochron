@@ -120,7 +120,7 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
             ? CupertinoColors.white
             : theme.typography.body.color;
         final subTextColor = isSelected
-            ? CupertinoColors.white.withOpacity(0.8)
+            ? CupertinoColors.white.withValues(alpha: 0.8)
             : CupertinoColors.systemGrey;
 
         return GestureDetector(
@@ -191,7 +191,9 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                               ),
                               decoration: BoxDecoration(
                                 color: isSelected
-                                    ? CupertinoColors.white.withOpacity(0.2)
+                                    ? CupertinoColors.white.withValues(
+                                        alpha: 0.2,
+                                      )
                                     : CupertinoColors.systemGrey6,
                                 borderRadius: BorderRadius.circular(4),
                               ),

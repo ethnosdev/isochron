@@ -128,7 +128,9 @@ class IsochronProcessor {
             : (fragments[nextPin].anchorStart / frameStride).round();
 
         if (realFrameStart >= realFrameEnd ||
-            anchorFrameStart >= anchorFrameEnd) continue;
+            anchorFrameStart >= anchorFrameEnd) {
+          continue;
+        }
 
         final realSlice = userMfcc.sublist(
             realFrameStart, realFrameEnd.clamp(0, userMfcc.length));
@@ -147,8 +149,9 @@ class IsochronProcessor {
       }
 
       for (final frag in fragments) {
-        if (frag.isPinned)
+        if (frag.isPinned) {
           frag.setRealTiming(start: frag.pinnedStart!, end: frag.pinnedEnd!);
+        }
       }
     }
     logStep("DTW Alignment");
