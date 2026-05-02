@@ -4,6 +4,21 @@ import 'dart:isolate';
 import 'package:isochron_cli/isochron_cli.dart';
 
 class AlignmentService {
+  Isolate? _activeIsolate;
+  ReceivePort? _activeReceivePort;
+
+  /// Instantly kills the running background process
+  void cancelCurrentRun() {
+    if (_activeIsolate != null) {
+      _activeIsolate!.kill(priority: Isolate.immediate);
+      _activeIsolate = null;
+    }
+    if (_activeReceivePort != null) {
+      _activeReceivePort!.close();
+      _activeReceivePort = null;
+    }
+  }
+
   Future<List<Fragment>> runIsochron({
     required String textPath,
     required String audioPath,
@@ -17,7 +32,7 @@ class AlignmentService {
     String snapMode = 'onset',
     int snapOffsetMs = 0,
   }) async {
-    final receivePort = ReceivePort();
+    _activeReceivePort = ReceivePort();
     String? rulesJson;
 
     if (dictPath != null) {
@@ -30,8 +45,8 @@ class AlignmentService {
     }
 
     try {
-      await Isolate.spawn(_isolateEntry, {
-        'sendPort': receivePort.sendPort,
+      _activeIsolate = await Isolate.spawn(_isolateEntry, {
+        'sendPort': _activeReceivePort!.sendPort,
         'textPath': textPath,
         'audioPath': audioPath,
         'rulesJson': rulesJson,
@@ -44,21 +59,24 @@ class AlignmentService {
         'snapOffsetMs': snapOffsetMs,
       });
 
-      await for (final message in receivePort) {
+      await for (final message in _activeReceivePort!) {
         if (message['type'] == 'progress') {
           onProgress(message['status'], message['value']);
         } else if (message['type'] == 'result') {
-          receivePort.close();
+          _activeReceivePort?.close();
           return message['data'] as List<Fragment>;
         } else if (message['type'] == 'error') {
           throw message['error'];
         }
       }
     } catch (e) {
-      receivePort.close();
+      _activeReceivePort?.close();
       rethrow;
+    } finally {
+      _activeIsolate = null;
+      _activeReceivePort = null;
     }
-    return [];
+    return []; // Returns empty if isolate is killed forcefully
   }
 
   static Future<void> _isolateEntry(Map<String, dynamic> args) async {

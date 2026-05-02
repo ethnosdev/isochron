@@ -33,6 +33,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   late final AppManager _homeManager;
   final Uuid _uuid = const Uuid();
   bool _hasUnsavedChanges = false;
+  final _alignmentService = AlignmentService();
 
   // --- Batch State ---
   bool _isBatchRunning = false;
@@ -394,8 +395,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         )
         .toList();
 
-    final alignmentService = AlignmentService();
-
     for (var pair in pendingPairs) {
       if (!_isBatchRunning) break; // Check if user clicked Stop
 
@@ -450,8 +449,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           actualTextPath = tempCleanTextFile.path;
         }
 
-        // Run DSP Engine
-        List<Fragment> fragments = await alignmentService.runIsochron(
+        // Run DSP Engine using the class-level _alignmentService
+        List<Fragment> fragments = await _alignmentService.runIsochron(
           textPath: actualTextPath,
           audioPath: audioAsset.path,
           dictPath: dictAsset?.path,
@@ -466,6 +465,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             }
           },
         );
+
+        // INSTANT CANCEL CHECK: If the user hit stop during processing
+        if (!_isBatchRunning) {
+          setState(() => pair.status = AlignmentStatus.pending);
+          break; // Break the loop so it doesn't save corrupt/empty data
+        }
 
         // Re-inject IDs
         if (hasIds && extractedIds.isNotEmpty) {
@@ -509,10 +514,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           pair.status = AlignmentStatus.done;
         });
       } catch (e) {
-        debugPrint("Batch Error on ${pair.id}: $e");
-        setState(() {
-          pair.status = AlignmentStatus.error;
-        });
+        // If it throws an error because it was killed, safely ignore it.
+        if (!_isBatchRunning) {
+          setState(() => pair.status = AlignmentStatus.pending);
+          break;
+        } else {
+          debugPrint("Batch Error on ${pair.id}: $e");
+          setState(() {
+            pair.status = AlignmentStatus.error;
+          });
+        }
       } finally {
         if (tempCleanTextFile != null && await tempCleanTextFile.exists()) {
           await tempCleanTextFile.delete();
@@ -741,7 +752,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             ),
             showLabel: true,
             onPressed: _isBatchRunning
-                ? () => setState(() => _isBatchRunning = false)
+                ? () {
+                    setState(() => _isBatchRunning = false);
+                    _alignmentService.cancelCurrentRun();
+                  }
                 : _runBatch,
           ),
         );
