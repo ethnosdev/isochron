@@ -274,7 +274,7 @@ class _WaveformViewState extends State<WaveformView> {
                 ),
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTapDown: (d) =>
+                  onTapUp: (d) =>
                       _handleTap(d.localPosition.dx, contentWidth, totalSec),
                   onDoubleTapDown: (d) => _handleDoubleTap(
                     d.localPosition.dx,
