@@ -1,10 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:macos_ui/macos_ui.dart';
+import 'package:macos_window_utils/macos_window_utils.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
-import 'ui/welcome_screen.dart';
+import 'ui/workspace/workspace_screen.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   await UserSettingsService().init();
+
+  // Configure native macOS window properties
+  await WindowManipulator.initialize();
+  await WindowManipulator.makeTitlebarTransparent();
+  await WindowManipulator.enableFullSizeContentView();
+  await WindowManipulator.hideTitle();
+  await WindowManipulator.addToolbar();
+
   runApp(const IsochronApp());
 }
 
@@ -16,25 +27,13 @@ class IsochronApp extends StatelessWidget {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: UserSettingsService().themeNotifier,
       builder: (context, currentMode, _) {
-        return MaterialApp(
+        return MacosApp(
           title: 'Isochron Studio',
           debugShowCheckedModeBanner: false,
-          themeMode: currentMode, // <-- Listens to the toggle!
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: Colors.teal,
-              brightness: Brightness.light,
-            ),
-            useMaterial3: true,
-          ),
-          darkTheme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: Colors.teal,
-              brightness: Brightness.dark,
-            ),
-            useMaterial3: true,
-          ),
-          home: const WelcomeScreen(),
+          themeMode: currentMode,
+          theme: MacosThemeData.light(),
+          darkTheme: MacosThemeData.dark(),
+          home: const WorkspaceScreen(), // Our new 3-pane shell
         );
       },
     );

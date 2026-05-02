@@ -2,25 +2,44 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 
-enum ProjectItemStatus { pending, processing, done, reviewed, error }
+enum AlignmentStatus { pending, processing, done, reviewed, error }
 
-class ProjectItem {
+/// Represents a raw file living in one of the project's pools.
+class ProjectAsset {
   final String id;
-  final String audioPath;
-  final String textPath;
-  final bool hasIds; // Kept for legacy compatibility at the item level
+  final String path;
 
-  /// The filename of the JSON output (stored relative to project dir)
+  ProjectAsset({required this.id, required this.path});
+
+  String get filename => p.basename(path);
+
+  Map<String, dynamic> toJson() => {'id': id, 'path': path};
+
+  factory ProjectAsset.fromJson(Map<String, dynamic> json) {
+    return ProjectAsset(id: json['id'], path: json['path']);
+  }
+}
+
+/// Represents the relationship linking an Audio file, a Text file, and a Dictionary.
+class AlignmentPair {
+  final String id;
+  String? audioAssetId;
+  String? textAssetId;
+  String? dictAssetId;
   final String outputFilename;
-  final ProjectItemStatus status;
+  AlignmentStatus status;
 
-  ProjectItem({
+  // Local overrides (allows one file to use a different strategy than the rest of the project)
+  bool? overrideHasIds;
+
+  AlignmentPair({
     required this.id,
-    required this.audioPath,
-    required this.textPath,
+    this.audioAssetId,
+    this.textAssetId,
+    this.dictAssetId,
     required this.outputFilename,
-    required this.hasIds,
-    this.status = ProjectItemStatus.pending,
+    this.status = AlignmentStatus.pending,
+    this.overrideHasIds,
   });
 
   /// Helper to get the full absolute path of the output JSON
@@ -30,32 +49,23 @@ class ProjectItem {
 
   Map<String, dynamic> toJson() => {
     'id': id,
-    'audioPath': audioPath,
-    'textPath': textPath,
+    'audioAssetId': audioAssetId,
+    'textAssetId': textAssetId,
+    'dictAssetId': dictAssetId,
     'outputFilename': outputFilename,
-    'hasIds': hasIds,
     'status': status.index,
+    'overrideHasIds': overrideHasIds,
   };
 
-  factory ProjectItem.fromJson(Map<String, dynamic> json) {
-    return ProjectItem(
+  factory AlignmentPair.fromJson(Map<String, dynamic> json) {
+    return AlignmentPair(
       id: json['id'],
-      audioPath: json['audioPath'],
-      textPath: json['textPath'],
+      audioAssetId: json['audioAssetId'],
+      textAssetId: json['textAssetId'],
+      dictAssetId: json['dictAssetId'],
       outputFilename: json['outputFilename'],
-      hasIds: json['hasIds'] ?? false,
-      status: ProjectItemStatus.values[json['status'] ?? 0],
-    );
-  }
-
-  ProjectItem copyWith({ProjectItemStatus? status}) {
-    return ProjectItem(
-      id: id,
-      audioPath: audioPath,
-      textPath: textPath,
-      outputFilename: outputFilename,
-      hasIds: hasIds,
-      status: status ?? this.status,
+      status: AlignmentStatus.values[json['status'] ?? 0],
+      overrideHasIds: json['overrideHasIds'],
     );
   }
 }
@@ -64,76 +74,85 @@ class Project {
   final String id;
   String name;
   final String directoryPath;
-  String? dictionaryPath;
 
-  // ID Strategies
-  bool hasIds;
-  bool generateIds;
-  String? generatedIdPrefix;
+  // --- ASSET POOLS ---
+  List<ProjectAsset> audioPool;
+  List<ProjectAsset> textPool;
+  List<ProjectAsset> dictPool;
 
-  /// Controls how fragment boundaries are refined during alignment.
-  ///
-  /// Stored as string to keep project files stable even if enum implementation
-  /// changes. Expected values: 'onset', 'gap'.
+  // --- ALIGNMENTS ---
+  List<AlignmentPair> alignments;
+
+  // --- GLOBAL SETTINGS ---
+  bool defaultHasIds;
+  bool defaultGenerateIds;
+  String? defaultIdPrefix;
   String snapMode;
-
-  /// Milliseconds subtracted from each onset-snapped phrase start (onset mode
-  /// only). Null or absent in JSON means no offset.
   int? snapOffset;
-
-  final List<ProjectItem> items;
 
   Project({
     required this.id,
     required this.name,
     required this.directoryPath,
-    this.dictionaryPath,
-    required this.hasIds,
-    this.generateIds = false,
-    this.generatedIdPrefix,
+    this.audioPool = const [],
+    this.textPool = const [],
+    this.dictPool = const [],
+    this.alignments = const [],
+    this.defaultHasIds = false,
+    this.defaultGenerateIds = false,
+    this.defaultIdPrefix,
     this.snapMode = 'onset',
     this.snapOffset,
-    required this.items,
   });
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
     'directoryPath': directoryPath,
-    'dictionaryPath': dictionaryPath,
-    'hasIds': hasIds,
-    'generateIds': generateIds,
-    'generatedIdPrefix': generatedIdPrefix,
+    'audioPool': audioPool.map((a) => a.toJson()).toList(),
+    'textPool': textPool.map((a) => a.toJson()).toList(),
+    'dictPool': dictPool.map((a) => a.toJson()).toList(),
+    'alignments': alignments.map((a) => a.toJson()).toList(),
+    'defaultHasIds': defaultHasIds,
+    'defaultGenerateIds': defaultGenerateIds,
+    'defaultIdPrefix': defaultIdPrefix,
     'snapMode': snapMode,
-    if (snapOffset != null) 'snapOffset': snapOffset,
-    'items': items.map((i) => i.toJson()).toList(),
+    'snapOffset': snapOffset,
   };
-
-  static int? _snapOffsetFromJson(dynamic v) {
-    if (v == null) return null;
-    if (v is int) return v;
-    if (v is num) return v.round();
-    return int.tryParse(v.toString());
-  }
 
   factory Project.fromJson(Map<String, dynamic> json) {
     return Project(
       id: json['id'],
       name: json['name'],
       directoryPath: json['directoryPath'],
-      dictionaryPath: json['dictionaryPath'],
-      hasIds: json['hasIds'] ?? false,
-      generateIds: json['generateIds'] ?? false,
-      generatedIdPrefix: json['generatedIdPrefix'],
+      audioPool:
+          (json['audioPool'] as List?)
+              ?.map((i) => ProjectAsset.fromJson(i))
+              .toList() ??
+          [],
+      textPool:
+          (json['textPool'] as List?)
+              ?.map((i) => ProjectAsset.fromJson(i))
+              .toList() ??
+          [],
+      dictPool:
+          (json['dictPool'] as List?)
+              ?.map((i) => ProjectAsset.fromJson(i))
+              .toList() ??
+          [],
+      alignments:
+          (json['alignments'] as List?)
+              ?.map((i) => AlignmentPair.fromJson(i))
+              .toList() ??
+          [],
+      defaultHasIds: json['defaultHasIds'] ?? false,
+      defaultGenerateIds: json['defaultGenerateIds'] ?? false,
+      defaultIdPrefix: json['defaultIdPrefix'],
       snapMode: json['snapMode'] ?? 'onset',
-      snapOffset: _snapOffsetFromJson(json['snapOffset']),
-      items: (json['items'] as List)
-          .map((i) => ProjectItem.fromJson(i))
-          .toList(),
+      snapOffset: json['snapOffset'],
     );
   }
 
-  /// Saves the project metadata to [directoryPath]/project.json
   Future<void> save() async {
     final file = File(p.join(directoryPath, 'project.json'));
     const encoder = JsonEncoder.withIndent('  ');

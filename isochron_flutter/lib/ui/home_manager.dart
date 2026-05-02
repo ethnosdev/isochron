@@ -56,24 +56,33 @@ class HomeManager extends ValueNotifier<AppState> {
     super.dispose();
   }
 
-  Future<void> loadProjectItem(
-    ProjectItem item,
-    String projectRoot, {
-    String? dictPath,
-  }) async {
-    // Reset pin snapshot for the new file — prevents stale state from a
-    // previous file carrying over if this file has no alignment JSON yet.
+  Future<void> loadAlignmentPair(AlignmentPair pair, Project project) async {
     _lastSavedPins = null;
 
     if (value.isPlaying) {
       await _audioService.pause();
     }
 
-    final absJsonPath = item.getAbsoluteOutputPath(projectRoot);
+    // 1. Resolve Asset Paths from the Pools
+    final audioAsset = project.audioPool
+        .where((a) => a.id == pair.audioAssetId)
+        .firstOrNull;
+    final textAsset = project.textPool
+        .where((a) => a.id == pair.textAssetId)
+        .firstOrNull;
+    final dictAsset = project.dictPool
+        .where((a) => a.id == pair.dictAssetId)
+        .firstOrNull;
 
-    // Optimized for just_audio playback using macOS native afconvert
-    final playbackPath = await _ensureWavForPlayback(item.audioPath);
+    if (audioAsset == null || textAsset == null) {
+      value = value.copyWith(
+        statusMessage: "Error: Missing Audio or Text asset.",
+      );
+      return;
+    }
 
+    final absJsonPath = pair.getAbsoluteOutputPath(project.directoryPath);
+    final playbackPath = await _ensureWavForPlayback(audioAsset.path);
     final duration = await _audioService.load(playbackPath);
 
     List<Fragment> loadedFragments = [];
@@ -91,14 +100,11 @@ class HomeManager extends ValueNotifier<AppState> {
           )
           .toList();
 
-      // Restore any previously saved pin locks from sidecar file
       await _pinsService.load(absJsonPath, loadedFragments);
-
-      // Snapshot what was actually persisted so discard can revert here
       _lastSavedPins = _buildPinsSnapshot(loadedFragments);
     }
 
-    final actualDictPath = dictPath ?? value.dictPath;
+    final actualDictPath = dictAsset?.path ?? value.dictPath;
     Map<String, String>? rules = value.transliterationRules;
 
     if (actualDictPath != null &&
@@ -114,21 +120,21 @@ class HomeManager extends ValueNotifier<AppState> {
     }
 
     value = value.copyWith(
-      audioPath: item.audioPath,
-      textPath: item.textPath,
+      audioPath: audioAsset.path,
+      textPath: textAsset.path,
       dictPath: actualDictPath,
       transliterationRules: rules,
       autoSavePath: absJsonPath,
       fragments: loadedFragments,
       audioDuration: duration,
-      statusMessage: "Loaded ${p.basename(item.audioPath)}",
+      statusMessage: "Loaded ${audioAsset.filename}",
       hasUnsavedChanges: false,
       clearWaveform: true,
       clearFocus: true,
       currentPlaybackPosition: Duration.zero,
     );
 
-    _generateWaveform(item.audioPath);
+    _generateWaveform(audioAsset.path);
   }
 
   Future<void> saveProject() async {
