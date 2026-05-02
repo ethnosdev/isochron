@@ -31,6 +31,7 @@ class _WaveformViewState extends State<WaveformView> {
   static const double _hPadding = 40.0;
   SystemMouseCursor _cursor = SystemMouseCursors.basic;
   static const double _hoverThresholdPx = 10.0;
+  bool _isPanZooming = false;
 
   @override
   void initState() {
@@ -225,6 +226,17 @@ class _WaveformViewState extends State<WaveformView> {
           },
 
           // 2. MAC TRACKPADS (Two-finger swipe)
+          onPointerPanZoomStart: (_) {
+            _isPanZooming = true;
+            // Force-drop any marker if user drops a 2nd finger to scroll
+            if (_dragIndex != null) {
+              setState(() {
+                _dragIndex = null;
+                _cursor = SystemMouseCursors.basic;
+              });
+            }
+          },
+          onPointerPanZoomEnd: (_) => _isPanZooming = false,
           onPointerPanZoomUpdate: (event) {
             final keys = HardwareKeyboard.instance.logicalKeysPressed;
             final isControl =
@@ -274,20 +286,29 @@ class _WaveformViewState extends State<WaveformView> {
                     contentWidth,
                     totalSec,
                   ),
-                  onHorizontalDragStart: (d) => _handleDragStart(
-                    d.localPosition.dx,
-                    contentWidth,
-                    totalSec,
-                  ),
-                  onHorizontalDragUpdate: (d) => _handleDragUpdate(
-                    d.localPosition.dx,
-                    contentWidth,
-                    totalSec,
-                  ),
-                  onHorizontalDragEnd: (_) => setState(() {
-                    _dragIndex = null;
-                    _cursor = SystemMouseCursors.basic;
-                  }),
+                  onHorizontalDragStart: (d) {
+                    if (_isPanZooming) return;
+                    _handleDragStart(
+                      d.localPosition.dx,
+                      contentWidth,
+                      totalSec,
+                    );
+                  },
+                  onHorizontalDragUpdate: (d) {
+                    if (_isPanZooming) return;
+                    _handleDragUpdate(
+                      d.localPosition.dx,
+                      contentWidth,
+                      totalSec,
+                    );
+                  },
+                  onHorizontalDragEnd: (_) {
+                    if (_isPanZooming) return;
+                    setState(() {
+                      _dragIndex = null;
+                      _cursor = SystemMouseCursors.basic;
+                    });
+                  },
                   child: Stack(
                     children: [
                       ValueListenableBuilder<Duration>(
