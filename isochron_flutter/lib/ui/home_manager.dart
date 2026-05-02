@@ -1,17 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
-import 'package:isochron_flutter/ui/dialogs/text_preview_dialog.dart';
-import 'package:isochron_flutter/ui/dialogs/transliteration_preview_dialog.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:just_waveform/just_waveform.dart';
+import 'package:macos_ui/macos_ui.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models/app_state.dart';
 import '../services/alignment_service.dart';
@@ -195,111 +192,6 @@ class HomeManager extends ValueNotifier<AppState> {
     value = value.copyWith(fragments: frags, hasUnsavedChanges: false);
   }
 
-  Future<void> pickAudio() async {
-    final path = await _pickFile(type: FileType.audio);
-    if (path == null) return;
-
-    final duration = await _audioService.load(path);
-
-    value = value.copyWith(
-      audioPath: path,
-      audioDuration: duration,
-      statusMessage: "Audio loaded: ${p.basename(path)}",
-      fragments: [],
-      clearWaveform: true,
-    );
-
-    _generateWaveform(path);
-  }
-
-  Future<void> pickText(BuildContext context) async {
-    final path = await _pickFile(type: FileType.custom, extensions: ['txt']);
-    if (path != null) {
-      // Read first few lines and ask user
-      final file = File(path);
-      final lines = await file.readAsLines();
-      final preview = lines.take(5).toList();
-
-      final bool? hasIds = await showDialog<bool>(
-        context: context,
-        builder: (_) => TextPreviewDialog(
-          filename: p.basename(path),
-          previewLines: preview,
-        ),
-      );
-
-      if (hasIds == null) return;
-
-      value = value.copyWith(
-        textPath: path,
-        hasIds: hasIds,
-        statusMessage: "Text: ${p.basename(path)}",
-      );
-    }
-  }
-
-  Future<void> pickDict(BuildContext context) async {
-    final path = await _pickFile(type: FileType.custom, extensions: ['json']);
-    if (path == null) return;
-
-    Map<String, String>? rules;
-    try {
-      final jsonString = await File(path).readAsString();
-      final Map<String, dynamic> rawMap = jsonDecode(jsonString);
-      rules = rawMap.map((k, v) => MapEntry(k, v.toString()));
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Error: $e")));
-      }
-      return;
-    }
-
-    if (value.textPath == null) {
-      value = value.copyWith(
-        dictPath: path,
-        transliterationRules: rules,
-        statusMessage: "Dict: ${p.basename(path)}",
-      );
-      return;
-    }
-
-    try {
-      final textFile = File(value.textPath!);
-      final fullText = await textFile.readAsString();
-
-      final analysis = await compute(
-        _analyzeTransliteration,
-        _AnalysisRequest(fullText, rules, value.hasIds),
-      );
-
-      if (!context.mounted) return;
-      final bool? confirm = await showDialog<bool>(
-        context: context,
-        builder: (_) => TransliterationPreviewDialog(
-          dictName: p.basename(path),
-          previewLines: analysis.previewLines,
-          unknownChars: analysis.unknownChars,
-        ),
-      );
-
-      if (confirm == true) {
-        value = value.copyWith(
-          dictPath: path,
-          transliterationRules: rules,
-          statusMessage: "Dict: ${p.basename(path)}",
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Error: $e")));
-      }
-    }
-  }
-
   Future<void> runAlignment(
     BuildContext context, {
     String snapMode = 'onset',
@@ -404,17 +296,17 @@ class HomeManager extends ValueNotifier<AppState> {
     } catch (e) {
       value = value.copyWith(isProcessing: false, statusMessage: "Error: $e");
       if (context.mounted) {
-        showDialog(
+        showMacosAlertDialog(
           context: context,
-          builder: (_) => AlertDialog(
+          builder: (_) => MacosAlertDialog(
+            appIcon: const MacosIcon(CupertinoIcons.exclamationmark_triangle),
             title: const Text("Alignment Error"),
-            content: Text(e.toString()),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("OK"),
-              ),
-            ],
+            message: Text(e.toString()),
+            primaryButton: PushButton(
+              controlSize: ControlSize.large,
+              onPressed: () => Navigator.pop(context),
+              child: const Text("OK"),
+            ),
           ),
         );
       }
@@ -655,26 +547,6 @@ class HomeManager extends ValueNotifier<AppState> {
     value = value.copyWith(fragments: frags, hasUnsavedChanges: true);
   }
 
-  Future<String?> _pickFile({
-    required FileType type,
-    List<String>? extensions,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final initialDir = prefs.getString(_keyLastDir);
-    final result = await FilePicker.pickFiles(
-      type: type,
-      allowedExtensions: extensions,
-      initialDirectory: initialDir,
-    );
-
-    if (result?.files.single.path != null) {
-      final path = result!.files.single.path!;
-      await prefs.setString(_keyLastDir, File(path).parent.path);
-      return path;
-    }
-    return null;
-  }
-
   Future<String> _ensureWavForPlayback(String originalPath) async {
     if (originalPath.toLowerCase().endsWith('.wav')) return originalPath;
 
@@ -807,17 +679,33 @@ class HomeManager extends ValueNotifier<AppState> {
     }
 
     if (prevTimed != null && t <= prevTimed.realStart) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Cannot set time before the previous fragment."),
+      showMacosAlertDialog(
+        context: context,
+        builder: (_) => MacosAlertDialog(
+          appIcon: const MacosIcon(CupertinoIcons.exclamationmark_triangle),
+          title: const Text("Invalid Timing"),
+          message: const Text("Cannot set time before the previous fragment."),
+          primaryButton: PushButton(
+            controlSize: ControlSize.large,
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK"),
+          ),
         ),
       );
       return;
     }
     if (nextTimed != null && t >= nextTimed.realStart) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Cannot set time after the next fragment."),
+      showMacosAlertDialog(
+        context: context,
+        builder: (_) => MacosAlertDialog(
+          appIcon: const MacosIcon(CupertinoIcons.exclamationmark_triangle),
+          title: const Text("Invalid Timing"),
+          message: const Text("Cannot set time after the next fragment."),
+          primaryButton: PushButton(
+            controlSize: ControlSize.large,
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK"),
+          ),
         ),
       );
       return;
@@ -844,54 +732,4 @@ class HomeManager extends ValueNotifier<AppState> {
       selectedFragmentIndex: nextIndex,
     );
   }
-}
-
-class _AnalysisRequest {
-  final String text;
-  final Map<String, String> rules;
-  final bool hasIds;
-  _AnalysisRequest(this.text, this.rules, this.hasIds);
-}
-
-class _AnalysisResult {
-  final List<String> previewLines;
-  final List<String> unknownChars;
-  _AnalysisResult(this.previewLines, this.unknownChars);
-}
-
-_AnalysisResult _analyzeTransliteration(_AnalysisRequest req) {
-  final List<String> previewLines = [];
-  final Set<String> unknownSet = {};
-
-  final nonLatinRegex = RegExp(r'[^\x00-\x7F]');
-  final lines = const LineSplitter().convert(req.text);
-
-  int lineCount = 0;
-  for (var line in lines) {
-    if (line.trim().isEmpty) continue;
-
-    String textToProcess = line;
-
-    if (req.hasIds) {
-      final parts = line.trim().split(' ');
-      if (parts.length > 1) {
-        textToProcess = parts.sublist(1).join(' ');
-      }
-    }
-
-    final converted = Transliterator.convert(textToProcess, req.rules);
-
-    if (lineCount < 5) {
-      previewLines.add(converted);
-      lineCount++;
-    }
-
-    final matches = nonLatinRegex.allMatches(converted);
-    for (var m in matches) {
-      unknownSet.add(m.group(0)!);
-    }
-  }
-
-  final sortedUnknowns = unknownSet.toList()..sort();
-  return _AnalysisResult(previewLines, sortedUnknowns);
 }

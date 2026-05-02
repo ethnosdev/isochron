@@ -3,12 +3,16 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart'; // For some layout widgets
+import 'package:flutter/material.dart';
+import 'package:isochron_flutter/services/alignment_service.dart';
 import 'package:isochron_flutter/ui/home_manager.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
+import 'package:isochron_cli/isochron_cli.dart';
+
 import 'inspector_pane.dart';
 import 'studio_editor.dart';
 
@@ -20,7 +24,7 @@ class WorkspaceScreen extends StatefulWidget {
 }
 
 class _WorkspaceScreenState extends State<WorkspaceScreen> {
-  int _sidebarIndex = 1; // Default to Alignments
+  int _sidebarIndex = 1;
   bool _showInspector = true;
 
   Project? _project;
@@ -28,12 +32,15 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   late final HomeManager _homeManager;
   final Uuid _uuid = const Uuid();
 
+  // --- Batch State ---
+  bool _isBatchRunning = false;
+  String _batchStatus = "";
+  double _batchProgress = 0.0;
+
   @override
   void initState() {
     super.initState();
     _homeManager = HomeManager();
-    // In Phase 3, we hooked up a save callback. Let's make sure saving the alignment
-    // also saves the project state (e.g. updating the status to "done").
     _homeManager.onSaveCallback = () {
       if (_activePair != null) {
         setState(() => _activePair!.status = AlignmentStatus.reviewed);
@@ -72,7 +79,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
     setState(() {
       _project = newProject;
-      _sidebarIndex = 1; // Go to alignments
+      _sidebarIndex = 1;
     });
   }
 
@@ -153,7 +160,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     if (_project == null) return;
     setState(() {
       pool.remove(asset);
-      // Orphan any pairs that used this asset
       for (var pair in _project!.alignments) {
         if (pair.audioAssetId == asset.id) pair.audioAssetId = null;
         if (pair.textAssetId == asset.id) pair.textAssetId = null;
@@ -161,6 +167,212 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       }
     });
     _project!.save();
+  }
+
+  // ---------------------------------------------------------------------------
+  // BATCH PROCESSING & EXPORT LOGIC
+  // ---------------------------------------------------------------------------
+
+  Future<void> _runBatch() async {
+    if (_project == null) return;
+
+    setState(() {
+      _isBatchRunning = true;
+      _batchStatus = "Starting Batch...";
+      _batchProgress = 0.0;
+    });
+
+    final pendingPairs = _project!.alignments
+        .where(
+          (p) =>
+              p.status == AlignmentStatus.pending ||
+              p.status == AlignmentStatus.error,
+        )
+        .toList();
+
+    final alignmentService = AlignmentService();
+
+    for (var pair in pendingPairs) {
+      if (!_isBatchRunning) break; // Check if user clicked Stop
+
+      setState(() {
+        pair.status = AlignmentStatus.processing;
+        _batchStatus = "Processing ${pair.id}...";
+      });
+
+      final audioAsset = _project!.audioPool
+          .where((a) => a.id == pair.audioAssetId)
+          .firstOrNull;
+      final textAsset = _project!.textPool
+          .where((a) => a.id == pair.textAssetId)
+          .firstOrNull;
+      final dictAsset = _project!.dictPool
+          .where((a) => a.id == pair.dictAssetId)
+          .firstOrNull;
+
+      if (audioAsset == null || textAsset == null) {
+        setState(() {
+          pair.status = AlignmentStatus.error;
+        });
+        continue; // Skip pairs missing files
+      }
+
+      File? tempCleanTextFile;
+      List<String> extractedIds = [];
+      String actualTextPath = textAsset.path;
+      bool hasIds = pair.overrideHasIds ?? _project!.defaultHasIds;
+
+      try {
+        // Strip IDs if needed before alignment
+        if (hasIds) {
+          final lines = await File(textAsset.path).readAsLines();
+          final cleanLines = <String>[];
+          for (var line in lines) {
+            if (line.trim().isEmpty) continue;
+            final parts = line.trim().split(' ');
+            if (parts.length > 1) {
+              extractedIds.add(parts.first);
+              cleanLines.add(parts.sublist(1).join(' '));
+            } else {
+              extractedIds.add("");
+              cleanLines.add(line);
+            }
+          }
+          final tempDir = await getTemporaryDirectory();
+          tempCleanTextFile = File(
+            p.join(tempDir.path, 'clean_${_uuid.v4()}.txt'),
+          );
+          await tempCleanTextFile.writeAsString(cleanLines.join('\n'));
+          actualTextPath = tempCleanTextFile.path;
+        }
+
+        // Run DSP Engine
+        List<Fragment> fragments = await alignmentService.runIsochron(
+          textPath: actualTextPath,
+          audioPath: audioAsset.path,
+          dictPath: dictAsset?.path,
+          snapMode: _project!.snapMode,
+          snapOffsetMs: _project!.snapOffset ?? 0,
+          onProgress: (status, prog) {
+            if (_isBatchRunning && mounted) {
+              setState(() {
+                _batchStatus = status;
+                _batchProgress = prog;
+              });
+            }
+          },
+        );
+
+        // Re-inject IDs
+        if (hasIds && extractedIds.isNotEmpty) {
+          for (int i = 0; i < fragments.length; i++) {
+            if (i < extractedIds.length) {
+              fragments[i] = fragments[i].copyWith(id: extractedIds[i]);
+            }
+          }
+        }
+
+        // Apply Auto-Generated IDs if needed
+        if (!hasIds && _project!.defaultGenerateIds) {
+          final prefix = _project!.defaultIdPrefix ?? "";
+          int pairIdx = _project!.alignments.indexOf(pair) + 1;
+          final recStr = pairIdx.toString().padLeft(3, '0');
+          for (int j = 0; j < fragments.length; j++) {
+            final verseStr = (j + 1).toString().padLeft(3, '0');
+            fragments[j] = fragments[j].copyWith(id: '$prefix$recStr$verseStr');
+          }
+        }
+
+        // Save Alignment Output
+        final absPath = pair.getAbsoluteOutputPath(_project!.directoryPath);
+        final List<Map<String, dynamic>> jsonList = fragments
+            .map(
+              (f) => {
+                'index': f.index,
+                if (f.id != null) 'id': f.id,
+                'text': f.text,
+                'start': double.parse(f.realStart.toStringAsFixed(3)),
+                'end': double.parse(f.realEnd.toStringAsFixed(3)),
+              },
+            )
+            .toList();
+
+        await File(
+          absPath,
+        ).writeAsString(const JsonEncoder.withIndent('  ').convert(jsonList));
+
+        setState(() {
+          pair.status = AlignmentStatus.done;
+        });
+      } catch (e) {
+        debugPrint("Batch Error on ${pair.id}: $e");
+        setState(() {
+          pair.status = AlignmentStatus.error;
+        });
+      } finally {
+        if (tempCleanTextFile != null && await tempCleanTextFile.exists()) {
+          await tempCleanTextFile.delete();
+        }
+      }
+
+      await _project!.save();
+    }
+
+    setState(() {
+      _isBatchRunning = false;
+      _batchStatus = "Batch Complete";
+      _batchProgress = 1.0;
+    });
+  }
+
+  Future<void> _exportCsv() async {
+    if (_project == null) return;
+
+    final exportablePairs = _project!.alignments
+        .where(
+          (p) =>
+              p.status == AlignmentStatus.done ||
+              p.status == AlignmentStatus.reviewed,
+        )
+        .toList();
+
+    if (exportablePairs.isEmpty) return;
+
+    final String? outputFile = await FilePicker.saveFile(
+      dialogTitle: 'Export Combined CSV',
+      fileName: '${_project!.name.replaceAll(" ", "_")}_full.csv',
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+    );
+
+    if (outputFile == null) return;
+
+    try {
+      final masterBuffer = StringBuffer();
+      masterBuffer.writeln('id,verse_id,recording_id,start,end');
+
+      for (var pair in exportablePairs) {
+        final absJsonPath = pair.getAbsoluteOutputPath(_project!.directoryPath);
+        final file = File(absJsonPath);
+
+        if (await file.exists()) {
+          final content = await file.readAsString();
+          final List<dynamic> jsonList = jsonDecode(content);
+
+          for (var j in jsonList) {
+            masterBuffer.write('${j['index']},');
+            masterBuffer.write('${j['id'] ?? ""},');
+            masterBuffer.write('${pair.id},');
+            masterBuffer.write('${j['start']},');
+            masterBuffer.write('${j['end']}\n');
+          }
+        }
+      }
+
+      await File(outputFile).writeAsString(masterBuffer.toString());
+    } catch (e) {
+      debugPrint("CSV Export Error: $e");
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -215,13 +427,27 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       case 0:
         actions.add(
           ToolBarIconButton(
-            label: 'Run All Pending',
-            icon: const MacosIcon(
-              CupertinoIcons.play_circle_fill,
-              color: CupertinoColors.activeGreen,
+            label: _isBatchRunning ? 'Stop Batch' : 'Run All Pending',
+            icon: MacosIcon(
+              _isBatchRunning
+                  ? CupertinoIcons.stop_fill
+                  : CupertinoIcons.play_circle_fill,
+              color: _isBatchRunning
+                  ? CupertinoColors.destructiveRed
+                  : CupertinoColors.activeGreen,
             ),
             showLabel: true,
-            onPressed: () {}, // Future Batch Logic
+            onPressed: _isBatchRunning
+                ? () => setState(() => _isBatchRunning = false)
+                : _runBatch,
+          ),
+        );
+        actions.add(
+          ToolBarIconButton(
+            label: 'Export CSV',
+            icon: const MacosIcon(CupertinoIcons.tray_arrow_down),
+            showLabel: true,
+            onPressed: _exportCsv,
           ),
         );
         break;
@@ -249,7 +475,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         actions.add(
           ToolBarIconButton(
             label: 'Import Text',
-            icon: MacosIcon(CupertinoIcons.add),
+            icon: const MacosIcon(CupertinoIcons.add),
             showLabel: true,
             onPressed: () => _importAsset('Text', ['txt'], _project!.textPool),
           ),
@@ -298,7 +524,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
     switch (_sidebarIndex) {
       case 0:
-        return const Center(child: Text("Batch Processor (Coming Soon)"));
+        return _BatchProcessorView(
+          pairs: _project!.alignments,
+          isRunning: _isBatchRunning,
+          status: _batchStatus,
+          progress: _batchProgress,
+        );
       case 1:
         return _RealAlignmentList(
           pairs: _project!.alignments,
@@ -333,9 +564,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // -------------------------------------------------------------------------
-    // WELCOME SCREEN (No Project Loaded)
-    // -------------------------------------------------------------------------
     if (_project == null) {
       return MacosWindow(
         key: const ValueKey('welcome_window'),
@@ -392,9 +620,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       );
     }
 
-    // -------------------------------------------------------------------------
-    // MAIN WORKSPACE (Project Loaded)
-    // -------------------------------------------------------------------------
     return MacosWindow(
       key: const ValueKey('main_workspace_window'),
       sidebar: Sidebar(
@@ -471,7 +696,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             activePair: _activePair,
             onChanged: () {
               setState(() {});
-              _project!.save(); // Save properties when inspector changes
+              _project!.save();
             },
           );
         },
@@ -489,8 +714,111 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 }
 
 // -----------------------------------------------------------------------------
-// REAL UI COMPONENTS FOR ASSETS AND ALIGNMENTS
+// UI COMPONENTS
 // -----------------------------------------------------------------------------
+
+class _BatchProcessorView extends StatelessWidget {
+  final List<AlignmentPair> pairs;
+  final bool isRunning;
+  final String status;
+  final double progress;
+
+  const _BatchProcessorView({
+    required this.pairs,
+    required this.isRunning,
+    required this.status,
+    required this.progress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        if (isRunning) ...[
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              children: [
+                Text(status, style: MacosTheme.of(context).typography.headline),
+                const SizedBox(height: 8),
+                ProgressBar(value: progress * 100),
+              ],
+            ),
+          ),
+          Container(height: 1, color: MacosTheme.of(context).dividerColor),
+        ],
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: pairs.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (context, i) {
+              final pair = pairs[i];
+              return Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: MacosTheme.of(context).canvasColor,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: CupertinoColors.systemGrey4),
+                ),
+                child: Row(
+                  children: [
+                    if (pair.status == AlignmentStatus.processing)
+                      const ProgressCircle()
+                    else
+                      const MacosIcon(
+                        CupertinoIcons.link,
+                        color: CupertinoColors.systemGrey,
+                      ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        pair.id,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _getStatusColor(pair.status).withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        pair.status.name.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: _getStatusColor(pair.status),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Color _getStatusColor(AlignmentStatus status) {
+    switch (status) {
+      case AlignmentStatus.done:
+      case AlignmentStatus.reviewed:
+        return CupertinoColors.activeGreen;
+      case AlignmentStatus.processing:
+        return CupertinoColors.activeBlue;
+      case AlignmentStatus.error:
+        return CupertinoColors.destructiveRed;
+      case AlignmentStatus.pending:
+      default:
+        return CupertinoColors.systemYellow;
+    }
+  }
+}
 
 class _RealAssetPool extends StatelessWidget {
   final String type;
@@ -505,9 +833,7 @@ class _RealAssetPool extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (pool.isEmpty) {
-      return Center(child: Text("No $type assets imported."));
-    }
+    if (pool.isEmpty) return Center(child: Text("No $type assets imported."));
 
     return ListView.separated(
       padding: const EdgeInsets.all(16),
@@ -575,13 +901,12 @@ class _RealAlignmentList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (pairs.isEmpty) {
+    if (pairs.isEmpty)
       return const Center(
         child: Text(
           "Click the + icon in the toolbar to create an Alignment Pair.",
         ),
       );
-    }
 
     return ListView.separated(
       padding: const EdgeInsets.all(16),
