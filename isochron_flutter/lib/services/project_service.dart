@@ -20,7 +20,7 @@ class ProjectService {
   ) async {
     final settings = UserSettingsService();
 
-    String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
+    String? selectedDirectory = await FilePicker.getDirectoryPath(
       dialogTitle: "Select Folder to Save Project",
       initialDirectory: settings.lastProjectDir,
     );

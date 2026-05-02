@@ -109,7 +109,7 @@ class _ProjectSettingsDialogState extends State<ProjectSettingsDialog> {
                   TextButton(
                     onPressed: () async {
                       final settings = UserSettingsService();
-                      final result = await FilePicker.platform.pickFiles(
+                      final result = await FilePicker.pickFiles(
                         type: FileType.custom,
                         allowedExtensions: ['json'],
                         initialDirectory: settings.lastDictDir,

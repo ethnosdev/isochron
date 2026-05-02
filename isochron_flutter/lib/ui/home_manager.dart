@@ -557,7 +557,7 @@ class HomeManager extends ValueNotifier<AppState> {
       return;
     }
 
-    final String? outputFile = await FilePicker.platform.saveFile(
+    final String? outputFile = await FilePicker.saveFile(
       dialogTitle: 'Export Alignment',
       fileName: 'alignment.json',
       type: FileType.custom,
@@ -655,7 +655,7 @@ class HomeManager extends ValueNotifier<AppState> {
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final initialDir = prefs.getString(_keyLastDir);
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: type,
       allowedExtensions: extensions,
       initialDirectory: initialDir,

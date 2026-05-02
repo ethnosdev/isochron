@@ -28,19 +28,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        actions: [
-          // IconButton(
-          //   icon: const Icon(Icons.settings),
-          //   tooltip: "App Settings",
-          //   onPressed: () {
-          //     showDialog(
-          //       context: context,
-          //       builder: (_) => const GlobalSettingsDialog(),
-          //     );
-          //   },
-          // ),
-          const ThemeToggleButton(),
-        ],
+        actions: [const ThemeToggleButton()],
       ),
       body: Center(
         child: Container(
@@ -169,7 +157,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     try {
       final settings = UserSettingsService();
       final lastDir = settings.lastProjectDir;
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['json'],
         dialogTitle: "Select Project File",

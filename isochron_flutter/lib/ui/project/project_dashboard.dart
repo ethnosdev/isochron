@@ -336,7 +336,7 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
       return;
     }
 
-    final String? outputFile = await FilePicker.platform.saveFile(
+    final String? outputFile = await FilePicker.saveFile(
       dialogTitle: 'Export Combined CSV',
       fileName: '${_project.name.replaceAll(" ", "_")}_full.csv',
       type: FileType.custom,

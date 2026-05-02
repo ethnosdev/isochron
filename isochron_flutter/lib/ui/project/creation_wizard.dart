@@ -367,7 +367,7 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
             OutlinedButton(
               onPressed: () async {
                 final settings = UserSettingsService();
-                final result = await FilePicker.platform.pickFiles(
+                final result = await FilePicker.pickFiles(
                   type: type,
                   allowMultiple: true,
                   allowedExtensions: extensions,
@@ -410,7 +410,7 @@ class _ProjectCreationWizardState extends State<ProjectCreationWizard> {
             OutlinedButton(
               onPressed: () async {
                 final settings = UserSettingsService();
-                final result = await FilePicker.platform.pickFiles(
+                final result = await FilePicker.pickFiles(
                   type: FileType.custom,
                   allowedExtensions: ['json'],
                   initialDirectory: settings.lastDictDir,
