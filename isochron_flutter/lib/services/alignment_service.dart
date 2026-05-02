@@ -7,7 +7,6 @@ class AlignmentService {
   Future<List<Fragment>> runIsochron({
     required String textPath,
     required String audioPath,
-    // REMOVED: ffmpegPath and espeakPath
     String? dictPath,
     String? pinsPath,
     bool hasIds = false,

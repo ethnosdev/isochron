@@ -94,16 +94,19 @@ class Project {
     required this.id,
     required this.name,
     required this.directoryPath,
-    this.audioPool = const [],
-    this.textPool = const [],
-    this.dictPool = const [],
-    this.alignments = const [],
+    List<ProjectAsset>? audioPool,
+    List<ProjectAsset>? textPool,
+    List<ProjectAsset>? dictPool,
+    List<AlignmentPair>? alignments,
     this.defaultHasIds = false,
     this.defaultGenerateIds = false,
     this.defaultIdPrefix,
     this.snapMode = 'onset',
     this.snapOffset,
-  });
+  }) : audioPool = audioPool ?? [],
+       textPool = textPool ?? [],
+       dictPool = dictPool ?? [],
+       alignments = alignments ?? [];
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -137,22 +140,22 @@ class Project {
       directoryPath: json['directoryPath'],
       audioPool:
           (json['audioPool'] as List?)
-              ?.map((i) => ProjectAsset.fromJson(i))
+              ?.map((i) => ProjectAsset.fromJson(i as Map<String, dynamic>))
               .toList() ??
           [],
       textPool:
           (json['textPool'] as List?)
-              ?.map((i) => ProjectAsset.fromJson(i))
+              ?.map((i) => ProjectAsset.fromJson(i as Map<String, dynamic>))
               .toList() ??
           [],
       dictPool:
           (json['dictPool'] as List?)
-              ?.map((i) => ProjectAsset.fromJson(i))
+              ?.map((i) => ProjectAsset.fromJson(i as Map<String, dynamic>))
               .toList() ??
           [],
       alignments:
           (json['alignments'] as List?)
-              ?.map((i) => AlignmentPair.fromJson(i))
+              ?.map((i) => AlignmentPair.fromJson(i as Map<String, dynamic>))
               .toList() ??
           [],
       defaultHasIds: json['defaultHasIds'] ?? false,

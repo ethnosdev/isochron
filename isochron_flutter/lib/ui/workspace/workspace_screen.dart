@@ -29,6 +29,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   Project? _project;
   AlignmentPair? _activePair;
+  AlignmentPair? _selectedPair;
   late final AppManager _homeManager;
   final Uuid _uuid = const Uuid();
 
@@ -84,24 +85,44 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   }
 
   Future<void> _openProject() async {
-    final result = await FilePicker.pickFiles(
-      dialogTitle: 'Open Project',
-      type: FileType.custom,
-      allowedExtensions: ['json'],
-    );
+    try {
+      final result = await FilePicker.pickFiles(
+        dialogTitle: 'Open Project',
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
 
-    if (result != null && result.files.single.path != null) {
-      try {
+      if (result != null && result.files.single.path != null) {
         final file = File(result.files.single.path!);
         final content = await file.readAsString();
-        final jsonMap = jsonDecode(content);
+        final dynamic parsed = jsonDecode(content);
+
+        if (parsed is! Map<String, dynamic>) {
+          throw const FormatException("Invalid project file format.");
+        }
 
         setState(() {
-          _project = Project.fromJson(jsonMap);
+          _project = Project.fromJson(parsed);
           _sidebarIndex = 1;
         });
-      } catch (e) {
-        debugPrint("Error loading project: $e");
+      }
+    } catch (e, stackTrace) {
+      debugPrint("Error loading project: $e\n$stackTrace");
+      if (mounted) {
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: const Text('Failed to Open Project'),
+            content: Text(e.toString()),
+            actions: [
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
       }
     }
   }
@@ -151,6 +172,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     if (_project == null) return;
     setState(() {
       if (_activePair == pair) _activePair = null;
+      if (_selectedPair == pair) _selectedPair = null;
       _project!.alignments.remove(pair);
     });
     _project!.save();
@@ -375,6 +397,47 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     }
   }
 
+  Future<bool> _requestCloseEditor() async {
+    if (_activePair != null && _homeManager.value.hasUnsavedChanges) {
+      final result = await showCupertinoDialog<String>(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('Unsaved Changes'),
+          content: const Text(
+            'You have unsaved changes in your alignment. Do you want to save them before leaving?',
+          ),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(context, 'cancel'),
+              child: const Text('Cancel'),
+            ),
+            CupertinoDialogAction(
+              isDestructiveAction: true,
+              onPressed: () => Navigator.pop(context, 'discard'),
+              child: const Text('Discard'),
+            ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () => Navigator.pop(context, 'save'),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      );
+
+      if (result == 'save') {
+        await _homeManager.saveProject();
+        return true;
+      } else if (result == 'discard') {
+        await _homeManager.discardChanges();
+        return true;
+      } else {
+        return false; // User cancelled the navigation
+      }
+    }
+    return true; // No unsaved changes, safe to close
+  }
+
   // ---------------------------------------------------------------------------
   // UI BUILDERS
   // ---------------------------------------------------------------------------
@@ -389,7 +452,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           useMousePosition: false,
           child: MacosIconButton(
             icon: const MacosIcon(CupertinoIcons.chevron_left),
-            onPressed: () => setState(() => _activePair = null),
+            onPressed: () async {
+              if (await _requestCloseEditor()) {
+                setState(() => _activePair = null);
+              }
+            },
           ),
         ),
         actions: [
@@ -533,6 +600,14 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       case 1:
         return _RealAlignmentList(
           pairs: _project!.alignments,
+          selectedPair: _selectedPair, // <-- Pass the selected pair
+          onSelect: (pair) {
+            setState(() {
+              _selectedPair = pair;
+              _showInspector =
+                  true; // Auto-open inspector when a pair is clicked
+            });
+          },
           onOpenPair: (pair) async {
             setState(() => _activePair = pair);
             await _homeManager.loadAlignmentPair(pair, _project!);
@@ -647,7 +722,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
               PushButton(
                 controlSize: ControlSize.small,
                 secondary: true,
-                onPressed: () => setState(() => _project = null),
+                onPressed: () async {
+                  if (await _requestCloseEditor()) {
+                    setState(() => _project = null);
+                  }
+                },
                 child: const Text("Close Project"),
               ),
             ],
@@ -656,11 +735,15 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         builder: (context, scrollController) {
           return SidebarItems(
             currentIndex: _sidebarIndex,
-            onChanged: (i) {
-              setState(() {
-                _sidebarIndex = i;
-                _activePair = null;
-              });
+            onChanged: (i) async {
+              if (i == _sidebarIndex) return;
+              if (await _requestCloseEditor()) {
+                setState(() {
+                  _sidebarIndex = i;
+                  _activePair = null;
+                  _selectedPair = null;
+                });
+              }
             },
             scrollController: scrollController,
             items: const [
@@ -696,7 +779,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         builder: (context, scrollController) {
           return InspectorPane(
             project: _project!,
-            activePair: _activePair,
+            activePair: _activePair ?? _selectedPair,
             onChanged: () {
               setState(() {});
               _project!.save();
@@ -780,7 +863,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                       LogicalKeyboardKey.keyW,
                       meta: true,
                     ),
-                    onSelected: () => setState(() => _project = null),
+                    onSelected: () async {
+                      if (await _requestCloseEditor()) {
+                        setState(() => _project = null);
+                      }
+                    },
                   ),
                 ],
               ),
@@ -986,11 +1073,15 @@ class _RealAssetPool extends StatelessWidget {
 
 class _RealAlignmentList extends StatelessWidget {
   final List<AlignmentPair> pairs;
+  final AlignmentPair? selectedPair;
+  final Function(AlignmentPair) onSelect;
   final Function(AlignmentPair) onOpenPair;
   final Function(AlignmentPair) onDelete;
 
   const _RealAlignmentList({
     required this.pairs,
+    required this.selectedPair,
+    required this.onSelect,
     required this.onOpenPair,
     required this.onDelete,
   });
@@ -1013,23 +1104,33 @@ class _RealAlignmentList extends StatelessWidget {
         final pair = pairs[i];
         final bool isReady =
             pair.audioAssetId != null && pair.textAssetId != null;
-
+        final bool isSelected = selectedPair == pair;
         return GestureDetector(
+          onTap: () => onSelect(pair),
           onDoubleTap: () {
             if (isReady) onOpenPair(pair);
           },
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: MacosTheme.of(context).canvasColor,
+              color: isSelected
+                  ? MacosTheme.of(context).primaryColor.withValues(alpha: 0.1)
+                  : MacosTheme.of(context).canvasColor,
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: CupertinoColors.systemGrey4),
+              border: Border.all(
+                color: isSelected
+                    ? MacosTheme.of(context).primaryColor
+                    : CupertinoColors.systemGrey4,
+                width: isSelected ? 2.0 : 1.0,
+              ),
             ),
             child: Row(
               children: [
-                const MacosIcon(
+                MacosIcon(
                   CupertinoIcons.link,
-                  color: CupertinoColors.systemGrey,
+                  color: isSelected
+                      ? MacosTheme.of(context).primaryColor
+                      : CupertinoColors.systemGrey,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
