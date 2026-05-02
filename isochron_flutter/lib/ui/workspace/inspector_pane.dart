@@ -127,45 +127,6 @@ class InspectorPane extends StatelessWidget {
             },
           ),
         ),
-        const SizedBox(height: 12),
-
-        // --- DICTIONARY SELECTION ---
-        Text(
-          'Transliteration (Optional)',
-          style: theme.typography.subheadline.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 4),
-        SizedBox(
-          width: double.infinity,
-          child: MacosPopupButton<String?>(
-            value: project.dictPool.any((d) => d.id == activePair!.dictAssetId)
-                ? activePair!.dictAssetId
-                : null,
-            hint: const Text('Default or Select...'),
-            items: [
-              const MacosPopupMenuItem<String?>(
-                value: null,
-                child: Text('Project Default'),
-              ),
-              ...project.dictPool.map(
-                (d) => MacosPopupMenuItem<String?>(
-                  value: d.id,
-                  child: Text(
-                    d.filename,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-            ],
-            onChanged: (val) {
-              activePair!.dictAssetId = val;
-              onChanged();
-            },
-          ),
-        ),
       ],
     );
   }
@@ -290,6 +251,46 @@ class InspectorPane extends StatelessWidget {
             },
           ),
         ],
+        const SizedBox(height: 16),
+
+        // --- DICTIONARY SELECTION ---
+        Text(
+          'Transliteration (Optional)',
+          style: theme.typography.subheadline.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        SizedBox(
+          width: double.infinity,
+          child: MacosPopupButton<String?>(
+            value: project.dictPool.any((d) => d.id == project.dictAssetId)
+                ? project.dictAssetId
+                : null,
+            hint: const Text('Select Dictionary...'),
+            items: [
+              const MacosPopupMenuItem<String?>(
+                value: null,
+                child: Text('None'),
+              ),
+              ...project.dictPool.map(
+                (d) => MacosPopupMenuItem<String?>(
+                  value: d.id,
+                  child: Text(
+                    d.filename,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ],
+            onChanged: (val) {
+              project.dictAssetId = val; // <-- Update this
+              onChanged();
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
       ],
     );
   }

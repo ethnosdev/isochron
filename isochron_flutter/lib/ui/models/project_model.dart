@@ -26,7 +26,6 @@ class AlignmentPair {
   final String id;
   String? audioAssetId;
   String? textAssetId;
-  String? dictAssetId;
   final String outputFilename;
   AlignmentStatus status;
 
@@ -37,7 +36,6 @@ class AlignmentPair {
     required this.id,
     this.audioAssetId,
     this.textAssetId,
-    this.dictAssetId,
     required this.outputFilename,
     this.status = AlignmentStatus.pending,
     this.overrideHasIds,
@@ -51,7 +49,6 @@ class AlignmentPair {
     'id': id,
     'audioAssetId': audioAssetId,
     'textAssetId': textAssetId,
-    'dictAssetId': dictAssetId,
     'outputFilename': outputFilename,
     'status': status.index,
     'overrideHasIds': overrideHasIds,
@@ -62,7 +59,6 @@ class AlignmentPair {
       id: json['id'],
       audioAssetId: json['audioAssetId'],
       textAssetId: json['textAssetId'],
-      dictAssetId: json['dictAssetId'],
       outputFilename: json['outputFilename'],
       status: AlignmentStatus.values[json['status'] ?? 0],
       overrideHasIds: json['overrideHasIds'],
@@ -74,6 +70,7 @@ class Project {
   final String id;
   String name;
   final String directoryPath;
+  String? dictAssetId;
 
   // --- ASSET POOLS ---
   List<ProjectAsset> audioPool;
@@ -94,6 +91,7 @@ class Project {
     required this.id,
     required this.name,
     required this.directoryPath,
+    this.dictAssetId,
     List<ProjectAsset>? audioPool,
     List<ProjectAsset>? textPool,
     List<ProjectAsset>? dictPool,
@@ -112,6 +110,7 @@ class Project {
     'id': id,
     'name': name,
     'directoryPath': directoryPath,
+    'dictAssetId': dictAssetId,
     'audioPool': audioPool.map((a) => a.toJson()).toList(),
     'textPool': textPool.map((a) => a.toJson()).toList(),
     'dictPool': dictPool.map((a) => a.toJson()).toList(),
@@ -138,6 +137,7 @@ class Project {
       id: json['id'],
       name: json['name'],
       directoryPath: json['directoryPath'],
+      dictAssetId: json['dictAssetId'],
       audioPool:
           (json['audioPool'] as List?)
               ?.map((i) => ProjectAsset.fromJson(i as Map<String, dynamic>))
@@ -217,7 +217,6 @@ class Project {
           id: item['id'] ?? uuid.v4(),
           audioAssetId: audioId,
           textAssetId: textId,
-          dictAssetId: dictAssetId,
           outputFilename:
               item['outputFilename'] ??
               'alignment_${uuid.v4().substring(0, 4)}.json',
@@ -231,6 +230,7 @@ class Project {
       id: json['id'] ?? uuid.v4(),
       name: json['name'] ?? 'Legacy Project',
       directoryPath: json['directoryPath'] ?? '',
+      dictAssetId: dictAssetId,
       audioPool: audioPool,
       textPool: textPool,
       dictPool: dictPool,

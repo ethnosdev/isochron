@@ -67,7 +67,7 @@ class AppManager extends ValueNotifier<AppState> {
         .where((a) => a.id == pair.textAssetId)
         .firstOrNull;
     final dictAsset = project.dictPool
-        .where((a) => a.id == pair.dictAssetId)
+        .where((a) => a.id == project.dictAssetId)
         .firstOrNull;
 
     if (audioAsset == null || textAsset == null) {

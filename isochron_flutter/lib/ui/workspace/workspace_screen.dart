@@ -182,10 +182,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     if (_project == null) return;
     setState(() {
       pool.remove(asset);
+
+      // If they deleted the active project dictionary, clear it
+      if (_project!.dictAssetId == asset.id) {
+        _project!.dictAssetId = null;
+      }
+
+      // Clear from pairs (dictAssetId is no longer in pairs)
       for (var pair in _project!.alignments) {
         if (pair.audioAssetId == asset.id) pair.audioAssetId = null;
         if (pair.textAssetId == asset.id) pair.textAssetId = null;
-        if (pair.dictAssetId == asset.id) pair.dictAssetId = null;
       }
     });
     _project!.save();
@@ -229,7 +235,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           .where((a) => a.id == pair.textAssetId)
           .firstOrNull;
       final dictAsset = _project!.dictPool
-          .where((a) => a.id == pair.dictAssetId)
+          .where((a) => a.id == _project!.dictAssetId)
           .firstOrNull;
 
       if (audioAsset == null || textAsset == null) {
