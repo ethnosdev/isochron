@@ -69,20 +69,82 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   // ---------------------------------------------------------------------------
 
   Future<void> _createNewProject() async {
-    final String? dir = await FilePicker.getDirectoryPath(
-      dialogTitle: 'Select Folder for New Project',
+    // STEP 1: Ask the user for the Project Name
+    final nameController = TextEditingController();
+    final String? projectName = await showCupertinoDialog<String>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Create New Project'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 8.0),
+          child: CupertinoTextField(
+            controller: nameController,
+            placeholder: 'e.g. Gospel of John',
+            autofocus: true,
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () {
+              if (nameController.text.trim().isNotEmpty) {
+                Navigator.pop(context, nameController.text.trim());
+              }
+            },
+            child: const Text('Next'),
+          ),
+        ],
+      ),
     );
-    if (dir == null) return;
 
-    final alignmentsDir = Directory(p.join(dir, 'alignments'));
-    if (!await alignmentsDir.exists()) {
-      await alignmentsDir.create();
+    if (projectName == null || projectName.isEmpty) return;
+
+    // STEP 2: Ask where to save it
+    final String? parentDir = await FilePicker.getDirectoryPath(
+      dialogTitle: 'Select Where to Save Project',
+    );
+    if (parentDir == null) return;
+
+    // STEP 3: Create the project folder automatically
+    final projectDir = Directory(p.join(parentDir, projectName));
+
+    // Safety check: Does it already exist?
+    if (await projectDir.exists()) {
+      if (mounted) {
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: const Text('Folder Already Exists'),
+            content: Text(
+              'A folder named "$projectName" already exists in this location.',
+            ),
+            actions: [
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
     }
 
+    // Create directories
+    await projectDir.create();
+    final alignmentsDir = Directory(p.join(projectDir.path, 'alignments'));
+    await alignmentsDir.create();
+
+    // Create and save project
     final newProject = Project(
       id: _uuid.v4(),
-      name: p.basename(dir),
-      directoryPath: dir,
+      name: projectName,
+      directoryPath: projectDir.path,
     );
     await newProject.save();
 
@@ -172,6 +234,112 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           outputFilename: 'alignment_$pairCount.json',
         ),
       );
+    });
+    _project!.save();
+  }
+
+  Future<void> _autoGeneratePairs() async {
+    if (_project == null) return;
+
+    // 1. Find assets that are NOT currently used in any alignment pair
+    final usedAudioIds = _project!.alignments
+        .map((p) => p.audioAssetId)
+        .toSet();
+    final usedTextIds = _project!.alignments.map((p) => p.textAssetId).toSet();
+
+    final unlinkedAudio = _project!.audioPool
+        .where((a) => !usedAudioIds.contains(a.id))
+        .toList();
+    final unlinkedText = _project!.textPool
+        .where((t) => !usedTextIds.contains(t.id))
+        .toList();
+
+    if (unlinkedAudio.isEmpty || unlinkedText.isEmpty) {
+      showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('Nothing to Pair'),
+          content: const Text(
+            'You need both unlinked Audio and unlinked Text assets in your pools to generate pairs.',
+          ),
+          actions: [
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // 2. Natural Sort Helper (makes "file_2" come before "file_10")
+    int naturalCompare(String a, String b) {
+      final regex = RegExp(r'\d+|\D+');
+      final matchesA = regex.allMatches(a).map((m) => m.group(0)!).toList();
+      final matchesB = regex.allMatches(b).map((m) => m.group(0)!).toList();
+      for (int i = 0; i < matchesA.length && i < matchesB.length; i++) {
+        final isNumA = int.tryParse(matchesA[i]) != null;
+        final isNumB = int.tryParse(matchesB[i]) != null;
+        if (isNumA && isNumB) {
+          final cmp = int.parse(matchesA[i]).compareTo(int.parse(matchesB[i]));
+          if (cmp != 0) return cmp;
+        } else {
+          final cmp = matchesA[i].compareTo(matchesB[i]);
+          if (cmp != 0) return cmp;
+        }
+      }
+      return matchesA.length.compareTo(matchesB.length);
+    }
+
+    // 3. Sort both lists naturally by filename
+    unlinkedAudio.sort((a, b) => naturalCompare(a.filename, b.filename));
+    unlinkedText.sort((a, b) => naturalCompare(a.filename, b.filename));
+
+    // 4. Determine how many pairs we can make
+    final int pairsToMake = unlinkedAudio.length < unlinkedText.length
+        ? unlinkedAudio.length
+        : unlinkedText.length;
+
+    // 5. Ask for confirmation
+    final bool? confirm = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Auto-Generate Pairs'),
+        content: Text(
+          'Found unlinked assets. This will sequentially link them and create $pairsToMake new pairs.\n\nDo you want to continue?',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Generate'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    // 6. Generate the pairs
+    setState(() {
+      final startingCount = _project!.alignments.length;
+      for (int i = 0; i < pairsToMake; i++) {
+        final pairCount = startingCount + i + 1;
+        _project!.alignments.add(
+          AlignmentPair(
+            id: 'Pair ${pairCount.toString().padLeft(2, '0')}',
+            audioAssetId: unlinkedAudio[i].id,
+            textAssetId: unlinkedText[i].id,
+            outputFilename: 'alignment_$pairCount.json',
+          ),
+        );
+      }
     });
     _project!.save();
   }
@@ -593,6 +761,14 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             icon: const MacosIcon(CupertinoIcons.add),
             showLabel: true,
             onPressed: _createNewPair,
+          ),
+        );
+        actions.add(
+          ToolBarIconButton(
+            label: 'Auto-Pair Unlinked',
+            icon: MacosIcon(CupertinoIcons.link),
+            showLabel: true,
+            onPressed: _autoGeneratePairs,
           ),
         );
         break;
