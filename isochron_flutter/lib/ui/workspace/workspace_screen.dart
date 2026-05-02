@@ -753,32 +753,25 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       key: const ValueKey('main_workspace_window'),
       sidebar: Sidebar(
         minWidth: 200,
-        bottom: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        top: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+          child: Row(
             children: [
-              Text(
-                _project!.name,
-                style: const TextStyle(fontWeight: FontWeight.bold),
+              const MacosIcon(
+                CupertinoIcons.folder_solid,
+                color: CupertinoColors.activeBlue,
               ),
-              const Text(
-                'Isochron Studio v1.0',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: CupertinoColors.systemGrey,
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _project!.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-              const SizedBox(height: 8),
-              PushButton(
-                controlSize: ControlSize.small,
-                secondary: true,
-                onPressed: () async {
-                  if (await _requestCloseEditor()) {
-                    setState(() => _project = null);
-                  }
-                },
-                child: const Text("Close Project"),
               ),
             ],
           ),
