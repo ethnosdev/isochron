@@ -71,6 +71,16 @@ class Project {
   bool generateIds;
   String? generatedIdPrefix;
 
+  /// Controls how fragment boundaries are refined during alignment.
+  ///
+  /// Stored as string to keep project files stable even if enum implementation
+  /// changes. Expected values: 'onset', 'gap'.
+  String snapMode;
+
+  /// Milliseconds subtracted from each onset-snapped phrase start (onset mode
+  /// only). Null or absent in JSON means no offset.
+  int? snapOffset;
+
   final List<ProjectItem> items;
 
   Project({
@@ -81,6 +91,8 @@ class Project {
     required this.hasIds,
     this.generateIds = false,
     this.generatedIdPrefix,
+    this.snapMode = 'onset',
+    this.snapOffset,
     required this.items,
   });
 
@@ -92,8 +104,17 @@ class Project {
     'hasIds': hasIds,
     'generateIds': generateIds,
     'generatedIdPrefix': generatedIdPrefix,
+    'snapMode': snapMode,
+    if (snapOffset != null) 'snapOffset': snapOffset,
     'items': items.map((i) => i.toJson()).toList(),
   };
+
+  static int? _snapOffsetFromJson(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is num) return v.round();
+    return int.tryParse(v.toString());
+  }
 
   factory Project.fromJson(Map<String, dynamic> json) {
     return Project(
@@ -104,6 +125,8 @@ class Project {
       hasIds: json['hasIds'] ?? false,
       generateIds: json['generateIds'] ?? false,
       generatedIdPrefix: json['generatedIdPrefix'],
+      snapMode: json['snapMode'] ?? 'onset',
+      snapOffset: _snapOffsetFromJson(json['snapOffset']),
       items: (json['items'] as List)
           .map((i) => ProjectItem.fromJson(i))
           .toList(),

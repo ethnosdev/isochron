@@ -5,7 +5,14 @@ class BoundarySnapper {
   /// Refines timestamps by looking for energy onsets in the real audio.
   /// [audio] should be the normalized float samples.
   /// [sampleRate] usually 16000.
-  static void snap(List<dynamic> fragments, Float64List audio, int sampleRate) {
+  /// [snapOffsetMs] is subtracted from each snapped start time (onset mode only;
+  /// callers pass 0 when not using onset snapping).
+  static void snap(
+    List<dynamic> fragments,
+    Float64List audio,
+    int sampleRate, {
+    int snapOffsetMs = 0,
+  }) {
     const double windowSec = 0.25; // Look +/- 250ms
     final int windowSamples = (windowSec * sampleRate).round();
 
@@ -17,8 +24,7 @@ class BoundarySnapper {
       noiseFloor += audio[i].abs();
     }
     noiseFloor = (noiseFloor / noiseSamples) * 1.5; // 1.5x average noise
-
-    for (final frag in fragments) {
+    for (final (i, frag) in fragments.indexed) {
       // Skip fragments whose timings were user-verified — don't move them.
       if (frag.isPinned) continue;
 
@@ -49,11 +55,20 @@ class BoundarySnapper {
 
       // Only apply if it makes sense (don't snap wildly far)
       if ((bestIndex - originalStartIndex).abs() < windowSamples) {
+        final double offsetSec = snapOffsetMs / 1000.0;
+        double startSec = (bestIndex / sampleRate) - offsetSec;
+        if (startSec < 0) startSec = 0;
         frag.setRealTiming(
-            start: bestIndex / sampleRate,
+            start: startSec,
             end: frag
                 .realEnd // Leave end alone, or apply similar logic backwards
             );
+        if (i > 0) {
+          final prev = fragments[i - 1];
+          if (!prev.isPinned) {
+            prev.setRealTiming(start: prev.realStart, end: startSec);
+          }
+        }
       }
     }
   }

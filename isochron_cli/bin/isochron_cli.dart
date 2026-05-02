@@ -4,6 +4,7 @@ import 'package:args/args.dart';
 import 'package:isochron_cli/src/core/isochron_processor.dart';
 import 'package:isochron_cli/src/core/drivers.dart';
 import 'package:isochron_cli/src/platform/mac_drivers.dart';
+import 'package:isochron_cli/src/core/boundary_strategy.dart';
 
 void main(List<String> arguments) async {
   final parser = ArgParser()
@@ -20,6 +21,17 @@ void main(List<String> arguments) async {
             'Path to a JSON file containing known-correct timings for specific fragments. '
             'Keys are fragment indices (0-based strings), values are objects with "start" and "end" in seconds. '
             'Example: {"0":{"start":0.0,"end":1.4},"7":{"start":12.3,"end":15.2}}')
+    ..addOption('snap-mode',
+        allowed: ['onset', 'gap'],
+        help: 'Controls how fragment boundaries are refined. '
+            '"onset" snaps to the start of speech (legacy behaviour). '
+            '"gap" snaps to the middle of the detected silence gap.',
+        defaultsTo: 'onset')
+    ..addOption(
+      'snap-offset',
+      help: 'Milliseconds subtracted from each onset-snapped phrase start '
+          '(snap-mode onset only; default 0).',
+    )
     ..addFlag('verbose',
         abbr: 'v', help: 'Show detailed logs', defaultsTo: false)
     ..addFlag('help',
@@ -39,7 +51,24 @@ void main(List<String> arguments) async {
     final dictPath = results['dict'];
     final pinsPath = results['pins'];
     final outputJsonPath = results['output'];
+    final snapModeRaw = results['snap-mode'] as String? ?? 'onset';
+    final snapOffsetRaw = results['snap-offset'] as String?;
     final verbose = results['verbose'] as bool;
+
+    int snapOffsetMs = 0;
+    if (snapOffsetRaw != null && snapOffsetRaw.trim().isNotEmpty) {
+      final parsed = int.tryParse(snapOffsetRaw.trim());
+      if (parsed == null) {
+        stderr.writeln(
+            'Error: --snap-offset must be a non-negative integer (milliseconds).');
+        exit(1);
+      }
+      if (parsed < 0) {
+        stderr.writeln('Error: --snap-offset must be >= 0.');
+        exit(1);
+      }
+      snapOffsetMs = parsed;
+    }
 
     Map<String, String>? rules;
     Map<int, ({double start, double end})>? pinnedTimings;
@@ -121,6 +150,10 @@ void main(List<String> arguments) async {
       exit(1);
     }
 
+    // Map CLI option to SnapMode enum. Default is conservative: onset.
+    final SnapMode snapMode =
+        snapModeRaw == 'gap' ? SnapMode.gapCenter : SnapMode.onset;
+
     // --- Setup Workspace ---
     final workDir = Directory.systemTemp.createTempSync('isochron_cli_');
     if (verbose) print('Workspace: ${workDir.path}');
@@ -143,6 +176,8 @@ void main(List<String> arguments) async {
             ? (status, pct) =>
                 print('[${(pct * 100).toStringAsFixed(1)}%] $status')
             : null,
+        snapMode: snapMode,
+        snapOffsetMs: snapOffsetMs,
       );
       // ---------------------
 

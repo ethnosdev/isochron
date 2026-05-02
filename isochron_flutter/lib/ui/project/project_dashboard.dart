@@ -276,6 +276,8 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
         generateIds: _project.generateIds,
         generatedIdPrefix: _project.generatedIdPrefix,
         recordingNumber: index + 1,
+        snapMode: _project.snapMode,
+        snapOffsetMs: _project.snapOffset ?? 0,
         onProgress: (status, prog) {
           if (mounted) setState(() => _currentProgress = prog);
         },

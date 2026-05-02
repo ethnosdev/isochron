@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'package:isochron_cli/isochron_cli.dart';
+import 'package:isochron_cli/src/core/boundary_strategy.dart';
 
 class AlignmentService {
   Future<List<Fragment>> runIsochron({
@@ -15,6 +16,8 @@ class AlignmentService {
     String? generatedIdPrefix,
     int recordingNumber = 1,
     required Function(String status, double progress) onProgress,
+    String snapMode = 'onset',
+    int snapOffsetMs = 0,
   }) async {
     final receivePort = ReceivePort();
     String? rulesJson;
@@ -39,6 +42,8 @@ class AlignmentService {
         'generateIds': generateIds,
         'generatedIdPrefix': generatedIdPrefix,
         'recordingNumber': recordingNumber,
+        'snapMode': snapMode,
+        'snapOffsetMs': snapOffsetMs,
       });
 
       await for (final message in receivePort) {
@@ -126,6 +131,12 @@ class AlignmentService {
         };
       }
 
+      final String snapModeRaw = (args['snapMode'] as String?) ?? 'onset';
+      final SnapMode snapMode = snapModeRaw == 'gap'
+          ? SnapMode.gapCenter
+          : SnapMode.onset;
+      final int snapOffsetMs = (args['snapOffsetMs'] as int?) ?? 0;
+
       // 2. Run Alignment on CLEAN text with Native Drivers
       final List<Fragment> rawFragments = await IsochronProcessor.process(
         text: cleanTextForEngine,
@@ -135,6 +146,8 @@ class AlignmentService {
         ttsDriver: ttsDriver, // Injected macOS driver
         transliterationRules: rules,
         pinnedTimings: pinnedTimings,
+        snapMode: snapMode,
+        snapOffsetMs: snapOffsetMs,
         onProgress: (s, p) =>
             sendPort.send({'type': 'progress', 'status': s, 'value': p}),
       );

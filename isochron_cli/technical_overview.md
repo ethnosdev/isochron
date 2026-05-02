@@ -14,8 +14,9 @@
 8. [Step 5 — MFCC Feature Extraction](#step-5--mfcc-feature-extraction)
 9. [Step 6 — DTW Alignment](#step-6--dtw-alignment)
 10. [Step 7 — Time Projection & Boundary Snapping](#step-7--time-projection--boundary-snapping)
-11. [Output Format](#output-format)
-12. [File Reference Summary](#file-reference-summary)
+11. [Snap Modes (Onset vs Gap)](#snap-modes-onset-vs-gap)
+12. [Output Format](#output-format)
+13. [File Reference Summary](#file-reference-summary)
 
 ---
 
@@ -320,6 +321,37 @@ The noise floor is estimated from the first 0.5 seconds of the audio and multipl
 
 ---
 
+## Snap Modes (Onset vs Gap)
+
+Isochron now supports two boundary refinement modes:
+
+- `onset` (default): keeps original behaviour by moving each fragment start toward detected speech onset.
+- `gap`: moves shared boundaries toward the middle of a detected silence gap between neighbouring fragments.
+
+### Where the mode is selected
+
+- **CLI:** `--snap-mode onset|gap` (`bin/isochron_cli.dart`); optional `--snap-offset` (integer **milliseconds**, onset only) subtracts that much from each snapped phrase start after onset detection.
+- **Flutter Studio:** Project Settings -> Snap Mode (`project_settings_dialog.dart`); optional **Snap offset** (ms) stored as `snapOffset` in `project.json` (milliseconds, unlike fragment `start`/`end` which are seconds).
+
+### How `gap` works
+
+**Files:**  
+`isochron_cli/lib/src/core/boundary_strategy.dart`  
+`isochron_cli/lib/src/math/boundary_snapping/boundary_snapping_strategy.dart`  
+`isochron_cli/lib/src/math/boundary_snapping/normalized_peak_bins.dart`
+
+At a high level:
+
+1. Convert raw audio into small normalized peak bins (10 ms each).
+2. Detect runs of low-energy bins (silence regions).
+3. For each boundary between fragment `i` and `i+1`, find the most relevant silence run near that seam.
+4. Set the shared boundary near the center of that silence run.
+5. Respect pinned fragments: pinned sides stay fixed; only unpinned sides move.
+
+This mode is often cleaner when adjacent fragments should meet in the middle of natural pauses rather than at speech onsets.
+
+---
+
 ## Output Format
 
 The final JSON output contains one object per fragment:
@@ -353,4 +385,7 @@ The final JSON output contains one object per fragment:
 | `lib/src/math/vector_utils.dart` | `euclideanDistance` — measures how "different" two MFCC vectors are. |
 | `lib/src/core/time_projector.dart` | Uses the DTW path to convert anchor frame indices → real timestamps for each fragment. |
 | `lib/src/math/boundary_snapper.dart` | Refines start timestamps by detecting energy onsets in the real audio around each projected start time. |
+| `lib/src/core/boundary_strategy.dart` | Defines snap-mode abstractions (`SnapMode`, `BoundarySnapStrategy`) and the default onset strategy adapter. |
+| `lib/src/math/boundary_snapping/boundary_snapping_strategy.dart` | Implements `GapCenterBoundarySnapStrategy` and shared snapping configuration. |
+| `lib/src/math/boundary_snapping/normalized_peak_bins.dart` | Builds normalized peak bins and selects silence runs used by gap-based snapping. |
 | `lib/src/audio/wav_utils.dart` | Calculates the duration of a WAV file from its byte size (assumes 16kHz/mono/16-bit format). |
