@@ -1232,7 +1232,6 @@ class _BatchProcessorView extends StatefulWidget {
   final double progress;
 
   const _BatchProcessorView({
-    super.key,
     required this.pairs,
     required this.isRunning,
     required this.status,
@@ -1368,7 +1367,6 @@ class _RealAssetPool extends StatefulWidget {
   final Function(ProjectAsset) onDelete;
 
   const _RealAssetPool({
-    super.key,
     required this.type,
     required this.pool,
     required this.onDelete,
@@ -1383,8 +1381,9 @@ class _RealAssetPoolState extends State<_RealAssetPool> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.pool.isEmpty)
+    if (widget.pool.isEmpty) {
       return Center(child: Text("No ${widget.type} assets imported."));
+    }
 
     final theme = MacosTheme.of(context);
 

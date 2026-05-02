@@ -56,8 +56,9 @@ class _WaveformViewState extends State<WaveformView> {
   void _centerOnTime(double anchorTime) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!widget.scrollController.hasClients ||
-          widget.state.audioDuration.inMilliseconds == 0)
+          widget.state.audioDuration.inMilliseconds == 0) {
         return;
+      }
 
       final viewportWidth = widget.scrollController.position.viewportDimension;
       final totalDuration = widget.state.audioDuration.inMilliseconds / 1000.0;
