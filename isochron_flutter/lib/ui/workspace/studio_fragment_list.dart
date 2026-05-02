@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart'; // Needed for ListView/ScrollController
 import 'package:macos_ui/macos_ui.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 
@@ -127,15 +126,18 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
             final isSelected = widget.selectedIndex == i;
 
             // macOS selection styling:
+            final macBlue = CupertinoColors.systemBlue.resolveFrom(context);
             final bgColor = isSelected
-                ? theme.primaryColor
-                : Colors.transparent;
-            final textColor = isSelected
-                ? CupertinoColors.white
-                : theme.typography.body.color;
-            final subTextColor = isSelected
-                ? CupertinoColors.white.withValues(alpha: 0.8)
-                : CupertinoColors.systemGrey;
+                ? macBlue.withValues(alpha: 0.15)
+                : CupertinoColors.transparent;
+
+            // Text stays its normal color regardless of selection
+            final textColor = theme.typography.body.color;
+            final subTextColor = CupertinoColors.systemGrey;
+
+            // Badges stay a consistent soft blue
+            final badgeBgColor = macBlue.withValues(alpha: 0.15);
+            final badgeTextColor = macBlue;
 
             return GestureDetector(
               onTap: () {
@@ -164,17 +166,13 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                             Icon(
                               CupertinoIcons.speaker_2_fill,
                               size: 14,
-                              color: isSelected
-                                  ? CupertinoColors.white
-                                  : theme.primaryColor,
+                              color: macBlue,
                             )
                           else if (f.isPinned)
                             Icon(
                               CupertinoIcons.lock_fill,
                               size: 12,
-                              color: isSelected
-                                  ? CupertinoColors.white
-                                  : CupertinoColors.systemYellow,
+                              color: CupertinoColors.systemYellow,
                             )
                           else
                             Text(
@@ -200,22 +198,18 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                               if (f.id != null && f.id!.isNotEmpty) ...[
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                    vertical: 1,
+                                    horizontal: 6,
+                                    vertical: 2,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? CupertinoColors.white.withValues(
-                                            alpha: 0.2,
-                                          )
-                                        : CupertinoColors.systemGrey6,
+                                    color: badgeBgColor,
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
                                     f.id!,
                                     style: TextStyle(
                                       fontSize: 10,
-                                      color: textColor,
+                                      color: badgeTextColor,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -257,7 +251,7 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
 
                     // 3. TIMING / ACTIONS COLUMN
                     SizedBox(
-                      width: 140,
+                      width: 180,
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
@@ -276,9 +270,7 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                             MacosIconButton(
                               icon: Icon(
                                 CupertinoIcons.clear_circled_solid,
-                                color: isSelected
-                                    ? CupertinoColors.white
-                                    : CupertinoColors.destructiveRed,
+                                color: CupertinoColors.destructiveRed,
                                 size: 16,
                               ),
                               onPressed: () => widget.onClear(i),
