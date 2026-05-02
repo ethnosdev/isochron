@@ -1162,87 +1162,112 @@ class _RealAlignmentList extends StatelessWidget {
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
+    final theme = MacosTheme.of(context);
+
+    // Changed from ListView.separated to ListView.builder to remove gaps
+    return ListView.builder(
       itemCount: pairs.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemExtent: 56.0, // Fixed height to match the fragment list
       itemBuilder: (context, i) {
         final pair = pairs[i];
         final bool isReady =
             pair.audioAssetId != null && pair.textAssetId != null;
         final bool isSelected = selectedPair == pair;
+
+        // Colors change completely based on selection state
+        final bgColor = isSelected
+            ? theme.primaryColor
+            : CupertinoColors.transparent;
+        final textColor = isSelected
+            ? CupertinoColors.white
+            : theme.typography.body.color;
+        final subTextColor = isSelected
+            ? CupertinoColors.white.withValues(alpha: 0.8)
+            : CupertinoColors.destructiveRed;
+        final iconColor = isSelected
+            ? CupertinoColors.white
+            : CupertinoColors.systemGrey;
+        final trashColor = isSelected
+            ? CupertinoColors.white
+            : CupertinoColors.destructiveRed;
+
         return GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: () => onSelect(pair),
           onDoubleTap: () {
             if (isReady) onOpenPair(pair);
           },
           child: Container(
-            padding: const EdgeInsets.all(12),
+            height: 56.0,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: isSelected
-                  ? MacosTheme.of(context).primaryColor.withValues(alpha: 0.1)
-                  : MacosTheme.of(context).canvasColor,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: isSelected
-                    ? MacosTheme.of(context).primaryColor
-                    : CupertinoColors.systemGrey4,
-                width: isSelected ? 2.0 : 1.0,
-              ),
+              color: bgColor,
+              // Flat bottom border just like the editor list
+              border: Border(bottom: BorderSide(color: theme.dividerColor)),
             ),
             child: Row(
               children: [
-                MacosIcon(
-                  CupertinoIcons.link,
-                  color: isSelected
-                      ? MacosTheme.of(context).primaryColor
-                      : CupertinoColors.systemGrey,
-                ),
+                MacosIcon(CupertinoIcons.link, color: iconColor),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         pair.id,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
                       ),
                       if (!isReady)
                         Text(
                           "Missing Audio or Text. Select in Inspector.",
-                          style: MacosTheme.of(context).typography.footnote
-                              .copyWith(color: CupertinoColors.destructiveRed),
+                          style: theme.typography.footnote.copyWith(
+                            color: subTextColor,
+                          ),
                         ),
                     ],
                   ),
                 ),
+                // Status Badge
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: pair.status == AlignmentStatus.reviewed
-                        ? CupertinoColors.activeGreen.withValues(alpha: 0.2)
-                        : CupertinoColors.systemYellow.withValues(alpha: 0.2),
+                    color: isSelected
+                        ? CupertinoColors.white.withValues(
+                            alpha: 0.2,
+                          ) // White bg when selected
+                        : (pair.status == AlignmentStatus.reviewed
+                              ? CupertinoColors.activeGreen.withValues(
+                                  alpha: 0.2,
+                                )
+                              : CupertinoColors.systemYellow.withValues(
+                                  alpha: 0.2,
+                                )),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     pair.status.name.toUpperCase(),
                     style: TextStyle(
                       fontSize: 11,
-                      color: pair.status == AlignmentStatus.reviewed
-                          ? CupertinoColors.activeGreen
-                          : CupertinoColors.systemYellow,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected
+                          ? CupertinoColors
+                                .white // White text when selected
+                          : (pair.status == AlignmentStatus.reviewed
+                                ? CupertinoColors.activeGreen
+                                : CupertinoColors.systemYellow),
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 MacosIconButton(
-                  icon: const MacosIcon(
-                    CupertinoIcons.trash,
-                    color: CupertinoColors.destructiveRed,
-                  ),
+                  icon: MacosIcon(CupertinoIcons.trash, color: trashColor),
                   onPressed: () => onDelete(pair),
                 ),
               ],
