@@ -25,7 +25,7 @@ class WorkspaceScreen extends StatefulWidget {
 
 class _WorkspaceScreenState extends State<WorkspaceScreen> {
   int _sidebarIndex = 1;
-  bool _showInspector = true;
+  bool _isSidebarCollapsed = false;
 
   Project? _project;
   AlignmentPair? _activePair;
@@ -522,11 +522,28 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             },
           ),
           const ToolBarSpacer(),
-          ToolBarIconButton(
-            label: 'Toggle Inspector',
-            icon: const MacosIcon(CupertinoIcons.sidebar_right),
-            showLabel: false,
-            onPressed: () => setState(() => _showInspector = !_showInspector),
+          CustomToolbarItem(
+            inToolbarBuilder: (context) => MacosTooltip(
+              message: 'Toggle Sidebar',
+              useMousePosition: false,
+              child: MacosIconButton(
+                icon: const MacosIcon(CupertinoIcons.sidebar_left),
+                onPressed: () =>
+                    setState(() => _isSidebarCollapsed = !_isSidebarCollapsed),
+              ),
+            ),
+          ),
+
+          CustomToolbarItem(
+            inToolbarBuilder: (context) => MacosTooltip(
+              message: 'Toggle Inspector',
+              useMousePosition: false,
+              child: MacosIconButton(
+                icon: const MacosIcon(CupertinoIcons.sidebar_right),
+                onPressed: () =>
+                    MacosWindowScope.of(context).toggleEndSidebar(),
+              ),
+            ),
           ),
         ],
       );
@@ -614,28 +631,36 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     return ToolBar(
       title: Text(title),
       titleWidth: 200.0,
-      leading: MacosTooltip(
-        message: 'Toggle Sidebar',
-        useMousePosition: false,
-        child: MacosIconButton(
-          icon: const MacosIcon(CupertinoIcons.sidebar_left),
-          onPressed: () => MacosWindowScope.of(context).toggleSidebar(),
-        ),
-      ),
       actions: [
         ...actions,
         const ToolBarSpacer(),
-        ToolBarIconButton(
-          label: 'Toggle Inspector',
-          icon: const MacosIcon(CupertinoIcons.sidebar_right),
-          showLabel: false,
-          onPressed: () => setState(() => _showInspector = !_showInspector),
+        CustomToolbarItem(
+          inToolbarBuilder: (context) => MacosTooltip(
+            message: 'Toggle Sidebar',
+            useMousePosition: false,
+            child: MacosIconButton(
+              icon: const MacosIcon(CupertinoIcons.sidebar_left),
+              onPressed: () =>
+                  setState(() => _isSidebarCollapsed = !_isSidebarCollapsed),
+            ),
+          ),
+        ),
+
+        CustomToolbarItem(
+          inToolbarBuilder: (context) => MacosTooltip(
+            message: 'Toggle Inspector',
+            useMousePosition: false,
+            child: MacosIconButton(
+              icon: const MacosIcon(CupertinoIcons.sidebar_right),
+              onPressed: () => MacosWindowScope.of(context).toggleEndSidebar(),
+            ),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildCenterPane() {
+  Widget _buildCenterPane(BuildContext context) {
     if (_activePair != null) {
       return StudioEditor(homeManager: _homeManager);
     }
@@ -651,13 +676,15 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       case 1:
         return _RealAlignmentList(
           pairs: _project!.alignments,
-          selectedPair: _selectedPair, // <-- Pass the selected pair
+          selectedPair: _selectedPair,
           onSelect: (pair) {
             setState(() {
               _selectedPair = pair;
-              _showInspector =
-                  true; // Auto-open inspector when a pair is clicked
             });
+            // Auto-open inspector if it's currently hidden
+            if (!MacosWindowScope.of(context).isEndSidebarShown) {
+              MacosWindowScope.of(context).toggleEndSidebar();
+            }
           },
           onOpenPair: (pair) async {
             setState(() => _activePair = pair);
@@ -752,27 +779,34 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     return MacosWindow(
       key: const ValueKey('main_workspace_window'),
       sidebar: Sidebar(
-        minWidth: 200,
+        minWidth: _isSidebarCollapsed ? 90 : 200,
+        startWidth: _isSidebarCollapsed ? 90 : 200,
+        maxWidth: _isSidebarCollapsed ? 90 : 300,
         top: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
           child: Row(
+            mainAxisAlignment: _isSidebarCollapsed
+                ? MainAxisAlignment.center
+                : MainAxisAlignment.start,
             children: [
               const MacosIcon(
                 CupertinoIcons.folder_solid,
                 color: CupertinoColors.activeBlue,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  _project!.name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
+              if (!_isSidebarCollapsed) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _project!.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -781,6 +815,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             currentIndex: _sidebarIndex,
             onChanged: (i) async {
               if (i == _sidebarIndex) return;
+
               if (await _requestCloseEditor()) {
                 setState(() {
                   _sidebarIndex = i;
@@ -790,26 +825,75 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
               }
             },
             scrollController: scrollController,
-            items: const [
+            items: [
               SidebarItem(
-                leading: MacosIcon(CupertinoIcons.rectangle_grid_1x2),
-                label: Text('Batch Processor'),
+                leading: _isSidebarCollapsed
+                    ? null
+                    : const MacosIcon(CupertinoIcons.rectangle_grid_1x2),
+                label: _isSidebarCollapsed
+                    ? Container(
+                        width: double.infinity,
+                        alignment: Alignment.center,
+                        child: const MacosIcon(
+                          CupertinoIcons.rectangle_grid_1x2,
+                          size: 16,
+                        ),
+                      )
+                    : const Text('Batch Processor'),
               ),
               SidebarItem(
-                leading: MacosIcon(CupertinoIcons.waveform_path),
-                label: Text('Alignments'),
+                leading: _isSidebarCollapsed
+                    ? null
+                    : const MacosIcon(CupertinoIcons.waveform_path),
+                label: _isSidebarCollapsed
+                    ? Container(
+                        width: double.infinity,
+                        alignment: Alignment.center,
+                        child: const MacosIcon(
+                          CupertinoIcons.waveform_path,
+                          size: 16,
+                        ),
+                      )
+                    : const Text('Alignments'),
               ),
               SidebarItem(
-                leading: MacosIcon(CupertinoIcons.folder),
-                label: Text('Audio Pool'),
+                leading: _isSidebarCollapsed
+                    ? null
+                    : const MacosIcon(CupertinoIcons.folder),
+                label: _isSidebarCollapsed
+                    ? Container(
+                        width: double.infinity,
+                        alignment: Alignment.center,
+                        child: const MacosIcon(CupertinoIcons.folder, size: 16),
+                      )
+                    : const Text('Audio Pool'),
               ),
               SidebarItem(
-                leading: MacosIcon(CupertinoIcons.doc_text),
-                label: Text('Text Pool'),
+                leading: _isSidebarCollapsed
+                    ? null
+                    : const MacosIcon(CupertinoIcons.doc_text),
+                label: _isSidebarCollapsed
+                    ? Container(
+                        width: double.infinity,
+                        alignment: Alignment.center,
+                        child: const MacosIcon(
+                          CupertinoIcons.doc_text,
+                          size: 16,
+                        ),
+                      )
+                    : const Text('Text Pool'),
               ),
               SidebarItem(
-                leading: MacosIcon(CupertinoIcons.book),
-                label: Text('Dictionaries'),
+                leading: _isSidebarCollapsed
+                    ? null
+                    : const MacosIcon(CupertinoIcons.book),
+                label: _isSidebarCollapsed
+                    ? Container(
+                        width: double.infinity,
+                        alignment: Alignment.center,
+                        child: const MacosIcon(CupertinoIcons.book, size: 16),
+                      )
+                    : const Text('Dictionaries'),
               ),
             ],
           );
@@ -819,7 +903,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         startWidth: 260,
         minWidth: 200,
         maxWidth: 300,
-        shownByDefault: _showInspector,
         builder: (context, scrollController) {
           return InspectorPane(
             project: _project!,
@@ -835,7 +918,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         toolBar: _buildToolBar(context),
         children: [
           ContentArea(
-            builder: (context, scrollController) => _buildCenterPane(),
+            builder: (context, scrollController) => _buildCenterPane(context),
           ),
         ],
       ),
@@ -939,22 +1022,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
               ),
           ],
         ),
-        if (_project != null)
-          PlatformMenu(
-            label: 'View',
-            menus: [
-              PlatformMenuItem(
-                label: 'Toggle Inspector',
-                shortcut: const SingleActivator(
-                  LogicalKeyboardKey.keyI,
-                  meta: true,
-                  alt: true,
-                ),
-                onSelected: () =>
-                    setState(() => _showInspector = !_showInspector),
-              ),
-            ],
-          ),
       ],
       child: activeScreen,
     );
