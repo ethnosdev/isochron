@@ -58,7 +58,7 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
   int _getActiveIndex(List<Fragment> frags, Duration pos) {
     final ms = pos.inMilliseconds;
     return frags.indexWhere(
-      (f) => ms >= (f.realStart * 1000) && ms <= (f.realEnd * 1000),
+      (f) => ms >= (f.realStart * 1000) && ms < (f.realEnd * 1000),
     );
   }
 
@@ -121,7 +121,7 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
             final isPlaying =
                 hasTime &&
                 currentPos.inMilliseconds >= (f.realStart * 1000) &&
-                currentPos.inMilliseconds <= (f.realEnd * 1000);
+                currentPos.inMilliseconds < (f.realEnd * 1000);
 
             final isSelected = widget.selectedIndex == i;
 
