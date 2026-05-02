@@ -92,6 +92,18 @@ class _StudioEditorState extends State<StudioEditor> {
         // Save (Cmd + S)
         const SingleActivator(LogicalKeyboardKey.keyS, meta: true): () =>
             widget.homeManager.saveProject(),
+
+        // Control + Up/Down to Zoom
+        const SingleActivator(LogicalKeyboardKey.arrowUp, control: true): () =>
+            widget.homeManager.setZoom(
+              widget.homeManager.value.zoomLevel * 1.5,
+            ),
+        const SingleActivator(
+          LogicalKeyboardKey.arrowDown,
+          control: true,
+        ): () => widget.homeManager.setZoom(
+          widget.homeManager.value.zoomLevel / 1.5,
+        ),
       },
       child: Focus(
         autofocus:
@@ -134,6 +146,7 @@ class _StudioEditorState extends State<StudioEditor> {
                     ),
                   ),
                   child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       MacosIconButton(
                         icon: const MacosIcon(CupertinoIcons.backward_end),
@@ -154,18 +167,18 @@ class _StudioEditorState extends State<StudioEditor> {
                         icon: const MacosIcon(CupertinoIcons.forward_end),
                         onPressed: widget.homeManager.skipToNext,
                       ),
-                      const Spacer(),
-                      const MacosIcon(CupertinoIcons.zoom_out, size: 14),
-                      SizedBox(
-                        width: 150,
-                        child: MacosSlider(
-                          value: state.zoomLevel.clamp(1.0, 20.0),
-                          min: 1.0,
-                          max: 20.0,
-                          onChanged: widget.homeManager.setZoom,
-                        ),
-                      ),
-                      const MacosIcon(CupertinoIcons.zoom_in, size: 14),
+                      // const Spacer(),
+                      // const MacosIcon(CupertinoIcons.zoom_out, size: 14),
+                      // SizedBox(
+                      //   width: 150,
+                      //   child: MacosSlider(
+                      //     value: state.zoomLevel.clamp(1.0, 20.0),
+                      //     min: 1.0,
+                      //     max: 20.0,
+                      //     onChanged: widget.homeManager.setZoom,
+                      //   ),
+                      // ),
+                      // const MacosIcon(CupertinoIcons.zoom_in, size: 14),
                     ],
                   ),
                 ),
