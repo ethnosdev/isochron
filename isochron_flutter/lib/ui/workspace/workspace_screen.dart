@@ -812,6 +812,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         ),
         builder: (context, scrollController) {
           return SidebarItems(
+            selectedColor: CupertinoColors.systemBlue
+                .resolveFrom(context)
+                .withValues(alpha: 0.15),
             currentIndex: _sidebarIndex,
             onChanged: (i) async {
               if (i == _sidebarIndex) return;
@@ -1032,13 +1035,14 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 // UI COMPONENTS
 // -----------------------------------------------------------------------------
 
-class _BatchProcessorView extends StatelessWidget {
+class _BatchProcessorView extends StatefulWidget {
   final List<AlignmentPair> pairs;
   final bool isRunning;
   final String status;
   final double progress;
 
   const _BatchProcessorView({
+    super.key,
     required this.pairs,
     required this.isRunning,
     required this.status,
@@ -1046,72 +1050,104 @@ class _BatchProcessorView extends StatelessWidget {
   });
 
   @override
+  State<_BatchProcessorView> createState() => _BatchProcessorViewState();
+}
+
+class _BatchProcessorViewState extends State<_BatchProcessorView> {
+  AlignmentPair? _selectedPair;
+
+  @override
   Widget build(BuildContext context) {
+    final theme = MacosTheme.of(context);
+
     return Column(
       children: [
-        if (isRunning) ...[
+        if (widget.isRunning) ...[
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               children: [
-                Text(status, style: MacosTheme.of(context).typography.headline),
+                Text(widget.status, style: theme.typography.headline),
                 const SizedBox(height: 8),
-                ProgressBar(value: progress * 100),
+                ProgressBar(value: widget.progress * 100),
               ],
             ),
           ),
-          Container(height: 1, color: MacosTheme.of(context).dividerColor),
+          Container(height: 1, color: theme.dividerColor),
         ],
         Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: pairs.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 8),
+          child: ListView.builder(
+            itemCount: widget.pairs.length,
+            itemExtent: 56.0,
             itemBuilder: (context, i) {
-              final pair = pairs[i];
-              return Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: MacosTheme.of(context).canvasColor,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: CupertinoColors.systemGrey4),
-                ),
-                child: Row(
-                  children: [
-                    if (pair.status == AlignmentStatus.processing)
-                      const ProgressCircle()
-                    else
-                      const MacosIcon(
-                        CupertinoIcons.link,
-                        color: CupertinoColors.systemGrey,
-                      ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        pair.id,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
+              final pair = widget.pairs[i];
+              final isSelected = _selectedPair == pair;
+
+              final macBlue = CupertinoColors.systemBlue.resolveFrom(context);
+              final bgColor = isSelected
+                  ? macBlue.withValues(alpha: 0.15)
+                  : CupertinoColors.transparent;
+              final textColor = theme.typography.body.color;
+              final iconColor = isSelected
+                  ? macBlue
+                  : CupertinoColors.systemGrey;
+
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _selectedPair = pair),
+                child: Container(
+                  height: 56.0,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: bgColor,
+                    border: Border(
+                      bottom: BorderSide(color: theme.dividerColor),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _getStatusColor(
-                          pair.status,
-                        ).withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        pair.status.name.toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: _getStatusColor(pair.status),
+                  ),
+                  child: Row(
+                    children: [
+                      if (pair.status == AlignmentStatus.processing)
+                        const ProgressCircle()
+                      else
+                        MacosIcon(CupertinoIcons.link, color: iconColor),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          pair.id,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: textColor,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ),
-                  ],
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? macBlue.withValues(alpha: 0.15)
+                              : _getStatusColor(
+                                  pair.status,
+                                ).withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          pair.status.name.toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: isSelected
+                                ? macBlue
+                                : _getStatusColor(pair.status),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -1136,67 +1172,106 @@ class _BatchProcessorView extends StatelessWidget {
   }
 }
 
-class _RealAssetPool extends StatelessWidget {
+class _RealAssetPool extends StatefulWidget {
   final String type;
   final List<ProjectAsset> pool;
   final Function(ProjectAsset) onDelete;
 
   const _RealAssetPool({
+    super.key,
     required this.type,
     required this.pool,
     required this.onDelete,
   });
 
   @override
-  Widget build(BuildContext context) {
-    if (pool.isEmpty) return Center(child: Text("No $type assets imported."));
+  State<_RealAssetPool> createState() => _RealAssetPoolState();
+}
 
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: pool.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
+class _RealAssetPoolState extends State<_RealAssetPool> {
+  ProjectAsset? _selectedAsset;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.pool.isEmpty)
+      return Center(child: Text("No ${widget.type} assets imported."));
+
+    final theme = MacosTheme.of(context);
+
+    return ListView.builder(
+      itemCount: widget.pool.length,
+      itemExtent: 64.0, // Slightly taller to comfortably fit the file path
       itemBuilder: (context, i) {
-        final asset = pool[i];
-        return Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: MacosTheme.of(context).canvasColor,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: CupertinoColors.systemGrey4),
-          ),
-          child: Row(
-            children: [
-              MacosIcon(
-                type == "Audio"
-                    ? CupertinoIcons.waveform
-                    : CupertinoIcons.doc_text,
-                color: CupertinoColors.systemGrey,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      asset.filename,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      asset.path,
-                      style: MacosTheme.of(context).typography.footnote
-                          .copyWith(color: CupertinoColors.systemGrey),
-                    ),
-                  ],
+        final asset = widget.pool[i];
+        final isSelected = _selectedAsset == asset;
+
+        final macBlue = CupertinoColors.systemBlue.resolveFrom(context);
+        final bgColor = isSelected
+            ? macBlue.withValues(alpha: 0.15)
+            : CupertinoColors.transparent;
+        final textColor = theme.typography.body.color;
+        final iconColor = isSelected ? macBlue : CupertinoColors.systemGrey;
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => setState(() => _selectedAsset = asset),
+          child: Container(
+            height: 64.0,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: bgColor,
+              border: Border(bottom: BorderSide(color: theme.dividerColor)),
+            ),
+            child: Row(
+              children: [
+                MacosIcon(
+                  widget.type == "Audio"
+                      ? CupertinoIcons.waveform
+                      : (widget.type == "Text"
+                            ? CupertinoIcons.doc_text
+                            : CupertinoIcons.book),
+                  color: iconColor,
                 ),
-              ),
-              MacosIconButton(
-                icon: const MacosIcon(
-                  CupertinoIcons.trash,
-                  color: CupertinoColors.destructiveRed,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        asset.filename,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        asset.path,
+                        style: theme.typography.footnote.copyWith(
+                          color: CupertinoColors.systemGrey,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
-                onPressed: () => onDelete(asset),
-              ),
-            ],
+                MacosIconButton(
+                  icon: const MacosIcon(
+                    CupertinoIcons.trash,
+                    color: CupertinoColors.destructiveRed,
+                  ),
+                  onPressed: () {
+                    if (_selectedAsset == asset) {
+                      setState(() => _selectedAsset = null);
+                    }
+                    widget.onDelete(asset);
+                  },
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -1241,22 +1316,12 @@ class _RealAlignmentList extends StatelessWidget {
             pair.audioAssetId != null && pair.textAssetId != null;
         final bool isSelected = selectedPair == pair;
 
-        // Colors change completely based on selection state
+        final macBlue = CupertinoColors.systemBlue.resolveFrom(context);
         final bgColor = isSelected
-            ? theme.primaryColor
+            ? macBlue.withValues(alpha: 0.15)
             : CupertinoColors.transparent;
-        final textColor = isSelected
-            ? CupertinoColors.white
-            : theme.typography.body.color;
-        final subTextColor = isSelected
-            ? CupertinoColors.white.withValues(alpha: 0.8)
-            : CupertinoColors.destructiveRed;
-        final iconColor = isSelected
-            ? CupertinoColors.white
-            : CupertinoColors.systemGrey;
-        final trashColor = isSelected
-            ? CupertinoColors.white
-            : CupertinoColors.destructiveRed;
+        final textColor = theme.typography.body.color;
+        final iconColor = isSelected ? macBlue : CupertinoColors.systemGrey;
 
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -1269,7 +1334,6 @@ class _RealAlignmentList extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
               color: bgColor,
-              // Flat bottom border just like the editor list
               border: Border(bottom: BorderSide(color: theme.dividerColor)),
             ),
             child: Row(
@@ -1292,23 +1356,21 @@ class _RealAlignmentList extends StatelessWidget {
                         Text(
                           "Missing Audio or Text. Select in Inspector.",
                           style: theme.typography.footnote.copyWith(
-                            color: subTextColor,
+                            color: CupertinoColors.destructiveRed,
                           ),
                         ),
                     ],
                   ),
                 ),
-                // Status Badge
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
+                    // Match pill background to selection state
                     color: isSelected
-                        ? CupertinoColors.white.withValues(
-                            alpha: 0.2,
-                          ) // White bg when selected
+                        ? macBlue.withValues(alpha: 0.15)
                         : (pair.status == AlignmentStatus.reviewed
                               ? CupertinoColors.activeGreen.withValues(
                                   alpha: 0.2,
@@ -1323,9 +1385,9 @@ class _RealAlignmentList extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
+                      // Match pill text to selection state
                       color: isSelected
-                          ? CupertinoColors
-                                .white // White text when selected
+                          ? macBlue
                           : (pair.status == AlignmentStatus.reviewed
                                 ? CupertinoColors.activeGreen
                                 : CupertinoColors.systemYellow),
@@ -1334,7 +1396,10 @@ class _RealAlignmentList extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 MacosIconButton(
-                  icon: MacosIcon(CupertinoIcons.trash, color: trashColor),
+                  icon: const MacosIcon(
+                    CupertinoIcons.trash,
+                    color: CupertinoColors.destructiveRed,
+                  ),
                   onPressed: () => onDelete(pair),
                 ),
               ],
