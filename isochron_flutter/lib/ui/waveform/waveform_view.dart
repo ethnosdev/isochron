@@ -32,10 +32,70 @@ class _WaveformViewState extends State<WaveformView> {
   static const double _hoverThresholdPx = 10.0;
 
   @override
+  void initState() {
+    super.initState();
+    widget.playbackNotifier.addListener(_autoScrollOnPlayback);
+  }
+
+  @override
   void didUpdateWidget(WaveformView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.state.zoomLevel != widget.state.zoomLevel) {
       _maintainCenterOnZoom();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.playbackNotifier.removeListener(_autoScrollOnPlayback);
+    super.dispose();
+  }
+
+  void _autoScrollOnPlayback() {
+    if (!widget.scrollController.hasClients ||
+        widget.state.audioDuration.inMilliseconds == 0) {
+      return;
+    }
+
+    // Only auto-scroll if audio is actually playing
+    if (!widget.state.isPlaying) return;
+
+    final viewportWidth = widget.scrollController.position.viewportDimension;
+    final totalDuration = widget.state.audioDuration.inMilliseconds / 1000.0;
+    final contentWidth = viewportWidth * widget.state.zoomLevel;
+
+    final currentSeconds =
+        widget.playbackNotifier.value.inMilliseconds / 1000.0;
+
+    // Playhead pixel relative strictly to the audio block
+    final playheadContentPixel =
+        (currentSeconds / totalDuration) * contentWidth;
+
+    // TRUE absolute pixel position inside the ScrollView (accounting for the 40px left padding)
+    final absolutePlayhead = playheadContentPixel + _hPadding;
+
+    final currentScroll = widget.scrollController.offset;
+
+    // If the playhead touches the right edge of the visible screen
+    if (absolutePlayhead >= currentScroll + viewportWidth) {
+      widget.scrollController.animateTo(
+        // Scroll exactly to the content pixel. This makes the visual playhead
+        // align perfectly with the 40px left padding boundary on the screen.
+        playheadContentPixel.clamp(
+          0.0,
+          widget.scrollController.position.maxScrollExtent,
+        ),
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    } else if (absolutePlayhead < currentScroll) {
+      // If playhead jumped backwards out of view
+      widget.scrollController.jumpTo(
+        (absolutePlayhead - (viewportWidth * 0.5)).clamp(
+          0.0,
+          widget.scrollController.position.maxScrollExtent,
+        ),
+      );
     }
   }
 

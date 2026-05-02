@@ -191,8 +191,7 @@ class AppManager extends ValueNotifier<AppState> {
     value = value.copyWith(fragments: frags, hasUnsavedChanges: false);
   }
 
-  Future<void> runAlignment(
-    BuildContext context, {
+  Future<void> runAlignment({
     String snapMode = 'onset',
     int snapOffsetMs = 0,
   }) async {
@@ -294,21 +293,7 @@ class AppManager extends ValueNotifier<AppState> {
       );
     } catch (e) {
       value = value.copyWith(isProcessing: false, statusMessage: "Error: $e");
-      if (context.mounted) {
-        showMacosAlertDialog(
-          context: context,
-          builder: (_) => MacosAlertDialog(
-            appIcon: const MacosIcon(CupertinoIcons.exclamationmark_triangle),
-            title: const Text("Alignment Error"),
-            message: Text(e.toString()),
-            primaryButton: PushButton(
-              controlSize: ControlSize.large,
-              onPressed: () => Navigator.pop(context),
-              child: const Text("OK"),
-            ),
-          ),
-        );
-      }
+      throw Exception(e.toString());
     } finally {
       if (tempCleanTextFile != null && await tempCleanTextFile.exists()) {
         await tempCleanTextFile.delete();

@@ -470,11 +470,31 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             label: 'Auto-Align',
             icon: const MacosIcon(CupertinoIcons.wand_rays),
             showLabel: true,
-            onPressed: () => _homeManager.runAlignment(
-              context,
-              snapMode: _project!.snapMode,
-              snapOffsetMs: _project!.snapOffset ?? 0,
-            ),
+            onPressed: () async {
+              try {
+                await _homeManager.runAlignment(
+                  snapMode: _project!.snapMode,
+                  snapOffsetMs: _project!.snapOffset ?? 0,
+                );
+              } catch (e) {
+                if (context.mounted) {
+                  showCupertinoDialog(
+                    context: context,
+                    builder: (_) => CupertinoAlertDialog(
+                      title: const Text("Alignment Error"),
+                      content: Text(e.toString()),
+                      actions: [
+                        CupertinoDialogAction(
+                          isDefaultAction: true,
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text("OK"),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+              }
+            },
           ),
           const ToolBarSpacer(),
           ToolBarIconButton(
