@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:isochron_flutter/services/alignment_service.dart';
+import 'package:isochron_flutter/utils/id_extraction.dart';
 import 'package:isochron_flutter/ui/app_manager.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:macos_ui/macos_ui.dart';
@@ -436,10 +437,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           final cleanLines = <String>[];
           for (var line in lines) {
             if (line.trim().isEmpty) continue;
-            final parts = line.trim().split(' ');
-            if (parts.length > 1) {
-              extractedIds.add(parts.first);
-              cleanLines.add(parts.sublist(1).join(' '));
+            final parsed = extractIdFromLine(line);
+            if (parsed.hasId) {
+              extractedIds.add(parsed.id);
+              cleanLines.add(parsed.content);
             } else {
               extractedIds.add("");
               cleanLines.add(line);
