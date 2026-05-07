@@ -230,11 +230,9 @@ class AppManager extends ValueNotifier<AppState> {
           final parsed = extractIdFromLine(line);
           if (parsed.hasId) {
             extractedIds.add(parsed.id);
-            debugPrint('[ALIGN] Found ID: ${parsed.id}');
             cleanLines.add(parsed.content);
           } else {
             extractedIds.add("");
-            debugPrint('[ALIGN] No ID found for line: $line');
             cleanLines.add(line);
           }
         }

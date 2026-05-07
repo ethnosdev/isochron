@@ -15,6 +15,7 @@ The core engine is 100% Dart, based on open-domain DSP theory, and completely fr
 * **Pro Timeline Gestures:** Navigate the timeline exactly like Logic Pro or Final Cut. Two-finger swipe to pan seamlessly, and two-finger vertical swipe (or pinch) for buttery-smooth exponential zooming anchored right to your mouse pointer.
 * **Global Transliteration:** Provide a JSON map of non-Latin to Latin characters to instantly apply transliteration rules across your entire project.
 * **Headless Batch Processor:** Queue up dozens of alignments, hit "Run All", and export everything into a unified CSV database when finished.
+* **Phrase Timing Export:** Export phrase timing text files per alignment from batch tiles or the editor toolbar when the pair is finalized.
 
 ---
 
@@ -33,9 +34,20 @@ flutter run -d macos
 Isochron uses a professional **Asset Pool** architecture. You don't have to manually match files before importing them.
 
 1. **Create a Project:** On the welcome screen, click "Create New Project". Type a name, pick a location (like your Desktop), and Isochron will instantly build the directory structure for you.
-2. **Import Assets:** Use the left sidebar to navigate to the **Audio Pool** and **Text Pool**. Click the `+` icon in the top toolbar to import your `.mp3`/`.wav` and `.txt` files.
+2. **Import Assets:** Use the left sidebar to navigate to the **Audio Pool** and **Text Pool**. Click the `+` icon in the top toolbar to import your `.mp3`/`.wav` and `.txt`/`.phrases` files.
 3. **Auto-Pair:** Navigate to **Alignments** in the sidebar. Click the **Auto-Pair Unlinked** button (the layered wand icon) to instantly create linked pairs from your imported files.
 4. **Align:** Select the **Batch Processor** tab and click "Run All Pending" to process them automatically, OR double-click a single pair to open the manual **Studio Editor**.
+
+### Export Notes
+
+* **Combined CSV Export:** Available from the Batch Processor toolbar. It includes only alignments with status `done` or `reviewed`.
+* **Phrase Timing Export:** Available from alignment-list tiles and in-editor toolbar for a specific alignment.
+  * Enabled only when status is `done` or `reviewed`.
+  * Disabled-state tooltip explains when status is not eligible.
+  * Suggested output name is derived from input text filename as:
+    `<original-base><separator>timing.txt`.
+    * Separator detection supports `-`, `_`, and spaces.
+    * If source uses spaces, output suffix separator is normalized to `-`.
 
 ---
 
