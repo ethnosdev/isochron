@@ -286,7 +286,10 @@ void main() {
     });
 
     test('buildPhraseTiming returns null for non-exportable status', () async {
-      final payload = await ExportService.buildPhraseTiming(project, pendingPair);
+      final payload = await ExportService.buildPhraseTiming(
+        project,
+        pendingPair,
+      );
       expect(payload, isNull);
     });
 
@@ -297,13 +300,16 @@ void main() {
       expect(payload, contains('2.132\t10.657\ts1\n'));
     });
 
-    test('defaultPhraseTimingFilenameForPair uses parsed filename metadata', () {
-      final name = ExportService.defaultPhraseTimingFilenameForPair(
-        project,
-        donePair,
-      );
-      expect(name, 'TH-01-GEN-01-timing.txt');
-    });
+    test(
+      'defaultPhraseTimingFilenameForPair uses parsed filename metadata',
+      () {
+        final name = ExportService.defaultPhraseTimingFilenameForPair(
+          project,
+          donePair,
+        );
+        expect(name, 'TH-01-GEN-01-timing.txt');
+      },
+    );
 
     test('defaultPhraseTimingFilenameForPair falls back on parse failure', () {
       final name = ExportService.defaultPhraseTimingFilenameForPair(
@@ -313,13 +319,16 @@ void main() {
       expect(name, 'BADNAME-timing.txt');
     });
 
-    test('buildCombinedCsv returns empty when no exportable alignments', () async {
-      pendingPair.status = AlignmentStatus.error;
-      donePair.status = AlignmentStatus.pending;
+    test(
+      'buildCombinedCsv returns empty when no exportable alignments',
+      () async {
+        pendingPair.status = AlignmentStatus.error;
+        donePair.status = AlignmentStatus.pending;
 
-      final csv = await ExportService.buildCombinedCsv(project);
-      expect(csv, isEmpty);
-    });
+        final csv = await ExportService.buildCombinedCsv(project);
+        expect(csv, isEmpty);
+      },
+    );
 
     test('buildPhraseTiming still works for done non-.phrase input', () async {
       donePair.textAssetId = 'text_2';
@@ -348,23 +357,26 @@ void main() {
       expect(name, 'grctr_071_MRK_01_read_timing.txt');
     });
 
-    test('default output naming forces .txt extension even for .phrase input', () {
-      final pair = AlignmentPair(
-        id: 'pair_phrase_ext',
-        textAssetId: 'text_5',
-        outputFilename: 'p.json',
-        status: AlignmentStatus.done,
-      );
-      project.textPool.add(
-        ProjectAsset(id: 'text_5', path: '/text/TH-01-GEN-01.phrase'),
-      );
+    test(
+      'default output naming forces .txt extension even for .phrase input',
+      () {
+        final pair = AlignmentPair(
+          id: 'pair_phrase_ext',
+          textAssetId: 'text_5',
+          outputFilename: 'p.json',
+          status: AlignmentStatus.done,
+        );
+        project.textPool.add(
+          ProjectAsset(id: 'text_5', path: '/text/TH-01-GEN-01.phrase'),
+        );
 
-      final name = ExportService.defaultPhraseTimingFilenameForPair(
-        project,
-        pair,
-      );
-      expect(name, 'TH-01-GEN-01-timing.txt');
-    });
+        final name = ExportService.defaultPhraseTimingFilenameForPair(
+          project,
+          pair,
+        );
+        expect(name, 'TH-01-GEN-01-timing.txt');
+      },
+    );
 
     test('default output naming normalizes space separator to dash', () {
       final pair = AlignmentPair(

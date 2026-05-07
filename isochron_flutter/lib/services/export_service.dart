@@ -60,7 +60,10 @@ class ExportService {
   ///
   /// Returns `null` when export is not allowed (status) or when the
   /// alignment JSON has no rows.
-  static Future<String?> buildPhraseTiming(Project project, AlignmentPair pair) async {
+  static Future<String?> buildPhraseTiming(
+    Project project,
+    AlignmentPair pair,
+  ) async {
     if (!canExportPhraseTiming(pair)) return null;
 
     final entries = await _loadAlignmentEntries(project, pair);
@@ -122,7 +125,9 @@ class ExportService {
   ///
   /// Extension is ignored intentionally so both `.txt` and `.phrase` source
   /// files can provide naming hints.
-  static PhraseExportMetadata parsePhraseMetadataFromTextFilename(String? textPath) {
+  static PhraseExportMetadata parsePhraseMetadataFromTextFilename(
+    String? textPath,
+  ) {
     if (textPath == null || textPath.trim().isEmpty) {
       return PhraseExportMetadata.fallback;
     }
@@ -141,7 +146,10 @@ class ExportService {
     final chapterId = parts[chapterIdx].trim();
     final bookCode = parts.sublist(2, chapterIdx).join('-').trim();
 
-    if (languageCode.isEmpty || bookId.isEmpty || bookCode.isEmpty || chapterId.isEmpty) {
+    if (languageCode.isEmpty ||
+        bookId.isEmpty ||
+        bookCode.isEmpty ||
+        chapterId.isEmpty) {
       return PhraseExportMetadata.fallback;
     }
 
@@ -208,7 +216,9 @@ class ExportService {
   }
 
   static String _formatSeconds(dynamic value) {
-    final asNum = value is num ? value.toDouble() : double.tryParse(value.toString()) ?? 0.0;
+    final asNum = value is num
+        ? value.toDouble()
+        : double.tryParse(value.toString()) ?? 0.0;
     return asNum.toStringAsFixed(3).replaceFirst(RegExp(r'\.?0+$'), '');
   }
 
@@ -224,9 +234,7 @@ class ExportService {
     if (dashCount == 0 && underscoreCount == 0 && spaceCount == 0) return '-';
 
     final counts = {'-': dashCount, '_': underscoreCount, ' ': spaceCount};
-    final best = counts.entries.reduce(
-      (a, b) => a.value >= b.value ? a : b,
-    );
+    final best = counts.entries.reduce((a, b) => a.value >= b.value ? a : b);
     return best.key;
   }
 
