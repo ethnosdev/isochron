@@ -15,7 +15,7 @@ The core engine is 100% Dart, based on open-domain DSP theory, and completely fr
 * **Pro Timeline Gestures:** Navigate the timeline exactly like Logic Pro or Final Cut. Two-finger swipe to pan seamlessly, and two-finger vertical swipe (or pinch) for buttery-smooth exponential zooming anchored right to your mouse pointer.
 * **Global Transliteration:** Provide a JSON map of non-Latin to Latin characters to instantly apply transliteration rules across your entire project.
 * **Headless Batch Processor:** Queue up dozens of alignments, hit "Run All", and export everything into a unified CSV database when finished.
-* **Phrase Timing Export:** Export phrase timing text files per alignment from batch tiles or the editor toolbar when the pair is finalized.
+* **Phrase Timing Export:** Export phrase timing text files per alignment from alignment-list tiles or the editor toolbar when the pair is finalized.
 
 ---
 
@@ -34,7 +34,7 @@ flutter run -d macos
 Isochron uses a professional **Asset Pool** architecture. You don't have to manually match files before importing them.
 
 1. **Create a Project:** On the welcome screen, click "Create New Project". Type a name, pick a location (like your Desktop), and Isochron will instantly build the directory structure for you.
-2. **Import Assets:** Use the left sidebar to navigate to the **Audio Pool** and **Text Pool**. Click the `+` icon in the top toolbar to import your `.mp3`/`.wav` and `.txt`/`.phrases` files.
+2. **Import Assets:** Use the left sidebar to navigate to the **Audio Pool** and **Text Pool**. Click the `+` icon in the top toolbar to import your `.mp3`/`.wav` and `.txt`/`.phrase` files.
 3. **Auto-Pair:** Navigate to **Alignments** in the sidebar. Click the **Auto-Pair Unlinked** button (the layered wand icon) to instantly create linked pairs from your imported files.
 4. **Align:** Select the **Batch Processor** tab and click "Run All Pending" to process them automatically, OR double-click a single pair to open the manual **Studio Editor**.
 
@@ -99,6 +99,14 @@ dart run bin/isochron_cli.dart \
   --output result.json
 ```
 
+**Timing Export (same run, same output flag):**
+```bash
+dart run bin/isochron_cli.dart \
+  --text TH-01-GEN-01.txt \
+  --audio recording.mp3 \
+  --output result.txt
+```
+
 **Advanced Usage:**
 ```bash
 dart run bin/isochron_cli.dart \
@@ -110,6 +118,8 @@ dart run bin/isochron_cli.dart \
 ```
 
 ### CLI Options Explained
+* **`--output`:** Single destination path for both JSON and timing exports.
+* **`--format` (`json` or `timing`):** Optional explicit output selector. If omitted, format is inferred from `--output` extension (`.json` => JSON, `.txt` => timing), then defaults to JSON.
 * **`--snap-mode` (`onset` or `gap`):** Boundary refinement mode. `onset` snaps the fragment toward the speech start. `gap` snaps boundaries toward the center of detected silences.
 * **`--snap-offset`:** Milliseconds subtracted from each onset-snapped phrase start (e.g. `250`).
 * **`--pins` (Pinned Timings):** Pass a JSON file of known-correct fragment timings (e.g. `{"0": {"start": 0.0, "end": 1.4}}`). The engine will lock these in and only perform DTW in the spaces *between* your pins.
