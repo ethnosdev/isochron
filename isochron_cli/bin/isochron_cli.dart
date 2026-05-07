@@ -5,6 +5,7 @@ import 'package:isochron_cli/src/core/isochron_processor.dart';
 import 'package:isochron_cli/src/core/drivers.dart';
 import 'package:isochron_cli/src/platform/mac_drivers.dart';
 import 'package:isochron_cli/src/core/boundary_strategy.dart';
+import 'package:isochron_cli/src/core/timing_export.dart';
 
 void main(List<String> arguments) async {
   final parser = ArgParser()
@@ -12,8 +13,11 @@ void main(List<String> arguments) async {
     ..addOption('audio', abbr: 'a', help: 'Path to the input audio file')
     ..addOption('output',
         abbr: 'o',
-        help: 'Path to save the alignment JSON',
-        defaultsTo: 'alignment.json')
+        help: 'Path to save output (JSON or timing text). '
+            'If omitted, derived from --text filename and resolved format.')
+    ..addOption('format',
+        allowed: ['json', 'timing'],
+        help: 'Output format. If omitted, inferred from --output extension.')
     ..addOption('dict',
         help: 'Path to a JSON file containing transliteration rules')
     ..addOption('pins',
@@ -50,7 +54,9 @@ void main(List<String> arguments) async {
     final audioPath = results['audio'];
     final dictPath = results['dict'];
     final pinsPath = results['pins'];
-    final outputJsonPath = results['output'];
+    final outputPath = results['output'] as String?;
+    final requestedFormat = results['format'] as String?;
+
     final snapModeRaw = results['snap-mode'] as String? ?? 'onset';
     final snapOffsetRaw = results['snap-offset'] as String?;
     final verbose = results['verbose'] as bool;
@@ -78,6 +84,16 @@ void main(List<String> arguments) async {
       print(parser.usage);
       exit(1);
     }
+
+    // Centralized in shared core: format precedence, derived defaults from
+    // source text when output is omitted, and extension normalization.
+    final effectiveOutput = TimingExport.resolveEffectiveOutput(
+      explicitOutputPath: outputPath,
+      requestedFormat: requestedFormat,
+      sourceTextPath: textPath,
+    );
+    final effectiveFormat = effectiveOutput.format;
+    final effectiveOutputPath = effectiveOutput.outputPath;
 
     // --- Load Dictionary ---
     if (dictPath != null) {
@@ -186,20 +202,29 @@ void main(List<String> arguments) async {
       }
 
       // --- Output Generation ---
-      final jsonOutput = fragments
-          .map((f) => {
-                'index': f.index,
-                if (f.id != null) 'id': f.id,
-                'text': f.text,
-                'start': double.parse(f.realStart.toStringAsFixed(3)),
-                'end': double.parse(f.realEnd.toStringAsFixed(3)),
-              })
-          .toList();
+      if (effectiveFormat == CliOutputFormat.json) {
+        // Preserve existing JSON schema for downstream compatibility.
+        final jsonOutput = fragments
+            .map((f) => {
+                  'index': f.index,
+                  if (f.id != null) 'id': f.id,
+                  'text': f.text,
+                  'start': double.parse(f.realStart.toStringAsFixed(3)),
+                  'end': double.parse(f.realEnd.toStringAsFixed(3)),
+                })
+            .toList();
 
-      final jsonFile = File(outputJsonPath);
-      await jsonFile.writeAsString(jsonEncode(jsonOutput));
+        final jsonFile = File(effectiveOutputPath);
+        await jsonFile.writeAsString(jsonEncode(jsonOutput));
+      } else {
+        // Timing export reuses shared core so CLI + Flutter stay identical.
+        final metadata = TimingExport.parseMetadataFromSourceFilename(textPath);
+        final payload = TimingExport.generateTimingPayload(fragments, metadata);
+        final textFile = File(effectiveOutputPath);
+        await textFile.writeAsString(payload);
+      }
 
-      print('Success! Saved to: $outputJsonPath');
+      print('Success! Saved to: $effectiveOutputPath');
     } catch (e, stack) {
       stderr.writeln('Critical Error: $e');
       if (verbose) stderr.writeln(stack);

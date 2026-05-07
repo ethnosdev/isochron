@@ -1,29 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:path/path.dart' as p;
-
-class PhraseExportMetadata {
-  final String languageCode;
-  final String bookId;
-  final String bookCode;
-  final String chapterId;
-
-  const PhraseExportMetadata({
-    required this.languageCode,
-    required this.bookId,
-    required this.bookCode,
-    required this.chapterId,
-  });
-
-  static const PhraseExportMetadata fallback = PhraseExportMetadata(
-    languageCode: 'XX',
-    bookId: '00',
-    bookCode: 'BOOK',
-    chapterId: '1',
-  );
-}
 
 class ExportService {
   /// Builds the "Export Combined CSV" payload for the whole project.
@@ -102,22 +82,12 @@ class ExportService {
   /// `\id`, `\c`, `\level phrase`, then `<start> <end> <phraseId>` rows.
   static String generatePhraseTiming(
     List<Map<String, dynamic>> entries,
-    PhraseExportMetadata metadata,
+    TimingExportMetadata metadata,
   ) {
-    final buffer = StringBuffer();
-    buffer.writeln('\\id ${metadata.bookCode}');
-    buffer.writeln('\\c ${metadata.chapterId}');
-    buffer.writeln('\\level phrase');
-
-    for (int i = 0; i < entries.length; i++) {
-      final e = entries[i];
-      final phraseId = _resolvePhraseId(e, i);
-      final start = _formatSeconds(e['start']);
-      final end = _formatSeconds(e['end']);
-      buffer.writeln('$start\t$end\t$phraseId');
-    }
-
-    return buffer.toString();
+    return TimingExport.generateTimingPayload(
+      _entriesToFragments(entries),
+      metadata,
+    );
   }
 
   /// Parses phrase metadata from a source text filename convention:
@@ -125,43 +95,13 @@ class ExportService {
   ///
   /// Extension is ignored intentionally so both `.txt` and `.phrase` source
   /// files can provide naming hints.
-  static PhraseExportMetadata parsePhraseMetadataFromTextFilename(
+  static TimingExportMetadata parsePhraseMetadataFromTextFilename(
     String? textPath,
   ) {
-    if (textPath == null || textPath.trim().isEmpty) {
-      return PhraseExportMetadata.fallback;
-    }
-
-    final base = p.basenameWithoutExtension(textPath);
-    final separator = _detectFilenameSeparator(base);
-    final parts = _splitBySeparator(base, separator);
-    if (parts.length < 4) return PhraseExportMetadata.fallback;
-
-    final languageCode = parts[0].trim();
-    final bookId = parts[1].trim();
-    // Support optional trailing suffix tokens (e.g. "..._01_read") by taking
-    // the rightmost numeric token as chapter id.
-    final chapterIdx = _findChapterTokenIndex(parts);
-    if (chapterIdx <= 2) return PhraseExportMetadata.fallback;
-    final chapterId = parts[chapterIdx].trim();
-    final bookCode = parts.sublist(2, chapterIdx).join('-').trim();
-
-    if (languageCode.isEmpty ||
-        bookId.isEmpty ||
-        bookCode.isEmpty ||
-        chapterId.isEmpty) {
-      return PhraseExportMetadata.fallback;
-    }
-
-    return PhraseExportMetadata(
-      languageCode: languageCode,
-      bookId: bookId,
-      bookCode: bookCode,
-      chapterId: chapterId,
-    );
+    return TimingExport.parseMetadataFromSourceFilename(textPath);
   }
 
-  static String defaultPhraseTimingFilename(PhraseExportMetadata metadata) {
+  static String defaultPhraseTimingFilename(TimingExportMetadata metadata) {
     return '${metadata.languageCode}-${metadata.bookId}-${metadata.bookCode}-${metadata.chapterId}.txt';
   }
 
@@ -172,16 +112,7 @@ class ExportService {
     final textAsset = project.textPool
         .where((a) => a.id == pair.textAssetId)
         .firstOrNull;
-    if (textAsset == null || textAsset.path.trim().isEmpty) {
-      return defaultPhraseTimingFilename(PhraseExportMetadata.fallback);
-    }
-
-    final inputBase = p.basenameWithoutExtension(textAsset.path);
-    final detected = _detectFilenameSeparator(inputBase);
-    final outputSep = detected == ' ' ? '-' : detected;
-
-    // Timing exports are always plain text sidecars.
-    return '$inputBase${outputSep}timing.txt';
+    return TimingExport.defaultTimingFilenameFromSourcePath(textAsset?.path);
   }
 
   static String defaultCsvFilename(String projectName) {
@@ -209,53 +140,9 @@ class ExportService {
     return 'Export unavailable';
   }
 
-  static String _resolvePhraseId(Map<String, dynamic> entry, int index) {
-    final id = entry['id']?.toString().trim();
-    if (id != null && id.isNotEmpty) return id;
-    return '${index + 1}';
-  }
-
-  static String _formatSeconds(dynamic value) {
-    final asNum = value is num
-        ? value.toDouble()
-        : double.tryParse(value.toString()) ?? 0.0;
-    return asNum.toStringAsFixed(3).replaceFirst(RegExp(r'\.?0+$'), '');
-  }
-
   static String _escape(String input) {
     if (input.contains(',')) return '"$input"';
     return input;
-  }
-
-  static String _detectFilenameSeparator(String value) {
-    final dashCount = '-'.allMatches(value).length;
-    final underscoreCount = '_'.allMatches(value).length;
-    final spaceCount = ' '.allMatches(value).length;
-    if (dashCount == 0 && underscoreCount == 0 && spaceCount == 0) return '-';
-
-    final counts = {'-': dashCount, '_': underscoreCount, ' ': spaceCount};
-    final best = counts.entries.reduce((a, b) => a.value >= b.value ? a : b);
-    return best.key;
-  }
-
-  static List<String> _splitBySeparator(String value, String separator) {
-    if (separator == ' ') {
-      return value
-          .trim()
-          .split(RegExp(r'\s+'))
-          .where((p) => p.isNotEmpty)
-          .toList();
-    }
-    return value.split(separator).where((p) => p.isNotEmpty).toList();
-  }
-
-  static int _findChapterTokenIndex(List<String> parts) {
-    for (int i = parts.length - 1; i >= 0; i--) {
-      if (RegExp(r'^\d+$').hasMatch(parts[i].trim())) {
-        return i;
-      }
-    }
-    return -1;
   }
 
   /// Reads per-alignment JSON output persisted by the aligner.
@@ -273,5 +160,22 @@ class ExportService {
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
+  }
+
+  static List<Fragment> _entriesToFragments(
+    List<Map<String, dynamic>> entries,
+  ) {
+    return entries.map((e) {
+      final fragment = Fragment(
+        index: (e['index'] as num?)?.toInt() ?? 0,
+        id: e['id']?.toString(),
+        text: e['text']?.toString() ?? '',
+      );
+      fragment.setRealTiming(
+        start: (e['start'] as num?)?.toDouble() ?? 0.0,
+        end: (e['end'] as num?)?.toDouble() ?? 0.0,
+      );
+      return fragment;
+    }).toList();
   }
 }
