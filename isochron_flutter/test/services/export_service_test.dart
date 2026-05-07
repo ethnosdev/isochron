@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/services/export_service.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 
@@ -73,10 +74,10 @@ void main() {
       final metadata = ExportService.parsePhraseMetadataFromTextFilename(
         '/tmp/not-parseable.txt',
       );
-      expect(metadata.languageCode, PhraseExportMetadata.fallback.languageCode);
-      expect(metadata.bookId, PhraseExportMetadata.fallback.bookId);
-      expect(metadata.bookCode, PhraseExportMetadata.fallback.bookCode);
-      expect(metadata.chapterId, PhraseExportMetadata.fallback.chapterId);
+      expect(metadata.languageCode, TimingExportMetadata.fallback.languageCode);
+      expect(metadata.bookId, TimingExportMetadata.fallback.bookId);
+      expect(metadata.bookCode, TimingExportMetadata.fallback.bookCode);
+      expect(metadata.chapterId, TimingExportMetadata.fallback.chapterId);
     });
 
     test('parses underscore variant with trailing suffix', () {
@@ -129,7 +130,7 @@ void main() {
 
       final phrase = ExportService.generatePhraseTiming(
         entries,
-        PhraseExportMetadata.fallback,
+        TimingExportMetadata.fallback,
       );
 
       expect(phrase, contains('\n2.1\t3.4\t1\n'));
@@ -140,7 +141,7 @@ void main() {
   group('ExportService helpers', () {
     test('builds default filenames', () {
       final phraseName = ExportService.defaultPhraseTimingFilename(
-        const PhraseExportMetadata(
+        const TimingExportMetadata(
           languageCode: 'TH',
           bookId: '01',
           bookCode: 'GEN',
