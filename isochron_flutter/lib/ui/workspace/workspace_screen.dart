@@ -46,6 +46,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   // Tree State
   TreeSelection? _selectedNode;
   final Set<String> _expandedNodes = {};
+  String? _editingNodeId;
 
   // Batch State
   bool _isBatchRunning = false;
@@ -456,7 +457,21 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           isExpanded: _expandedNodes.contains(col.id),
           depth: 0,
           hasChildren: true,
+          isEditing: _editingNodeId == col.id,
+          onDoubleTap: () => setState(() => _editingNodeId = col.id),
+          onEditComplete: (newName) {
+            setState(() {
+              if (newName.trim().isNotEmpty) col.name = newName.trim();
+              _editingNodeId = null;
+            });
+            _project!.save();
+          },
           onTap: () async {
+            // If we are currently editing, clicking stops the edit without expanding/collapsing
+            if (_editingNodeId != null) {
+              setState(() => _editingNodeId = null);
+              return;
+            }
             if (await _requestCloseEditor()) {
               setState(() {
                 if (_expandedNodes.contains(col.id))
@@ -487,10 +502,23 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
               isExpanded: _expandedNodes.contains(track.id),
               depth: 1,
               hasChildren: true,
+              isEditing: _editingNodeId == track.id,
+              onDoubleTap: () => setState(() => _editingNodeId = track.id),
+              onEditComplete: (newName) {
+                setState(() {
+                  if (newName.trim().isNotEmpty) track.name = newName.trim();
+                  _editingNodeId = null;
+                });
+                _project!.save();
+              },
               onTap: () async {
+                if (_editingNodeId != null) {
+                  setState(() => _editingNodeId = null);
+                  return;
+                }
                 if (await _requestCloseEditor()) {
                   setState(() {
-                    _expandedNodes.add(track.id); // Auto-expand track
+                    _expandedNodes.add(track.id);
                     _selectedNode = TreeSelection(
                       type: NodeType.track,
                       collection: col,
@@ -626,11 +654,15 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     required int depth,
     required bool hasChildren,
     required VoidCallback onTap,
+    VoidCallback? onDoubleTap,
+    bool isEditing = false,
+    ValueChanged<String>? onEditComplete,
   }) {
     final theme = MacosTheme.of(context);
     final blue = CupertinoColors.systemBlue.resolveFrom(context);
     return GestureDetector(
       onTap: onTap,
+      onDoubleTap: onDoubleTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
         height: 28,
@@ -662,18 +694,25 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                  color: isSelected
-                      ? CupertinoColors.white
-                      : theme.typography.body.color,
-                ),
-              ),
+              child: isEditing
+                  ? _InlineTextEditor(
+                      initialText: label,
+                      onComplete: onEditComplete!,
+                    )
+                  : Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                        color: isSelected
+                            ? CupertinoColors.white
+                            : theme.typography.body.color,
+                      ),
+                    ),
             ),
           ],
         ),
@@ -1709,6 +1748,73 @@ class _ProjectSettingsModalState extends State<_ProjectSettingsModal> {
           child: const Text("Save"),
         ),
       ],
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// INLINE TREE EDITOR
+// -----------------------------------------------------------------------------
+class _InlineTextEditor extends StatefulWidget {
+  final String initialText;
+  final ValueChanged<String> onComplete;
+
+  const _InlineTextEditor({
+    required this.initialText,
+    required this.onComplete,
+  });
+
+  @override
+  State<_InlineTextEditor> createState() => _InlineTextEditorState();
+}
+
+class _InlineTextEditorState extends State<_InlineTextEditor> {
+  late TextEditingController _controller;
+  late FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialText);
+    _focusNode = FocusNode();
+
+    // Save when focus is lost (clicking elsewhere)
+    _focusNode.addListener(() {
+      if (!_focusNode.hasFocus) {
+        widget.onComplete(_controller.text);
+      }
+    });
+
+    // Auto focus the text field immediately when it appears
+    Future.microtask(() {
+      if (mounted) {
+        _focusNode.requestFocus();
+        // Highlight all text so typing immediately overwrites it
+        _controller.selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: _controller.text.length,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MacosTextField(
+      controller: _controller,
+      focusNode: _focusNode,
+      maxLines: 1,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      style: const TextStyle(fontSize: 13),
+      // Save when hitting Enter
+      onSubmitted: widget.onComplete,
     );
   }
 }
