@@ -52,6 +52,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   String _batchStatus = "";
   double _batchProgress = 0.0;
 
+  // Menu Cache
+  List<PlatformMenuItem>? _cachedMenus;
+  Project? _lastMenuProject;
+  bool? _lastMenuHasUnsaved;
+  NodeType? _lastMenuNodeType;
+
   @override
   void initState() {
     super.initState();
@@ -944,6 +950,150 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   // NATIVE MENU BAR & ROOT BUILD
   // ---------------------------------------------------------------------------
 
+  List<PlatformMenuItem> _buildMenus() {
+    if (_cachedMenus != null &&
+        _lastMenuProject == _project &&
+        _lastMenuHasUnsaved == _hasUnsavedChanges &&
+        _lastMenuNodeType == _selectedNode?.type) {
+      return _cachedMenus!;
+    }
+
+    _lastMenuProject = _project;
+    _lastMenuHasUnsaved = _hasUnsavedChanges;
+    _lastMenuNodeType = _selectedNode?.type;
+
+    _cachedMenus = [
+      PlatformMenu(
+        label: 'Isochron Studio',
+        menus: [
+          const PlatformProvidedMenuItem(
+            type: PlatformProvidedMenuItemType.about,
+          ),
+          if (_project != null)
+            PlatformMenuItem(
+              label: 'Settings...',
+              shortcut: const SingleActivator(
+                LogicalKeyboardKey.comma,
+                meta: true,
+              ),
+              onSelected: () async {
+                if (await _requestCloseEditor()) {
+                  setState(
+                    () =>
+                        _selectedNode = TreeSelection(type: NodeType.settings),
+                  );
+                }
+              },
+            ),
+          const PlatformProvidedMenuItem(
+            type: PlatformProvidedMenuItemType.quit,
+          ),
+        ],
+      ),
+      PlatformMenu(
+        label: 'File',
+        menus: [
+          PlatformMenuItemGroup(
+            members: [
+              PlatformMenuItem(
+                label: 'New Project...',
+                shortcut: const SingleActivator(
+                  LogicalKeyboardKey.keyN,
+                  meta: true,
+                ),
+                onSelected: _createNewProject,
+              ),
+              PlatformMenuItem(
+                label: 'Open Project...',
+                shortcut: const SingleActivator(
+                  LogicalKeyboardKey.keyO,
+                  meta: true,
+                ),
+                onSelected: _openProject,
+              ),
+            ],
+          ),
+          if (_project != null)
+            PlatformMenuItemGroup(
+              members: [
+                PlatformMenuItem(
+                  label: 'Save',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.keyS,
+                    meta: true,
+                  ),
+                  onSelected:
+                      (_selectedNode?.type == NodeType.track &&
+                          !_hasUnsavedChanges)
+                      ? null
+                      : () {
+                          if (_selectedNode?.type == NodeType.track) {
+                            _homeManager.saveProject();
+                          } else {
+                            _project!.save();
+                          }
+                        },
+                ),
+              ],
+            ),
+          if (_project != null)
+            PlatformMenuItemGroup(
+              members: [
+                PlatformMenuItem(
+                  label: 'Export CSV...',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.keyE,
+                    meta: true,
+                    shift: true,
+                  ),
+                  onSelected: () async {
+                    final out = await FilePicker.saveFile(
+                      dialogTitle: 'Export CSV',
+                      fileName: ExportService.defaultCsvFilename(
+                        _project!.name,
+                      ),
+                      type: FileType.custom,
+                      allowedExtensions: ['csv'],
+                      initialDirectory: _project!.directoryPath,
+                    );
+                    if (out != null) {
+                      final payload = await ExportService.buildCombinedCsv(
+                        _project!,
+                      );
+                      await File(out).writeAsString(payload);
+                    }
+                  },
+                ),
+              ],
+            ),
+          if (_project != null)
+            PlatformMenuItemGroup(
+              members: [
+                PlatformMenuItem(
+                  label: 'Close Project',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.keyW,
+                    meta: true,
+                  ),
+                  onSelected: () async {
+                    if (await _requestCloseEditor()) {
+                      setState(() {
+                        _project = null;
+                        _selectedNode = null;
+                        _expandedNodes.clear();
+                      });
+                    }
+                  },
+                ),
+              ],
+            ),
+        ],
+      ),
+    ];
+
+    return _cachedMenus!;
+  }
+
   @override
   Widget build(BuildContext context) {
     final Widget activeScreen = _project == null
@@ -1076,137 +1226,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             ),
           );
 
-    return PlatformMenuBar(
-      menus: [
-        PlatformMenu(
-          label: 'Isochron Studio',
-          menus: [
-            const PlatformProvidedMenuItem(
-              type: PlatformProvidedMenuItemType.about,
-            ),
-            if (_project != null)
-              PlatformMenuItem(
-                label: 'Settings...',
-                shortcut: const SingleActivator(
-                  LogicalKeyboardKey.comma,
-                  meta: true,
-                ),
-                onSelected: () async {
-                  if (await _requestCloseEditor()) {
-                    setState(
-                      () => _selectedNode = TreeSelection(
-                        type: NodeType.settings,
-                      ),
-                    );
-                  }
-                },
-              ),
-            const PlatformProvidedMenuItem(
-              type: PlatformProvidedMenuItemType.quit,
-            ),
-          ],
-        ),
-        PlatformMenu(
-          label: 'File',
-          menus: [
-            PlatformMenuItemGroup(
-              members: [
-                PlatformMenuItem(
-                  label: 'New Project...',
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyN,
-                    meta: true,
-                  ),
-                  onSelected: _createNewProject,
-                ),
-                PlatformMenuItem(
-                  label: 'Open Project...',
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyO,
-                    meta: true,
-                  ),
-                  onSelected: _openProject,
-                ),
-              ],
-            ),
-            if (_project != null)
-              PlatformMenuItemGroup(
-                members: [
-                  PlatformMenuItem(
-                    label: 'Save',
-                    shortcut: const SingleActivator(
-                      LogicalKeyboardKey.keyS,
-                      meta: true,
-                    ),
-                    onSelected:
-                        (_selectedNode?.type == NodeType.track &&
-                            !_hasUnsavedChanges)
-                        ? null
-                        : () {
-                            if (_selectedNode?.type == NodeType.track) {
-                              _homeManager.saveProject();
-                            } else {
-                              _project!.save();
-                            }
-                          },
-                  ),
-                ],
-              ),
-            if (_project != null)
-              PlatformMenuItemGroup(
-                members: [
-                  PlatformMenuItem(
-                    label: 'Export CSV...',
-                    shortcut: const SingleActivator(
-                      LogicalKeyboardKey.keyE,
-                      meta: true,
-                      shift: true,
-                    ),
-                    onSelected: () async {
-                      final out = await FilePicker.saveFile(
-                        dialogTitle: 'Export CSV',
-                        fileName: ExportService.defaultCsvFilename(
-                          _project!.name,
-                        ),
-                        type: FileType.custom,
-                        allowedExtensions: ['csv'],
-                        initialDirectory: _project!.directoryPath,
-                      );
-                      if (out != null) {
-                        final payload = await ExportService.buildCombinedCsv(
-                          _project!,
-                        );
-                        await File(out).writeAsString(payload);
-                      }
-                    },
-                  ),
-                ],
-              ),
-            if (_project != null)
-              PlatformMenuItemGroup(
-                members: [
-                  PlatformMenuItem(
-                    label: 'Close Project',
-                    shortcut: const SingleActivator(
-                      LogicalKeyboardKey.keyW,
-                      meta: true,
-                    ),
-                    onSelected: () async {
-                      if (await _requestCloseEditor()) {
-                        setState(() {
-                          _project = null;
-                          _selectedNode = null;
-                          _expandedNodes.clear();
-                        });
-                      }
-                    },
-                  ),
-                ],
-              ),
-          ],
-        ),
-      ],
-      child: activeScreen,
-    );
+    return PlatformMenuBar(menus: _buildMenus(), child: activeScreen);
   }
 }

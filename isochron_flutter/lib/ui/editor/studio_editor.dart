@@ -133,77 +133,45 @@ class _StudioEditorState extends State<StudioEditor> {
         child: ValueListenableBuilder<AppState>(
           valueListenable: widget.homeManager,
           builder: (context, state, _) {
-            // Loading State
-            if (state.isProcessing) {
-              return Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const ProgressCircle(),
-                    const SizedBox(height: 16),
-                    Text(
-                      state.statusMessage,
-                      style: MacosTheme.of(context).typography.headline,
-                    ),
-                  ],
-                ),
-              );
-            }
-
             // Editor State
             return Column(
               children: [
-                // --- 1. Waveform Controls ---
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: MacosTheme.of(context).canvasColor,
-                    border: Border(
-                      bottom: BorderSide(
-                        color: MacosTheme.of(context).dividerColor,
+                // --- Processing Bar ---
+                if (state.isProcessing)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: MacosTheme.of(context).canvasColor,
+                      border: Border(
+                        bottom: BorderSide(
+                          color: MacosTheme.of(context).dividerColor,
+                        ),
                       ),
                     ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      MacosIconButton(
-                        icon: const MacosIcon(CupertinoIcons.backward_end),
-                        onPressed: widget.homeManager.skipToPrevious,
-                      ),
-                      const SizedBox(width: 8),
-                      MacosIconButton(
-                        icon: MacosIcon(
-                          state.isPlaying
-                              ? CupertinoIcons.pause_solid
-                              : CupertinoIcons.play_arrow_solid,
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 200,
+                          child: Text(
+                            state.statusMessage,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                        onPressed: widget.homeManager.togglePlay,
-                        backgroundColor: MacosTheme.of(context).primaryColor,
-                      ),
-                      const SizedBox(width: 8),
-                      MacosIconButton(
-                        icon: const MacosIcon(CupertinoIcons.forward_end),
-                        onPressed: widget.homeManager.skipToNext,
-                      ),
-                      // const Spacer(),
-                      // const MacosIcon(CupertinoIcons.zoom_out, size: 14),
-                      // SizedBox(
-                      //   width: 150,
-                      //   child: MacosSlider(
-                      //     value: state.zoomLevel.clamp(1.0, 20.0),
-                      //     min: 1.0,
-                      //     max: 20.0,
-                      //     onChanged: widget.homeManager.setZoom,
-                      //   ),
-                      // ),
-                      // const MacosIcon(CupertinoIcons.zoom_in, size: 14),
-                    ],
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: ProgressBar(value: state.progress * 100),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
 
                 // --- 2. Waveform View ---
                 Container(
