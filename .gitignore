@@ -86,3 +86,5 @@ isochron_debug.txt
 # but ignore the alignment result files.
 *.json_output
 *.srt_output
+
+supplemental/
