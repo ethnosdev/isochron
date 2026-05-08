@@ -20,6 +20,7 @@ dependencies:
   uuid: ^4.5.2
   macos_ui: ^2.2.2
   macos_window_utils: ^1.9.1
+  window_manager: ^0.5.1
   
   # Our Local Engine
   isochron_cli:
