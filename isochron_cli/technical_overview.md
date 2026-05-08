@@ -354,7 +354,15 @@ This mode is often cleaner when adjacent fragments should meet in the middle of 
 
 ## Output Format
 
-The final JSON output contains one object per fragment:
+`isochron_cli` can now emit **JSON** or **timing text** from the same alignment run.
+
+Format resolution order:
+
+1. `--format json|timing` (if provided)
+2. inferred from `--output` extension (`.json` => JSON, `.txt` => timing)
+3. fallback to JSON
+
+### JSON output
 
 ```json
 [
@@ -367,15 +375,28 @@ The final JSON output contains one object per fragment:
 - `start` / `end` — timestamps in seconds, rounded to 3 decimal places.
 - `id` — included if the input text contained an explicit identifier.
 
+### Timing text output
+
+Timing text uses:
+
+- `\id <BOOK>`
+- `\c <CHAPTER>`
+- `\level phrase`
+- tab-separated rows: `<start>\t<end>\t<phraseId>`
+
+When a fragment `id` is missing, fallback IDs are numeric (`1`, `2`, `3`, ...).
+Metadata for `\id` and `\c` is parsed from the source text filename using the same logic shared with Flutter export.
+
 ---
 
 ## File Reference Summary
 
 | File | Role |
 |------|------|
-| `bin/isochron_cli.dart` | CLI entry point. Parses command-line flags, loads the dict file, calls `IsochronProcessor.process()`, and writes the JSON output. |
+| `bin/isochron_cli.dart` | CLI entry point. Parses command-line flags, resolves output format, runs `IsochronProcessor.process()`, and writes JSON or timing text output. |
 | `lib/src/core/isochron_processor.dart` | **Master pipeline** — orchestrates all 7 steps in order. The best place to understand the full flow. |
 | `lib/src/core/fragment.dart` | The `Fragment` data class. Carries text, anchor timings, and real timings through the entire pipeline. |
+| `lib/src/core/timing_export.dart` | Shared timing export core used by CLI and Flutter (metadata parsing, payload generation, output format resolution). |
 | `lib/src/core/text_parser.dart` | Splits the raw text file into `Fragment` objects (one per non-empty line). |
 | `lib/src/core/transliterator.dart` | Converts non-Latin characters to Latin equivalents using a user-provided dictionary. |
 | `lib/src/synthesis/anchor_generator.dart` | Calls eSpeak-ng to synthesize audio for each fragment, normalizes with FFmpeg, concatenates into one anchor WAV, and records anchor timings. |

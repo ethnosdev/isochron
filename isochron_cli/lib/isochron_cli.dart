@@ -10,6 +10,7 @@ export 'src/core/isochron_processor.dart';
 export 'src/core/transliterator.dart';
 export 'src/core/pin_boundary_enforcer.dart';
 export 'src/core/boundary_strategy.dart';
+export 'src/core/timing_export.dart';
 
 // Drivers
 export 'src/core/drivers.dart';

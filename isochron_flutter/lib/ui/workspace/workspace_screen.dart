@@ -5,6 +5,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:isochron_flutter/services/alignment_service.dart';
+import 'package:isochron_flutter/services/export_service.dart';
+import 'package:isochron_flutter/utils/id_extraction.dart';
 import 'package:isochron_flutter/ui/app_manager.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:macos_ui/macos_ui.dart';
@@ -436,10 +438,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           final cleanLines = <String>[];
           for (var line in lines) {
             if (line.trim().isEmpty) continue;
-            final parts = line.trim().split(' ');
-            if (parts.length > 1) {
-              extractedIds.add(parts.first);
-              cleanLines.add(parts.sublist(1).join(' '));
+            final parsed = extractIdFromLine(line);
+            if (parsed.hasId) {
+              extractedIds.add(parsed.id);
+              cleanLines.add(parsed.content);
             } else {
               extractedIds.add("");
               cleanLines.add(line);
@@ -547,19 +549,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   Future<void> _exportCsv() async {
     if (_project == null) return;
 
-    final exportablePairs = _project!.alignments
-        .where(
-          (p) =>
-              p.status == AlignmentStatus.done ||
-              p.status == AlignmentStatus.reviewed,
-        )
-        .toList();
-
-    if (exportablePairs.isEmpty) return;
-
     final String? outputFile = await FilePicker.saveFile(
       dialogTitle: 'Export Combined CSV',
-      fileName: '${_project!.name.replaceAll(" ", "_")}_full.csv',
+      fileName: ExportService.defaultCsvFilename(_project!.name),
       type: FileType.custom,
       allowedExtensions: ['csv'],
     );
@@ -567,39 +559,38 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     if (outputFile == null) return;
 
     try {
-      final masterBuffer = StringBuffer();
-      masterBuffer.writeln('id,verse_id,recording_id,start,end');
-
-      for (var pair in exportablePairs) {
-        final absJsonPath = pair.getAbsoluteOutputPath(_project!.directoryPath);
-        final file = File(absJsonPath);
-
-        // Resolve the nice title
-        final audioAsset = _project!.audioPool
-            .where((a) => a.id == pair.audioAssetId)
-            .firstOrNull;
-        final displayTitle = audioAsset != null
-            ? p.basenameWithoutExtension(audioAsset.path)
-            : pair.id;
-
-        if (await file.exists()) {
-          final content = await file.readAsString();
-          final List<dynamic> jsonList = jsonDecode(content);
-
-          for (var j in jsonList) {
-            masterBuffer.write('${j['index']},');
-            masterBuffer.write('${j['id'] ?? ""},');
-            masterBuffer.write('$displayTitle,');
-            masterBuffer.write('${j['start']},');
-            masterBuffer.write('${j['end']}\n');
-          }
-        }
-      }
-
-      await File(outputFile).writeAsString(masterBuffer.toString());
+      // Workspace delegates export construction to ExportService so UI code only
+      // handles user interaction (save dialog + file write).
+      final payload = await ExportService.buildCombinedCsv(_project!);
+      if (payload.isEmpty) return;
+      await File(outputFile).writeAsString(payload);
     } catch (e) {
       debugPrint("CSV Export Error: $e");
     }
+  }
+
+  Future<void> _exportPhraseTimingForPair(AlignmentPair pair) async {
+    if (_project == null) return;
+    // Keep UI guard in sync with disabled buttons/tooltips for safety.
+    if (!ExportService.canExportPhraseTiming(pair)) return;
+    final defaultName = ExportService.defaultPhraseTimingFilenameForPair(
+      _project!,
+      pair,
+    );
+
+    final outputFile = await FilePicker.saveFile(
+      // Keep extension aligned with inferred default filename.
+      dialogTitle: 'Export Phrase Timing',
+      fileName: defaultName,
+      type: FileType.custom,
+      allowedExtensions: ['txt'],
+    );
+    if (outputFile == null) return;
+
+    // Service owns row loading + metadata parsing + phrase payload formatting.
+    final payload = await ExportService.buildPhraseTiming(_project!, pair);
+    if (payload == null || payload.isEmpty) return;
+    await File(outputFile).writeAsString(payload);
   }
 
   Future<bool> _requestCloseEditor() async {
@@ -719,6 +710,20 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
               }
             },
           ),
+          ToolBarIconButton(
+            label: 'Export Timing',
+            icon: MacosIcon(
+              CupertinoIcons.square_arrow_down,
+              color: ExportService.canExportPhraseTiming(_activePair!)
+                  ? MacosTheme.of(context).typography.body.color
+                  : CupertinoColors.systemGrey.withValues(alpha: 0.5),
+            ),
+            showLabel: true,
+            tooltipMessage: ExportService.phraseExportTooltip(_activePair!),
+            onPressed: ExportService.canExportPhraseTiming(_activePair!)
+                ? () => _exportPhraseTimingForPair(_activePair!)
+                : null,
+          ),
           const ToolBarSpacer(),
           CustomToolbarItem(
             inToolbarBuilder: (context) => MacosTooltip(
@@ -821,7 +826,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             label: 'Import Text',
             icon: const MacosIcon(CupertinoIcons.add),
             showLabel: true,
-            onPressed: () => _importAsset('Text', ['txt'], _project!.textPool),
+            // Accept both `.txt` and `.phrases` transcript inputs.
+            onPressed: () =>
+                _importAsset('Text', ['txt', 'phrases'], _project!.textPool),
           ),
         );
         break;
@@ -901,6 +908,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             setState(() => _activePair = pair);
             await _homeManager.loadAlignmentPair(pair, _project!);
           },
+          onExportPhrase: _exportPhraseTimingForPair,
           onDelete: _deletePair,
         );
       case 2:
@@ -1504,6 +1512,7 @@ class _RealAlignmentList extends StatelessWidget {
   final AlignmentPair? selectedPair;
   final Function(AlignmentPair) onSelect;
   final Function(AlignmentPair) onOpenPair;
+  final Future<void> Function(AlignmentPair) onExportPhrase;
   final Function(AlignmentPair) onDelete;
 
   const _RealAlignmentList({
@@ -1512,6 +1521,7 @@ class _RealAlignmentList extends StatelessWidget {
     required this.selectedPair,
     required this.onSelect,
     required this.onOpenPair,
+    required this.onExportPhrase,
     required this.onDelete,
   });
 
@@ -1620,6 +1630,22 @@ class _RealAlignmentList extends StatelessWidget {
                                 ? CupertinoColors.activeGreen
                                 : CupertinoColors.systemYellow),
                     ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                MacosTooltip(
+                  message: ExportService.phraseExportTooltip(pair),
+                  useMousePosition: false,
+                  child: MacosIconButton(
+                    icon: MacosIcon(
+                      CupertinoIcons.square_arrow_down,
+                      color: ExportService.canExportPhraseTiming(pair)
+                          ? iconColor
+                          : CupertinoColors.systemGrey.withValues(alpha: 0.5),
+                    ),
+                    onPressed: ExportService.canExportPhraseTiming(pair)
+                        ? () => onExportPhrase(pair)
+                        : null,
                   ),
                 ),
                 const SizedBox(width: 8),
