@@ -5,7 +5,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:isochron_flutter/services/alignment_service.dart';
-import 'package:isochron_flutter/services/audio_service.dart';
 import 'package:isochron_flutter/services/export_service.dart';
 import 'package:isochron_flutter/services/pins_service.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
@@ -18,17 +17,15 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 
+// --- Extracted Feature Views ---
+import 'models/workspace_models.dart';
+import 'components/inline_text_editor.dart';
 import 'studio_editor.dart';
-
-// --- NODE ENUMS FOR SIDEBAR TREE ---
-enum NodeType { collection, track, audio, text, settings }
-
-class TreeSelection {
-  final NodeType type;
-  final Collection? collection;
-  final Track? track;
-  TreeSelection({required this.type, this.collection, this.track});
-}
+import 'views/welcome_view.dart';
+import 'views/project_settings_view.dart';
+import 'views/audio_inspector_view.dart';
+import 'views/text_editor_view.dart';
+import 'views/collection_batch_view.dart';
 
 class WorkspaceScreen extends StatefulWidget {
   const WorkspaceScreen({super.key});
@@ -87,8 +84,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   Future<void> _createNewProject() async {
     final settings = UserSettingsService();
 
-    // 1. ONE NATIVE DESKTOP DIALOG: Name & Location together!
-    // This opens the standard macOS "Save As" sheet.
     final String? projectPath = await FilePicker.saveFile(
       dialogTitle: 'Create New Project',
       fileName: 'Untitled Project',
@@ -101,7 +96,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     final projectDir = Directory(projectPath);
     final projectName = p.basename(projectPath);
 
-    // 2. Safety check: Does it already exist?
     if (await projectDir.exists()) {
       if (mounted) {
         showMacosAlertDialog(
@@ -124,21 +118,17 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       return;
     }
 
-    // 3. Save the parent directory for the next time they create/open a project
     settings.setLastProjectDir(p.dirname(projectPath));
 
-    // 4. Create directories
     await projectDir.create(recursive: true);
     await Directory(p.join(projectDir.path, 'alignments')).create();
 
-    // 5. Create and save project
     final newProject = Project(
       id: _uuid.v4(),
       name: projectName,
       directoryPath: projectDir.path,
     );
 
-    // Auto-create initial collection
     final defaultCollection = Collection(
       id: _uuid.v4(),
       name: "First Collection",
@@ -230,7 +220,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // INVALIDATION LOGIC (Used when replacing/editing text or audio)
+  // INVALIDATION LOGIC
   // ---------------------------------------------------------------------------
 
   Future<void> _invalidateAndReplace(
@@ -263,7 +253,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
     await action();
 
-    // Purge alignment data safely
     final jsonPath = track.getAbsoluteOutputPath(_project!.directoryPath);
     final pinsPath = PinsService.pinsPath(jsonPath);
     if (await File(jsonPath).exists()) await File(jsonPath).delete();
@@ -339,11 +328,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           snapMode: _project!.snapMode,
           snapOffsetMs: _project!.snapOffset ?? 0,
           onProgress: (status, prog) {
-            if (_isBatchRunning && mounted)
+            if (_isBatchRunning && mounted) {
               setState(() {
                 _batchStatus = status;
                 _batchProgress = prog;
               });
+            }
           },
         );
 
@@ -354,8 +344,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
         if (_project!.defaultHasIds && extractedIds.isNotEmpty) {
           for (int i = 0; i < fragments.length; i++) {
-            if (i < extractedIds.length)
+            if (i < extractedIds.length) {
               fragments[i] = fragments[i].copyWith(id: extractedIds[i]);
+            }
           }
         }
 
@@ -394,8 +385,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           setState(() => track.status = AlignmentStatus.error);
         }
       } finally {
-        if (tempCleanTextFile != null && await tempCleanTextFile.exists())
+        if (tempCleanTextFile != null && await tempCleanTextFile.exists()) {
           await tempCleanTextFile.delete();
+        }
       }
 
       await _project!.save();
@@ -406,6 +398,28 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       _batchStatus = "Batch Complete";
       _batchProgress = 1.0;
     });
+  }
+
+  Future<void> _exportPhraseTimingForTrack(Track track) async {
+    if (_project == null) return;
+    if (!ExportService.canExportPhraseTiming(track)) return;
+
+    final defaultName = ExportService.defaultPhraseTimingFilenameForTrack(
+      track,
+    );
+
+    final outputFile = await FilePicker.saveFile(
+      dialogTitle: 'Export Phrase Timing',
+      fileName: defaultName,
+      type: FileType.custom,
+      allowedExtensions: ['txt'],
+      initialDirectory: _project!.directoryPath,
+    );
+    if (outputFile == null) return;
+
+    final payload = await ExportService.buildPhraseTiming(_project!, track);
+    if (payload == null || payload.isEmpty) return;
+    await File(outputFile).writeAsString(payload);
   }
 
   // ---------------------------------------------------------------------------
@@ -449,8 +463,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     setState(() {
       _project!.collections.remove(collection);
       if (_selectedNode?.collection == collection) {
-        _selectedNode =
-            null; // Clear the center pane if the active collection was deleted
+        _selectedNode = null;
       }
       _expandedNodes.remove(collection.id);
     });
@@ -483,7 +496,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
     if (confirm != true) return;
 
-    // Clean up alignment files from the hard drive so they don't leave ghosts
     final jsonPath = track.getAbsoluteOutputPath(_project!.directoryPath);
     final pinsPath = PinsService.pinsPath(jsonPath);
     if (await File(jsonPath).exists()) await File(jsonPath).delete();
@@ -492,7 +504,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     setState(() {
       collection.tracks.remove(track);
       if (_selectedNode?.track == track) {
-        // Fall back to viewing the parent collection
         _expandedTrackId = null;
         _selectedNode = TreeSelection(
           type: NodeType.collection,
@@ -512,6 +523,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       final isColSelected =
           _selectedNode?.collection == col &&
           _selectedNode?.type == NodeType.collection;
+
       rows.add(
         _buildTreeRow(
           label: col.name,
@@ -538,24 +550,22 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
               return;
             }
 
-            // 1. If it's already the active view, just toggle expansion instantly.
             if (isColSelected) {
               setState(() {
-                if (_expandedNodes.contains(col.id))
+                if (_expandedNodes.contains(col.id)) {
                   _expandedNodes.remove(col.id);
-                else
+                } else {
                   _expandedNodes.add(col.id);
+                }
               });
               return;
             }
 
-            // 2. Check for unsaved changes ONLY if necessary (avoids async locking)
             if (_hasUnsavedChanges && _selectedNode?.type == NodeType.track) {
               final proceed = await _requestCloseEditor();
               if (!proceed) return;
             }
 
-            // 3. Switch instantly
             setState(() {
               if (!_expandedNodes.contains(col.id)) _expandedNodes.add(col.id);
               _selectedNode = TreeSelection(
@@ -572,6 +582,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           final isTrackSelected =
               _selectedNode?.track == track &&
               _selectedNode?.type == NodeType.track;
+
           rows.add(
             _buildTreeRow(
               label: track.name,
@@ -598,7 +609,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
                 final bool isAlreadyExpanded = _expandedTrackId == track.id;
 
-                // 1. If it's already the active track, toggle instantly and abort.
                 if (isTrackSelected) {
                   setState(() {
                     _expandedTrackId = isAlreadyExpanded ? null : track.id;
@@ -606,14 +616,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                   return;
                 }
 
-                // 2. Check for unsaved changes safely
                 if (_hasUnsavedChanges &&
                     _selectedNode?.type == NodeType.track) {
                   final proceed = await _requestCloseEditor();
                   if (!proceed) return;
                 }
 
-                // 3. Wipe the previous track from memory so the Editor mounts lightweight
                 _homeManager.value = _homeManager.value.copyWith(
                   clearWaveform: true,
                   clearFocus: true,
@@ -621,7 +629,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                   statusMessage: "Loading...",
                 );
 
-                // 4. Update the UI state instantly
                 setState(() {
                   _expandedTrackId = track.id;
                   _selectedNode = TreeSelection(
@@ -631,7 +638,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                   );
                 });
 
-                // 5. Delay the heavy hard-drive loading by 50ms so the sidebar animation finishes completely smooth!
                 Future.delayed(const Duration(milliseconds: 50), () {
                   if (mounted) _homeManager.loadTrack(track, _project!);
                 });
@@ -742,7 +748,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                 icon: MacosIcon(
                   CupertinoIcons.folder_badge_plus,
                   size: 18,
-                  color: theme.typography.body.color, // High contrast
+                  color: theme.typography.body.color,
                 ),
                 onPressed: _addCollection,
                 boxConstraints: const BoxConstraints(
@@ -813,7 +819,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: isEditing
-                  ? _InlineTextEditor(
+                  ? InlineTextEditor(
                       initialText: label,
                       onComplete: onEditComplete!,
                     )
@@ -857,12 +863,13 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   // ---------------------------------------------------------------------------
 
   Widget _buildCenterPane() {
-    if (_selectedNode == null)
+    if (_selectedNode == null) {
       return const Center(child: Text("Select a collection or track."));
+    }
 
     switch (_selectedNode!.type) {
       case NodeType.collection:
-        return _CollectionBatchView(
+        return CollectionBatchView(
           collection: _selectedNode!.collection!,
           project: _project!,
           isRunning: _isBatchRunning,
@@ -877,9 +884,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             setState(() {});
             _project!.save();
           },
-          // <--- NEW: OPEN TRACK FROM LIST --->
           onOpenTrack: (track) {
-            // 1. Wipe the previous track from memory so the Editor mounts lightweight
             _homeManager.value = _homeManager.value.copyWith(
               clearWaveform: true,
               clearFocus: true,
@@ -887,7 +892,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
               statusMessage: "Loading...",
             );
 
-            // 2. Instantly swap the view and expand the sidebar node
             setState(() {
               _expandedTrackId = track.id;
               _selectedNode = TreeSelection(
@@ -897,7 +901,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
               );
             });
 
-            // 3. Delay heavy lifting by 50ms to keep animations perfectly smooth
             Future.delayed(const Duration(milliseconds: 50), () {
               if (mounted) _homeManager.loadTrack(track, _project!);
             });
@@ -906,19 +909,19 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       case NodeType.track:
         return StudioEditor(homeManager: _homeManager);
       case NodeType.text:
-        return _TextEditorView(
+        return TextEditorView(
           track: _selectedNode!.track!,
           onReplaceOrEdit: (action) =>
               _invalidateAndReplace(_selectedNode!.track!, action),
         );
       case NodeType.audio:
-        return _AudioInspectorView(
+        return AudioInspectorView(
           track: _selectedNode!.track!,
           onReplace: (action) =>
               _invalidateAndReplace(_selectedNode!.track!, action),
         );
       case NodeType.settings:
-        return _ProjectSettingsView(
+        return ProjectSettingsView(
           project: _project!,
           onSaved: () {
             setState(() {});
@@ -935,9 +938,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   @override
   Widget build(BuildContext context) {
     final Widget activeScreen = _project == null
-        ? _buildWelcomeWindow()
+        ? WelcomeView(
+            onCreateNewProject: _createNewProject,
+            onOpenProject: _openProject,
+          )
         : MacosWindow(
-            key: const ValueKey('main_workspace_window'), // <--- Added Key
+            key: const ValueKey('main_workspace_window'),
             sidebar: _buildTreeSidebar(context),
             child: MacosScaffold(
               toolBar: ToolBar(
@@ -1061,7 +1067,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             ),
           );
 
-    // --- RESTORED NATIVE MACOS MENU BAR ---
     return PlatformMenuBar(
       menus: [
         PlatformMenu(
@@ -1073,8 +1078,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             if (_project != null)
               PlatformMenuItem(
                 label: 'Settings...',
-                // Standard macOS shortcut: Cmd + Comma
-                shortcut: SingleActivator(LogicalKeyboardKey.comma, meta: true),
+                shortcut: const SingleActivator(
+                  LogicalKeyboardKey.comma,
+                  meta: true,
+                ),
                 onSelected: () async {
                   if (await _requestCloseEditor()) {
                     setState(
@@ -1093,7 +1100,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         PlatformMenu(
           label: 'File',
           menus: [
-            // Group 1: Creating/Opening Projects
             PlatformMenuItemGroup(
               members: [
                 PlatformMenuItem(
@@ -1114,7 +1120,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                 ),
               ],
             ),
-            // Group 2: Saving
             if (_project != null)
               PlatformMenuItemGroup(
                 members: [
@@ -1138,7 +1143,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                   ),
                 ],
               ),
-            // Group 3: Exporting
             if (_project != null)
               PlatformMenuItemGroup(
                 members: [
@@ -1169,7 +1173,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                   ),
                 ],
               ),
-            // Group 4: Closing
             if (_project != null)
               PlatformMenuItemGroup(
                 members: [
@@ -1195,951 +1198,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         ),
       ],
       child: activeScreen,
-    );
-  }
-
-  Widget _buildWelcomeWindow() {
-    return MacosWindow(
-      key: const ValueKey('welcome_window'), // <--- Added Key
-      child: MacosScaffold(
-        children: [
-          ContentArea(
-            builder: (context, scrollController) => Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const MacosIcon(
-                    CupertinoIcons.waveform_path_ecg,
-                    size: 80,
-                    color: CupertinoColors.activeBlue,
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    "Isochron Studio",
-                    style: MacosTheme.of(context).typography.largeTitle
-                        .copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 48),
-                  PushButton(
-                    controlSize: ControlSize.large,
-                    onPressed: _createNewProject,
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 24.0),
-                      child: Text("Create New Project"),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  PushButton(
-                    controlSize: ControlSize.large,
-                    secondary: true,
-                    onPressed: _openProject,
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 24.0),
-                      child: Text("Open Existing Project"),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _exportPhraseTimingForTrack(Track track) async {
-    if (_project == null) return;
-    if (!ExportService.canExportPhraseTiming(track)) return;
-
-    final defaultName = ExportService.defaultPhraseTimingFilenameForTrack(
-      track,
-    );
-
-    final outputFile = await FilePicker.saveFile(
-      dialogTitle: 'Export Phrase Timing',
-      fileName: defaultName,
-      type: FileType.custom,
-      allowedExtensions: ['txt'],
-      initialDirectory: _project!.directoryPath,
-    );
-    if (outputFile == null) return;
-
-    final payload = await ExportService.buildPhraseTiming(_project!, track);
-    if (payload == null || payload.isEmpty) return;
-    await File(outputFile).writeAsString(payload);
-  }
-}
-
-// -----------------------------------------------------------------------------
-// SUB-VIEWS
-// -----------------------------------------------------------------------------
-
-class _CollectionBatchView extends StatelessWidget {
-  final Collection collection;
-  final Project project;
-  final bool isRunning;
-  final String status;
-  final double progress;
-  final VoidCallback onRunBatch;
-  final VoidCallback onStopBatch;
-  final VoidCallback onChanged;
-  final void Function(Track track) onOpenTrack;
-
-  const _CollectionBatchView({
-    required this.collection,
-    required this.project,
-    required this.isRunning,
-    required this.status,
-    required this.progress,
-    required this.onRunBatch,
-    required this.onStopBatch,
-    required this.onChanged,
-    required this.onOpenTrack,
-  });
-
-  Future<void> _importAndAutoPair() async {
-    final settings = UserSettingsService();
-    final result = await FilePicker.pickFiles(
-      allowMultiple: true,
-      initialDirectory: settings.lastSourceDir,
-    );
-    if (result == null || result.files.isEmpty) return;
-
-    // Save the folder where they keep their raw audio/text!
-    settings.setLastSourceDir(p.dirname(result.files.first.path!));
-
-    final List<String> audioFiles = [];
-    final List<String> textFiles = [];
-
-    for (var file in result.files) {
-      if (file.path == null) continue;
-      final ext = p.extension(file.path!).toLowerCase();
-      if (['.mp3', '.wav', '.m4a'].contains(ext)) {
-        audioFiles.add(file.path!);
-      } else if (['.txt', '.phrases'].contains(ext)) {
-        textFiles.add(file.path!);
-      }
-    }
-
-    if (audioFiles.isEmpty && textFiles.isEmpty) return;
-
-    // Natural sort helper
-    int naturalCompare(String a, String b) {
-      final regex = RegExp(r'\d+|\D+');
-      final matchesA = regex.allMatches(a).map((m) => m.group(0)!).toList();
-      final matchesB = regex.allMatches(b).map((m) => m.group(0)!).toList();
-      for (int i = 0; i < matchesA.length && i < matchesB.length; i++) {
-        final isNumA = int.tryParse(matchesA[i]) != null;
-        final isNumB = int.tryParse(matchesB[i]) != null;
-        if (isNumA && isNumB) {
-          final cmp = int.parse(matchesA[i]).compareTo(int.parse(matchesB[i]));
-          if (cmp != 0) return cmp;
-        } else {
-          final cmp = matchesA[i].compareTo(matchesB[i]);
-          if (cmp != 0) return cmp;
-        }
-      }
-      return matchesA.length.compareTo(matchesB.length);
-    }
-
-    audioFiles.sort(naturalCompare);
-    textFiles.sort(naturalCompare);
-
-    // 1. FILL HOLES IN EXISTING TRACKS FIRST
-    if (audioFiles.isNotEmpty) {
-      final tracksNeedingAudio = collection.tracks
-          .where((t) => t.audioPath == null)
-          .toList();
-      int fillCount = tracksNeedingAudio.length < audioFiles.length
-          ? tracksNeedingAudio.length
-          : audioFiles.length;
-      for (int i = 0; i < fillCount; i++) {
-        tracksNeedingAudio[i].audioPath = audioFiles.removeAt(0);
-      }
-    }
-
-    if (textFiles.isNotEmpty) {
-      final tracksNeedingText = collection.tracks
-          .where((t) => t.textPath == null)
-          .toList();
-      int fillCount = tracksNeedingText.length < textFiles.length
-          ? tracksNeedingText.length
-          : textFiles.length;
-      for (int i = 0; i < fillCount; i++) {
-        tracksNeedingText[i].textPath = textFiles.removeAt(0);
-      }
-    }
-
-    // 2. PAIR AND CREATE NEW TRACKS WITH WHATEVER IS LEFT OVER
-    int maxCount = audioFiles.length > textFiles.length
-        ? audioFiles.length
-        : textFiles.length;
-    for (int i = 0; i < maxCount; i++) {
-      final audio = i < audioFiles.length ? audioFiles[i] : null;
-      final text = i < textFiles.length ? textFiles[i] : null;
-
-      final name = audio != null
-          ? p.basenameWithoutExtension(audio)
-          : p.basenameWithoutExtension(text!);
-
-      collection.tracks.add(
-        Track(
-          id: const Uuid().v4(),
-          name: name,
-          audioPath: audio,
-          textPath: text,
-          outputFilename: '${name}_timing.json',
-        ),
-      );
-    }
-
-    onChanged();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (collection.tracks.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const MacosIcon(
-              CupertinoIcons.tray_arrow_down,
-              size: 64,
-              color: CupertinoColors.systemGrey,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              "Empty Collection",
-              style: MacosTheme.of(context).typography.title1,
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              "Select audio and text files to generate your tracks.",
-              style: TextStyle(color: CupertinoColors.systemGrey),
-            ),
-            const SizedBox(height: 24),
-            PushButton(
-              controlSize: ControlSize.large,
-              onPressed: _importAndAutoPair,
-              child: const Text("Select Files..."),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Row(
-            children: [
-              PushButton(
-                controlSize: ControlSize.large,
-                secondary: isRunning,
-                onPressed: isRunning ? onStopBatch : onRunBatch,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    MacosIcon(
-                      isRunning
-                          ? CupertinoIcons.stop_fill
-                          : CupertinoIcons.play_arrow_solid,
-                      size: 14,
-                      color: isRunning
-                          ? CupertinoColors.destructiveRed
-                          : CupertinoColors.white,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(isRunning ? "Stop Batch" : "Run Alignment on All"),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              // ADDED: Import button always available
-              PushButton(
-                controlSize: ControlSize.regular,
-                secondary: true,
-                onPressed: _importAndAutoPair,
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    MacosIcon(CupertinoIcons.add, size: 12),
-                    SizedBox(width: 4),
-                    Text("Import Files"),
-                  ],
-                ),
-              ),
-              const Spacer(),
-              PushButton(
-                controlSize: ControlSize.regular,
-                secondary: true,
-                onPressed: () async {
-                  final out = await FilePicker.saveFile(
-                    dialogTitle: 'Export CSV',
-                    fileName: ExportService.defaultCsvFilename(project.name),
-                    type: FileType.custom,
-                    allowedExtensions: ['csv'],
-                    initialDirectory: project.directoryPath,
-                  );
-                  if (out != null) {
-                    final payload = await ExportService.buildCombinedCsv(
-                      project,
-                    );
-                    await File(out).writeAsString(payload);
-                  }
-                },
-                child: const Text("Export Combined CSV"),
-              ),
-            ],
-          ),
-        ),
-        if (isRunning)
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16.0,
-              vertical: 8.0,
-            ),
-            child: ProgressBar(value: progress * 100),
-          ),
-        Container(height: 1, color: MacosTheme.of(context).dividerColor),
-        Expanded(
-          child: ListView.builder(
-            itemCount: collection.tracks.length,
-            itemExtent: 56,
-            itemBuilder: (ctx, i) {
-              final t = collection.tracks[i];
-              return MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onOpenTrack(t),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: MacosTheme.of(context).dividerColor,
-                        ),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        if (t.status == AlignmentStatus.processing)
-                          const ProgressCircle()
-                        else
-                          const MacosIcon(
-                            CupertinoIcons.waveform_path,
-                            color: CupertinoColors.systemGrey,
-                          ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                t.name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              if (t.audioPath == null || t.textPath == null)
-                                Text(
-                                  t.audioPath == null
-                                      ? "Missing Audio"
-                                      : "Missing Text",
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: CupertinoColors.destructiveRed,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        Text(
-                          t.status.name.toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: CupertinoColors.systemGrey,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _TextEditorView extends StatefulWidget {
-  final Track track;
-  final Future<void> Function(Future<void> Function()) onReplaceOrEdit;
-  const _TextEditorView({required this.track, required this.onReplaceOrEdit});
-
-  @override
-  State<_TextEditorView> createState() => _TextEditorViewState();
-}
-
-class _TextEditorViewState extends State<_TextEditorView> {
-  late TextEditingController _controller;
-  bool _isEditing = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController();
-    _loadFile();
-  }
-
-  Future<void> _loadFile() async {
-    if (widget.track.textPath != null &&
-        await File(widget.track.textPath!).exists()) {
-      _controller.text = await File(widget.track.textPath!).readAsString();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.track.textPath == null) {
-      return Center(
-        child: PushButton(
-          controlSize: ControlSize.large,
-          onPressed: () => _replaceFile(),
-          child: const Text("Attach Text File"),
-        ),
-      );
-    }
-
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: MacosTheme.of(context).dividerColor),
-            ),
-          ),
-          child: Row(
-            children: [
-              const MacosIcon(CupertinoIcons.doc_text),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  widget.track.textPath!,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-              ),
-              if (_isEditing)
-                PushButton(
-                  controlSize: ControlSize.regular,
-                  onPressed: () {
-                    widget.onReplaceOrEdit(() async {
-                      await File(
-                        widget.track.textPath!,
-                      ).writeAsString(_controller.text);
-                      setState(() => _isEditing = false);
-                    });
-                  },
-                  child: const Text("Save Edits"),
-                ),
-              const SizedBox(width: 8),
-              PushButton(
-                secondary: true,
-                controlSize: ControlSize.regular,
-                onPressed: _replaceFile,
-                child: const Text("Replace File..."),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: MacosTextField(
-              controller: _controller,
-              maxLines: null,
-              onChanged: (_) {
-                if (!_isEditing) setState(() => _isEditing = true);
-              },
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _replaceFile() async {
-    final settings = UserSettingsService();
-    final result = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['txt', 'phrases'],
-      initialDirectory: settings.lastSourceDir,
-    );
-    if (result != null && result.files.single.path != null) {
-      settings.setLastSourceDir(p.dirname(result.files.single.path!));
-      widget.onReplaceOrEdit(() async {
-        widget.track.textPath = result.files.single.path!;
-        await _loadFile();
-      });
-    }
-  }
-}
-
-class _AudioInspectorView extends StatefulWidget {
-  final Track track;
-  final Future<void> Function(Future<void> Function()) onReplace;
-  const _AudioInspectorView({required this.track, required this.onReplace});
-
-  @override
-  State<_AudioInspectorView> createState() => _AudioInspectorViewState();
-}
-
-class _AudioInspectorViewState extends State<_AudioInspectorView> {
-  final AudioService _audio = AudioService();
-  bool _isPlaying = false;
-  Duration? _duration;
-
-  @override
-  void initState() {
-    super.initState();
-    _initAudio();
-    _audio.stateStream.listen((s) {
-      if (mounted) setState(() => _isPlaying = s.playing);
-    });
-  }
-
-  Future<void> _initAudio() async {
-    if (widget.track.audioPath != null &&
-        await File(widget.track.audioPath!).exists()) {
-      _duration = await _audio.load(widget.track.audioPath!);
-      setState(() {});
-    }
-  }
-
-  @override
-  void dispose() {
-    _audio.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.track.audioPath == null) {
-      return Center(
-        child: PushButton(
-          controlSize: ControlSize.large,
-          onPressed: _replaceFile,
-          child: const Text("Attach Audio File"),
-        ),
-      );
-    }
-
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const MacosIcon(
-            CupertinoIcons.speaker_3_fill,
-            size: 80,
-            color: CupertinoColors.activeBlue,
-          ),
-          const SizedBox(height: 24),
-          Text(
-            p.basename(widget.track.audioPath!),
-            style: MacosTheme.of(context).typography.title1,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _duration != null
-                ? "${_duration!.inSeconds} seconds"
-                : "Loading...",
-            style: const TextStyle(color: CupertinoColors.systemGrey),
-          ),
-          const SizedBox(height: 32),
-          MacosIconButton(
-            icon: MacosIcon(
-              _isPlaying
-                  ? CupertinoIcons.pause_fill
-                  : CupertinoIcons.play_arrow_solid,
-              size: 24,
-              color: CupertinoColors.white,
-            ),
-            backgroundColor: CupertinoColors.activeBlue,
-            shape: BoxShape.circle,
-            onPressed: () => _isPlaying ? _audio.pause() : _audio.play(),
-          ),
-          const SizedBox(height: 48),
-          PushButton(
-            secondary: true,
-            controlSize: ControlSize.regular,
-            onPressed: _replaceFile,
-            child: const Text("Replace Audio File..."),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _replaceFile() async {
-    final settings = UserSettingsService();
-    final result = await FilePicker.pickFiles(
-      type: FileType.audio,
-      initialDirectory: settings.lastSourceDir,
-    );
-    if (result != null && result.files.single.path != null) {
-      settings.setLastSourceDir(p.dirname(result.files.single.path!));
-      widget.onReplace(() async {
-        widget.track.audioPath = result.files.single.path!;
-        await _initAudio();
-      });
-    }
-  }
-}
-
-// -----------------------------------------------------------------------------
-// DESKTOP SETTINGS VIEW
-// -----------------------------------------------------------------------------
-class _ProjectSettingsView extends StatefulWidget {
-  final Project project;
-  final VoidCallback onSaved;
-  const _ProjectSettingsView({required this.project, required this.onSaved});
-
-  @override
-  State<_ProjectSettingsView> createState() => _ProjectSettingsViewState();
-}
-
-class _ProjectSettingsViewState extends State<_ProjectSettingsView> {
-  late bool _generateIds;
-  late bool _hasIds;
-  late String _prefix;
-
-  @override
-  void initState() {
-    super.initState();
-    _generateIds = widget.project.defaultGenerateIds;
-    _hasIds = widget.project.defaultHasIds;
-    _prefix = widget.project.defaultIdPrefix ?? "";
-  }
-
-  String get _idPreview {
-    if (_generateIds)
-      return "Preview: ID [${_prefix}001001] / Text [In the beginning...]";
-    if (_hasIds) return "Preview: ID [40001001] / Text [In the beginning...]";
-    return "Preview: ID [] / Text [In the beginning...]";
-  }
-
-  void _triggerSave() {
-    widget.project.defaultGenerateIds = _generateIds;
-    widget.project.defaultHasIds = _hasIds;
-    widget.project.defaultIdPrefix = _prefix;
-    widget.onSaved();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = MacosTheme.of(context);
-
-    return Center(
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 600),
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Project Settings",
-              style: theme.typography.largeTitle.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 32),
-
-            // --- ID STRATEGY ---
-            Text("Verse ID Strategy", style: theme.typography.headline),
-            const SizedBox(height: 8),
-            Text(
-              "How should Isochron assign IDs to your text fragments?",
-              style: TextStyle(
-                color: theme.typography.body.color?.withValues(alpha: 0.7),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: 300,
-              child: MacosPopupButton<int>(
-                value: _generateIds ? 2 : (_hasIds ? 1 : 0),
-                items: const [
-                  MacosPopupMenuItem<int>(value: 0, child: Text('None')),
-                  MacosPopupMenuItem<int>(
-                    value: 1,
-                    child: Text('IDs are included in text file'),
-                  ),
-                  MacosPopupMenuItem<int>(
-                    value: 2,
-                    child: Text('Auto-Generate (Prefix + Rec + Verse)'),
-                  ),
-                ],
-                onChanged: (val) {
-                  setState(() {
-                    if (val == 0) {
-                      _hasIds = false;
-                      _generateIds = false;
-                    } else if (val == 1) {
-                      _hasIds = true;
-                      _generateIds = false;
-                    } else if (val == 2) {
-                      _hasIds = false;
-                      _generateIds = true;
-                    }
-                  });
-                  _triggerSave();
-                },
-              ),
-            ),
-            if (_generateIds) ...[
-              const SizedBox(height: 12),
-              SizedBox(
-                width: 300,
-                child: MacosTextField(
-                  controller: TextEditingController(text: _prefix),
-                  placeholder: 'Optional ID Prefix (e.g. 40)',
-                  onChanged: (val) {
-                    setState(() => _prefix = val);
-                    _triggerSave();
-                  },
-                ),
-              ),
-            ],
-            const SizedBox(height: 8),
-            Text(
-              _idPreview,
-              style: const TextStyle(
-                fontSize: 12,
-                color: CupertinoColors.systemGrey,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-
-            const SizedBox(height: 32),
-            Container(height: 1, color: theme.dividerColor),
-            const SizedBox(height: 32),
-
-            // --- SNAP MODE ---
-            Text("Boundary Snap Mode", style: theme.typography.headline),
-            const SizedBox(height: 8),
-            Text(
-              "Determines how audio boundaries are calculated when resolving dynamic time warping.",
-              style: TextStyle(
-                color: theme.typography.body.color?.withValues(alpha: 0.7),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: 300,
-              child: MacosPopupButton<String>(
-                value: widget.project.snapMode,
-                items: const [
-                  MacosPopupMenuItem<String>(
-                    value: 'onset',
-                    child: Text('Onset (Snap to speech start)'),
-                  ),
-                  MacosPopupMenuItem<String>(
-                    value: 'gap',
-                    child: Text('Gap (Snap to center of silence)'),
-                  ),
-                ],
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() => widget.project.snapMode = val);
-                    _triggerSave();
-                  }
-                },
-              ),
-            ),
-
-            // <--- NEW: CONDITIONAL ONSET OFFSET FIELD --->
-            if (widget.project.snapMode == 'onset') ...[
-              const SizedBox(height: 16),
-              Text(
-                "Snap Offset (ms)",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: theme.typography.body.color,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                "Subtracts milliseconds from the detected onset to catch breath sounds or soft consonants.",
-                style: TextStyle(
-                  fontSize: 12,
-                  color: theme.typography.body.color?.withValues(alpha: 0.7),
-                ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: 150,
-                child: MacosTextField(
-                  controller: TextEditingController(
-                    text: widget.project.snapOffset?.toString() ?? '',
-                  ),
-                  placeholder: 'e.g. 250',
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  onChanged: (val) {
-                    widget.project.snapOffset = val.isEmpty
-                        ? null
-                        : int.tryParse(val);
-                    _triggerSave();
-                  },
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 32),
-            Container(height: 1, color: theme.dividerColor),
-            const SizedBox(height: 32),
-
-            // --- TRANSLITERATION ---
-            Text(
-              "Global Transliteration Dictionary",
-              style: theme.typography.headline,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "Provide a JSON map to convert non-Latin characters into Latin characters to assist the alignment engine.",
-              style: TextStyle(
-                color: theme.typography.body.color?.withValues(alpha: 0.7),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                PushButton(
-                  controlSize: ControlSize.regular,
-                  secondary: true,
-                  onPressed: () async {
-                    final settings = UserSettingsService();
-                    final res = await FilePicker.pickFiles(
-                      allowedExtensions: ['json'],
-                      type: FileType.custom,
-                      initialDirectory: settings.lastDictDir,
-                    );
-                    if (res != null && res.files.single.path != null) {
-                      settings.setLastDictDir(
-                        p.dirname(res.files.single.path!),
-                      );
-                      setState(
-                        () => widget.project.dictPath = res.files.single.path!,
-                      );
-                      _triggerSave();
-                    }
-                  },
-                  child: const Text("Select JSON File..."),
-                ),
-                const SizedBox(width: 16),
-                if (widget.project.dictPath != null) ...[
-                  Expanded(
-                    child: Text(
-                      p.basename(widget.project.dictPath!),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  MacosIconButton(
-                    icon: const MacosIcon(
-                      CupertinoIcons.clear_circled_solid,
-                      color: CupertinoColors.systemGrey,
-                    ),
-                    onPressed: () {
-                      setState(() => widget.project.dictPath = null);
-                      _triggerSave();
-                    },
-                  ),
-                ] else
-                  const Text(
-                    "No dictionary selected.",
-                    style: TextStyle(color: CupertinoColors.systemGrey),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// -----------------------------------------------------------------------------
-// INLINE TREE EDITOR
-// -----------------------------------------------------------------------------
-class _InlineTextEditor extends StatefulWidget {
-  final String initialText;
-  final ValueChanged<String> onComplete;
-
-  const _InlineTextEditor({
-    required this.initialText,
-    required this.onComplete,
-  });
-
-  @override
-  State<_InlineTextEditor> createState() => _InlineTextEditorState();
-}
-
-class _InlineTextEditorState extends State<_InlineTextEditor> {
-  late TextEditingController _controller;
-  late FocusNode _focusNode;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.initialText);
-    _focusNode = FocusNode();
-
-    // Save when focus is lost (clicking elsewhere)
-    _focusNode.addListener(() {
-      if (!_focusNode.hasFocus) {
-        widget.onComplete(_controller.text);
-      }
-    });
-
-    // Auto focus the text field immediately when it appears
-    Future.microtask(() {
-      if (mounted) {
-        _focusNode.requestFocus();
-        // Highlight all text so typing immediately overwrites it
-        _controller.selection = TextSelection(
-          baseOffset: 0,
-          extentOffset: _controller.text.length,
-        );
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return MacosTextField(
-      controller: _controller,
-      focusNode: _focusNode,
-      maxLines: 1,
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-      style: const TextStyle(fontSize: 13),
-      // Save when hitting Enter
-      onSubmitted: widget.onComplete,
     );
   }
 }
