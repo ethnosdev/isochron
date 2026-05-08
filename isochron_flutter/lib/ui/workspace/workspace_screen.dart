@@ -806,8 +806,33 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             _alignmentService.cancelCurrentRun();
           },
           onChanged: () {
-            setState(() {}); // Synchronously update the UI first
-            _project!.save(); // Then fire-and-forget the save to disk
+            setState(() {});
+            _project!.save();
+          },
+          // <--- NEW: OPEN TRACK FROM LIST --->
+          onOpenTrack: (track) {
+            // 1. Wipe the previous track from memory so the Editor mounts lightweight
+            _homeManager.value = _homeManager.value.copyWith(
+              clearWaveform: true,
+              clearFocus: true,
+              fragments: [],
+              statusMessage: "Loading...",
+            );
+
+            // 2. Instantly swap the view and expand the sidebar node
+            setState(() {
+              _expandedTrackId = track.id;
+              _selectedNode = TreeSelection(
+                type: NodeType.track,
+                collection: _selectedNode!.collection,
+                track: track,
+              );
+            });
+
+            // 3. Delay heavy lifting by 50ms to keep animations perfectly smooth
+            Future.delayed(const Duration(milliseconds: 50), () {
+              if (mounted) _homeManager.loadTrack(track, _project!);
+            });
           },
         );
       case NodeType.track:
@@ -1129,6 +1154,7 @@ class _CollectionBatchView extends StatelessWidget {
   final VoidCallback onRunBatch;
   final VoidCallback onStopBatch;
   final VoidCallback onChanged;
+  final void Function(Track track) onOpenTrack;
 
   const _CollectionBatchView({
     required this.collection,
@@ -1139,6 +1165,7 @@ class _CollectionBatchView extends StatelessWidget {
     required this.onRunBatch,
     required this.onStopBatch,
     required this.onChanged,
+    required this.onOpenTrack,
   });
 
   Future<void> _importAndAutoPair() async {
@@ -1346,56 +1373,65 @@ class _CollectionBatchView extends StatelessWidget {
             itemExtent: 56,
             itemBuilder: (ctx, i) {
               final t = collection.tracks[i];
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: MacosTheme.of(context).dividerColor,
+              return MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onOpenTrack(t),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: MacosTheme.of(context).dividerColor,
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        if (t.status == AlignmentStatus.processing)
+                          const ProgressCircle()
+                        else
+                          const MacosIcon(
+                            CupertinoIcons.waveform_path,
+                            color: CupertinoColors.systemGrey,
+                          ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                t.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              if (t.audioPath == null || t.textPath == null)
+                                Text(
+                                  t.audioPath == null
+                                      ? "Missing Audio"
+                                      : "Missing Text",
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: CupertinoColors.destructiveRed,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          t.status.name.toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: CupertinoColors.systemGrey,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                child: Row(
-                  children: [
-                    if (t.status == AlignmentStatus.processing)
-                      const ProgressCircle()
-                    else
-                      const MacosIcon(
-                        CupertinoIcons.waveform_path,
-                        color: CupertinoColors.systemGrey,
-                      ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            t.name,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          if (t.audioPath == null || t.textPath == null)
-                            Text(
-                              t.audioPath == null
-                                  ? "Missing Audio"
-                                  : "Missing Text",
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: CupertinoColors.destructiveRed,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      t.status.name.toUpperCase(),
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: CupertinoColors.systemGrey,
-                      ),
-                    ),
-                  ],
                 ),
               );
             },
