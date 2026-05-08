@@ -21,13 +21,13 @@ import 'package:isochron_cli/isochron_cli.dart';
 import 'studio_editor.dart';
 
 // --- NODE ENUMS FOR SIDEBAR TREE ---
-enum NodeType { collection, track, audio, text }
+enum NodeType { collection, track, audio, text, settings }
 
 class TreeSelection {
   final NodeType type;
-  final Collection collection;
+  final Collection? collection;
   final Track? track;
-  TreeSelection({required this.type, required this.collection, this.track});
+  TreeSelection({required this.type, this.collection, this.track});
 }
 
 class WorkspaceScreen extends StatefulWidget {
@@ -421,18 +421,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     });
   }
 
-  void _showProjectSettings() {
-    showCupertinoDialog(
-      context: context,
-      builder: (context) {
-        return _ProjectSettingsModal(
-          project: _project!,
-          onSaved: () => setState(() => _project!.save()),
-        );
-      },
-    );
-  }
-
   Sidebar _buildTreeSidebar(BuildContext context) {
     List<Widget> rows = [];
     final theme = MacosTheme.of(context);
@@ -447,7 +435,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           icon: isColSelected
               ? CupertinoIcons.folder_solid
               : CupertinoIcons.folder,
-          iconColor: CupertinoColors.activeBlue,
+          iconColor: theme.typography.body.color ?? CupertinoColors.black,
           isSelected: isColSelected,
           isExpanded: _expandedNodes.contains(col.id),
           depth: 0,
@@ -646,39 +634,42 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       startWidth: 260,
       maxWidth: 350,
       top: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Text(
-          _project!.name,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        padding: const EdgeInsets.only(
+          left: 16.0,
+          right: 8.0,
+          top: 12.0,
+          bottom: 8.0,
         ),
-      ),
-      bottom: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(height: 1, color: theme.dividerColor),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                MacosTooltip(
-                  message: "Add Collection",
-                  child: MacosIconButton(
-                    icon: const MacosIcon(CupertinoIcons.folder_badge_plus),
-                    onPressed: _addCollection,
-                  ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                _project!.name,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
                 ),
-                MacosTooltip(
-                  message: "Project Settings",
-                  child: MacosIconButton(
-                    icon: const MacosIcon(CupertinoIcons.settings),
-                    onPressed: _showProjectSettings,
-                  ),
-                ),
-              ],
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
-        ],
+            MacosTooltip(
+              message: "New Collection",
+              child: MacosIconButton(
+                icon: MacosIcon(
+                  CupertinoIcons.folder_badge_plus,
+                  size: 18,
+                  color: theme.typography.body.color, // High contrast
+                ),
+                onPressed: _addCollection,
+                boxConstraints: const BoxConstraints(
+                  minHeight: 28,
+                  minWidth: 28,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
       builder: (context, scrollController) => ListView.builder(
         controller: scrollController,
@@ -789,12 +780,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     switch (_selectedNode!.type) {
       case NodeType.collection:
         return _CollectionBatchView(
-          collection: _selectedNode!.collection,
+          collection: _selectedNode!.collection!,
           project: _project!,
           isRunning: _isBatchRunning,
           status: _batchStatus,
           progress: _batchProgress,
-          onRunBatch: () => _runBatch(_selectedNode!.collection),
+          onRunBatch: () => _runBatch(_selectedNode!.collection!),
           onStopBatch: () {
             setState(() => _isBatchRunning = false);
             _alignmentService.cancelCurrentRun();
@@ -843,6 +834,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           onReplace: (action) =>
               _invalidateAndReplace(_selectedNode!.track!, action),
         );
+      case NodeType.settings:
+        return _ProjectSettingsView(
+          project: _project!,
+          onSaved: () => setState(() => _project!.save()),
+        );
     }
   }
 
@@ -862,7 +858,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                 title: Text(
                   _selectedNode?.type == NodeType.track
                       ? _selectedNode!.track!.name
-                      : "Isochron Studio",
+                      : (_selectedNode?.type == NodeType.settings
+                            ? "Project Settings"
+                            : "Isochron Studio"),
                 ),
                 actions: [
                   if (_selectedNode?.type == NodeType.track) ...[
@@ -950,11 +948,30 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     // --- RESTORED NATIVE MACOS MENU BAR ---
     return PlatformMenuBar(
       menus: [
-        const PlatformMenu(
+        PlatformMenu(
           label: 'Isochron Studio',
           menus: [
-            PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.about),
-            PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.quit),
+            const PlatformProvidedMenuItem(
+              type: PlatformProvidedMenuItemType.about,
+            ),
+            if (_project != null)
+              PlatformMenuItem(
+                label: 'Settings...',
+                // Standard macOS shortcut: Cmd + Comma
+                shortcut: SingleActivator(LogicalKeyboardKey.comma, meta: true),
+                onSelected: () async {
+                  if (await _requestCloseEditor()) {
+                    setState(
+                      () => _selectedNode = TreeSelection(
+                        type: NodeType.settings,
+                      ),
+                    );
+                  }
+                },
+              ),
+            const PlatformProvidedMenuItem(
+              type: PlatformProvidedMenuItemType.quit,
+            ),
           ],
         ),
         PlatformMenu(
@@ -1672,18 +1689,18 @@ class _AudioInspectorViewState extends State<_AudioInspectorView> {
 }
 
 // -----------------------------------------------------------------------------
-// PROJECT SETTINGS MODAL
+// DESKTOP SETTINGS VIEW
 // -----------------------------------------------------------------------------
-class _ProjectSettingsModal extends StatefulWidget {
+class _ProjectSettingsView extends StatefulWidget {
   final Project project;
   final VoidCallback onSaved;
-  const _ProjectSettingsModal({required this.project, required this.onSaved});
+  const _ProjectSettingsView({required this.project, required this.onSaved});
 
   @override
-  State<_ProjectSettingsModal> createState() => _ProjectSettingsModalState();
+  State<_ProjectSettingsView> createState() => _ProjectSettingsViewState();
 }
 
-class _ProjectSettingsModalState extends State<_ProjectSettingsModal> {
+class _ProjectSettingsViewState extends State<_ProjectSettingsView> {
   late bool _generateIds;
   late bool _hasIds;
   late String _prefix;
@@ -1703,33 +1720,55 @@ class _ProjectSettingsModalState extends State<_ProjectSettingsModal> {
     return "Preview: ID [] / Text [In the beginning...]";
   }
 
+  void _triggerSave() {
+    widget.project.defaultGenerateIds = _generateIds;
+    widget.project.defaultHasIds = _hasIds;
+    widget.project.defaultIdPrefix = _prefix;
+    widget.onSaved();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return CupertinoAlertDialog(
-      title: const Text("Project Settings"),
-      content: Padding(
-        padding: const EdgeInsets.only(top: 16.0),
+    final theme = MacosTheme.of(context);
+
+    return Center(
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 600),
+        padding: const EdgeInsets.all(32.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "Verse ID Strategy",
-              style: TextStyle(fontWeight: FontWeight.bold),
+            Text(
+              "Project Settings",
+              style: theme.typography.largeTitle.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
+            const SizedBox(height: 32),
+
+            // --- ID STRATEGY ---
+            Text("Verse ID Strategy", style: theme.typography.headline),
             const SizedBox(height: 8),
+            Text(
+              "How should Isochron assign IDs to your text fragments?",
+              style: TextStyle(
+                color: theme.typography.body.color?.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(height: 12),
             SizedBox(
-              width: double.infinity,
+              width: 300,
               child: MacosPopupButton<int>(
                 value: _generateIds ? 2 : (_hasIds ? 1 : 0),
                 items: const [
                   MacosPopupMenuItem<int>(value: 0, child: Text('None')),
                   MacosPopupMenuItem<int>(
                     value: 1,
-                    child: Text('IDs are in text file'),
+                    child: Text('IDs are included in text file'),
                   ),
                   MacosPopupMenuItem<int>(
                     value: 2,
-                    child: Text('Auto-Generate'),
+                    child: Text('Auto-Generate (Prefix + Rec + Verse)'),
                   ),
                 ],
                 onChanged: (val) {
@@ -1745,72 +1784,130 @@ class _ProjectSettingsModalState extends State<_ProjectSettingsModal> {
                       _generateIds = true;
                     }
                   });
+                  _triggerSave();
                 },
               ),
             ),
             if (_generateIds) ...[
-              const SizedBox(height: 8),
-              MacosTextField(
-                controller: TextEditingController(text: _prefix),
-                placeholder: 'ID Prefix (e.g. 40)',
-                onChanged: (val) => setState(() => _prefix = val),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: 300,
+                child: MacosTextField(
+                  controller: TextEditingController(text: _prefix),
+                  placeholder: 'Optional ID Prefix (e.g. 40)',
+                  onChanged: (val) {
+                    setState(() => _prefix = val);
+                    _triggerSave();
+                  },
+                ),
               ),
             ],
             const SizedBox(height: 8),
             Text(
               _idPreview,
               style: const TextStyle(
-                fontSize: 11,
+                fontSize: 12,
                 color: CupertinoColors.systemGrey,
                 fontStyle: FontStyle.italic,
               ),
             ),
 
-            const SizedBox(height: 16),
-            const Text(
-              "Snap Mode",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+            const SizedBox(height: 32),
+            Container(height: 1, color: theme.dividerColor),
+            const SizedBox(height: 32),
+
+            // --- SNAP MODE ---
+            Text("Boundary Snap Mode", style: theme.typography.headline),
             const SizedBox(height: 8),
+            Text(
+              "Determines how audio boundaries are calculated when resolving dynamic time warping.",
+              style: TextStyle(
+                color: theme.typography.body.color?.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(height: 12),
             SizedBox(
-              width: double.infinity,
+              width: 300,
               child: MacosPopupButton<String>(
                 value: widget.project.snapMode,
                 items: const [
                   MacosPopupMenuItem<String>(
                     value: 'onset',
-                    child: Text('Onset (Phrase start)'),
+                    child: Text('Onset (Snap to speech start)'),
                   ),
                   MacosPopupMenuItem<String>(
                     value: 'gap',
-                    child: Text('Gap (Silence between)'),
+                    child: Text('Gap (Snap to center of silence)'),
                   ),
                 ],
                 onChanged: (val) {
-                  if (val != null)
+                  if (val != null) {
                     setState(() => widget.project.snapMode = val);
+                    _triggerSave();
+                  }
                 },
               ),
             ),
 
-            const SizedBox(height: 16),
-            const Text(
-              "Global Transliteration Dict",
-              style: TextStyle(fontWeight: FontWeight.bold),
+            // <--- NEW: CONDITIONAL ONSET OFFSET FIELD --->
+            if (widget.project.snapMode == 'onset') ...[
+              const SizedBox(height: 16),
+              Text(
+                "Snap Offset (ms)",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: theme.typography.body.color,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "Subtracts milliseconds from the detected onset to catch breath sounds or soft consonants.",
+                style: TextStyle(
+                  fontSize: 12,
+                  color: theme.typography.body.color?.withValues(alpha: 0.7),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: 150,
+                child: MacosTextField(
+                  controller: TextEditingController(
+                    text: widget.project.snapOffset?.toString() ?? '',
+                  ),
+                  placeholder: 'e.g. 250',
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  onChanged: (val) {
+                    widget.project.snapOffset = val.isEmpty
+                        ? null
+                        : int.tryParse(val);
+                    _triggerSave();
+                  },
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 32),
+            Container(height: 1, color: theme.dividerColor),
+            const SizedBox(height: 32),
+
+            // --- TRANSLITERATION ---
+            Text(
+              "Global Transliteration Dictionary",
+              style: theme.typography.headline,
             ),
             const SizedBox(height: 8),
+            Text(
+              "Provide a JSON map to convert non-Latin characters into Latin characters to assist the alignment engine.",
+              style: TextStyle(
+                color: theme.typography.body.color?.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(
-                  child: Text(
-                    widget.project.dictPath != null
-                        ? p.basename(widget.project.dictPath!)
-                        : "None",
-                    maxLines: 1,
-                  ),
-                ),
                 PushButton(
-                  controlSize: ControlSize.small,
+                  controlSize: ControlSize.regular,
                   secondary: true,
                   onPressed: () async {
                     final settings = UserSettingsService();
@@ -1826,32 +1923,40 @@ class _ProjectSettingsModalState extends State<_ProjectSettingsModal> {
                       setState(
                         () => widget.project.dictPath = res.files.single.path!,
                       );
+                      _triggerSave();
                     }
                   },
-                  child: const Text("Select"),
+                  child: const Text("Select JSON File..."),
                 ),
+                const SizedBox(width: 16),
+                if (widget.project.dictPath != null) ...[
+                  Expanded(
+                    child: Text(
+                      p.basename(widget.project.dictPath!),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  MacosIconButton(
+                    icon: const MacosIcon(
+                      CupertinoIcons.clear_circled_solid,
+                      color: CupertinoColors.systemGrey,
+                    ),
+                    onPressed: () {
+                      setState(() => widget.project.dictPath = null);
+                      _triggerSave();
+                    },
+                  ),
+                ] else
+                  const Text(
+                    "No dictionary selected.",
+                    style: TextStyle(color: CupertinoColors.systemGrey),
+                  ),
               ],
             ),
           ],
         ),
       ),
-      actions: [
-        CupertinoDialogAction(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("Cancel"),
-        ),
-        CupertinoDialogAction(
-          isDefaultAction: true,
-          onPressed: () {
-            widget.project.defaultGenerateIds = _generateIds;
-            widget.project.defaultHasIds = _hasIds;
-            widget.project.defaultIdPrefix = _prefix;
-            widget.onSaved();
-            Navigator.pop(context);
-          },
-          child: const Text("Save"),
-        ),
-      ],
     );
   }
 }
