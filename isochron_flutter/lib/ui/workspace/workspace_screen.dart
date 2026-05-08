@@ -20,7 +20,7 @@ import 'package:isochron_cli/isochron_cli.dart';
 // --- Extracted Feature Views ---
 import 'models/workspace_models.dart';
 import 'components/inline_text_editor.dart';
-import 'studio_editor.dart';
+import '../editor/studio_editor.dart';
 import 'views/welcome_view.dart';
 import 'views/project_settings_view.dart';
 import 'views/audio_inspector_view.dart';
@@ -587,7 +587,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             _buildTreeRow(
               label: track.name,
               icon: CupertinoIcons.waveform_path,
-              iconColor: _getTrackColor(track.status),
+              iconColor: _getTrackColor(context, track.status),
               isSelected: isTrackSelected,
               isExpanded: _expandedTrackId == track.id,
               depth: 1,
@@ -844,17 +844,26 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     );
   }
 
-  Color _getTrackColor(AlignmentStatus status) {
+  Color _getTrackColor(BuildContext context, AlignmentStatus status) {
+    final isDark = MacosTheme.of(context).brightness == Brightness.dark;
     switch (status) {
       case AlignmentStatus.done:
       case AlignmentStatus.reviewed:
-        return CupertinoColors.activeGreen;
+        return isDark
+            ? CupertinoColors.activeGreen
+            : const Color(0xFF198754); // Deeper Green
       case AlignmentStatus.processing:
-        return CupertinoColors.activeBlue;
+        return isDark
+            ? CupertinoColors.activeBlue
+            : const Color(0xFF0056B3); // Deeper Blue
       case AlignmentStatus.error:
-        return CupertinoColors.destructiveRed;
+        return isDark
+            ? CupertinoColors.destructiveRed
+            : const Color(0xFFDC3545); // Deeper Red
       case AlignmentStatus.pending:
-        return CupertinoColors.systemYellow;
+        return isDark
+            ? CupertinoColors.systemYellow
+            : const Color(0xFFD97706); // Dark Amber instead of pale yellow
     }
   }
 
@@ -951,7 +960,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                   _selectedNode?.type == NodeType.track
                       ? _selectedNode!.track!.name
                       : (_selectedNode?.type == NodeType.settings
-                            ? "Project Settings"
+                            ? "Settings"
                             : "Isochron Studio"),
                 ),
                 actions: [

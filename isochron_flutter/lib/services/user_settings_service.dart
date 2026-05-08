@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+enum AppThemeMode { system, light, dark }
 
 class UserSettingsService {
   // Singleton Pattern
@@ -16,20 +18,20 @@ class UserSettingsService {
   static const String _keyThemeMode = 'theme_mode';
   static const String _keyLastZoom = 'last_zoom_level';
 
-  late final ValueNotifier<ThemeMode> themeNotifier;
+  late final ValueNotifier<AppThemeMode> themeNotifier;
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
 
     // Load saved theme or default to system
     final savedThemeIndex =
-        _prefs.getInt(_keyThemeMode) ?? ThemeMode.system.index;
-    themeNotifier = ValueNotifier(ThemeMode.values[savedThemeIndex]);
+        _prefs.getInt(_keyThemeMode) ?? AppThemeMode.system.index;
+    themeNotifier = ValueNotifier(AppThemeMode.values[savedThemeIndex]);
   }
 
   // --- Theme ---
 
-  Future<void> setThemeMode(ThemeMode mode) async {
+  Future<void> setThemeMode(AppThemeMode mode) async {
     themeNotifier.value = mode;
     await _prefs.setInt(_keyThemeMode, mode.index);
   }

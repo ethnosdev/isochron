@@ -21,15 +21,26 @@ Future<void> main() async {
 class IsochronApp extends StatelessWidget {
   const IsochronApp({super.key});
 
+  ThemeMode _mapTheme(AppThemeMode mode) {
+    switch (mode) {
+      case AppThemeMode.light:
+        return ThemeMode.light;
+      case AppThemeMode.dark:
+        return ThemeMode.dark;
+      case AppThemeMode.system:
+        return ThemeMode.system;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ThemeMode>(
+    return ValueListenableBuilder<AppThemeMode>(
       valueListenable: UserSettingsService().themeNotifier,
       builder: (context, currentMode, _) {
         return MacosApp(
           title: 'Isochron Studio',
           debugShowCheckedModeBanner: false,
-          themeMode: currentMode,
+          themeMode: _mapTheme(currentMode),
           theme: MacosThemeData.light(),
           darkTheme: MacosThemeData.dark(),
           home: const WorkspaceScreen(), // Our new 3-pane shell

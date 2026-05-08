@@ -5,7 +5,7 @@ import 'package:isochron_flutter/ui/models/app_state.dart';
 import 'package:macos_ui/macos_ui.dart';
 
 import '../waveform/waveform_view.dart';
-import 'studio_fragment_list.dart';
+import 'components/studio_fragment_list.dart';
 
 class StudioEditor extends StatefulWidget {
   final AppManager homeManager;
