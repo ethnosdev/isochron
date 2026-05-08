@@ -421,6 +421,89 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     });
   }
 
+  Future<void> _deleteCollection(Collection collection) async {
+    final bool? confirm = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Delete Collection?'),
+        content: Text(
+          'Are you sure you want to delete "${collection.name}" and all of its tracks?\n\nThis will remove them from the project, but your raw audio and text files will remain safe on your hard drive.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() {
+      _project!.collections.remove(collection);
+      if (_selectedNode?.collection == collection) {
+        _selectedNode =
+            null; // Clear the center pane if the active collection was deleted
+      }
+      _expandedNodes.remove(collection.id);
+    });
+
+    _project!.save();
+  }
+
+  Future<void> _deleteTrack(Track track, Collection collection) async {
+    final bool? confirm = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Delete Track?'),
+        content: Text(
+          'Are you sure you want to remove "${track.name}" from this collection?',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    // Clean up alignment files from the hard drive so they don't leave ghosts
+    final jsonPath = track.getAbsoluteOutputPath(_project!.directoryPath);
+    final pinsPath = PinsService.pinsPath(jsonPath);
+    if (await File(jsonPath).exists()) await File(jsonPath).delete();
+    if (await File(pinsPath).exists()) await File(pinsPath).delete();
+
+    setState(() {
+      collection.tracks.remove(track);
+      if (_selectedNode?.track == track) {
+        // Fall back to viewing the parent collection
+        _expandedTrackId = null;
+        _selectedNode = TreeSelection(
+          type: NodeType.collection,
+          collection: collection,
+        );
+      }
+    });
+
+    _project!.save();
+  }
+
   Sidebar _buildTreeSidebar(BuildContext context) {
     List<Widget> rows = [];
     final theme = MacosTheme.of(context);
@@ -837,7 +920,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       case NodeType.settings:
         return _ProjectSettingsView(
           project: _project!,
-          onSaved: () => setState(() => _project!.save()),
+          onSaved: () {
+            setState(() {});
+            _project!.save();
+          },
         );
     }
   }
@@ -863,6 +949,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                             : "Isochron Studio"),
                 ),
                 actions: [
+                  // --- TRACK ACTIONS ---
                   if (_selectedNode?.type == NodeType.track) ...[
                     ToolBarIconButton(
                       label: 'Save',
@@ -933,6 +1020,35 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                               _selectedNode!.track!,
                             )
                           : null,
+                    ),
+                    const ToolBarSpacer(),
+                    ToolBarIconButton(
+                      label: 'Delete Track',
+                      icon: const MacosIcon(
+                        CupertinoIcons.trash,
+                        color: CupertinoColors.destructiveRed,
+                      ),
+                      showLabel: false,
+                      tooltipMessage: 'Delete Track',
+                      onPressed: () => _deleteTrack(
+                        _selectedNode!.track!,
+                        _selectedNode!.collection!,
+                      ),
+                    ),
+                  ]
+                  // --- COLLECTION ACTIONS ---
+                  else if (_selectedNode?.type == NodeType.collection) ...[
+                    const ToolBarSpacer(),
+                    ToolBarIconButton(
+                      label: 'Delete Collection',
+                      icon: const MacosIcon(
+                        CupertinoIcons.trash,
+                        color: CupertinoColors.destructiveRed,
+                      ),
+                      showLabel: true,
+                      tooltipMessage: 'Delete Collection',
+                      onPressed: () =>
+                          _deleteCollection(_selectedNode!.collection!),
                     ),
                   ],
                 ],

@@ -119,36 +119,65 @@ class Project {
   };
 
   factory Project.fromJson(Map<String, dynamic> json) {
-    // Legacy Migration from Pools & Alignments -> Collections & Tracks
     List<Collection> migratedCollections = [];
+
+    // 1. CURRENT FORMAT
     if (json.containsKey('collections')) {
       migratedCollections = (json['collections'] as List)
           .map((i) => Collection.fromJson(i as Map<String, dynamic>))
           .toList();
-    } else if (json.containsKey('alignments')) {
+    }
+    // 2. LEGACY FORMATS MIGRATION
+    else {
       final defaultCol = Collection(
         id: const Uuid().v4(),
         name: 'Imported Alignments',
       );
 
-      final audioPool = json['audioPool'] as List? ?? [];
-      final textPool = json['textPool'] as List? ?? [];
-      final audioMap = {for (var a in audioPool) a['id']: a['path']};
-      final textMap = {for (var t in textPool) t['id']: t['path']};
-
-      for (var a in (json['alignments'] as List)) {
-        defaultCol.tracks.add(
-          Track(
-            id: a['id'],
-            name: 'Track ${defaultCol.tracks.length + 1}',
-            audioPath: audioMap[a['audioAssetId']],
-            textPath: textMap[a['textAssetId']],
-            outputFilename: a['outputFilename'],
-            status: AlignmentStatus.values[a['status'] ?? 0],
-          ),
-        );
+      // Legacy v1: Direct Paths under "items" (This matches your pasted JSON)
+      if (json.containsKey('items')) {
+        for (var item in (json['items'] as List)) {
+          defaultCol.tracks.add(
+            Track(
+              id: item['id'] ?? const Uuid().v4(),
+              // Better track naming based on the output filename instead of "Track 1"
+              name: p.basenameWithoutExtension(
+                item['outputFilename'] ?? 'Track',
+              ),
+              audioPath: item['audioPath'],
+              textPath: item['textPath'],
+              outputFilename:
+                  item['outputFilename'] ??
+                  'alignment_${defaultCol.tracks.length}.json',
+              status: AlignmentStatus.values[item['status'] ?? 0],
+            ),
+          );
+        }
       }
-      migratedCollections.add(defaultCol);
+      // Legacy v2: Pool IDs under "alignments"
+      else if (json.containsKey('alignments')) {
+        final audioPool = json['audioPool'] as List? ?? [];
+        final textPool = json['textPool'] as List? ?? [];
+        final audioMap = {for (var a in audioPool) a['id']: a['path']};
+        final textMap = {for (var t in textPool) t['id']: t['path']};
+
+        for (var a in (json['alignments'] as List)) {
+          defaultCol.tracks.add(
+            Track(
+              id: a['id'] ?? const Uuid().v4(),
+              name: p.basenameWithoutExtension(a['outputFilename'] ?? 'Track'),
+              audioPath: audioMap[a['audioAssetId']],
+              textPath: textMap[a['textAssetId']],
+              outputFilename: a['outputFilename'],
+              status: AlignmentStatus.values[a['status'] ?? 0],
+            ),
+          );
+        }
+      }
+
+      if (defaultCol.tracks.isNotEmpty) {
+        migratedCollections.add(defaultCol);
+      }
     }
 
     return Project(
@@ -156,10 +185,13 @@ class Project {
       name: json['name'] ?? 'Project',
       directoryPath: json['directoryPath'],
       collections: migratedCollections,
-      dictPath: json['dictPath'] ?? json['dictAssetId'],
-      defaultHasIds: json['defaultHasIds'] ?? false,
-      defaultGenerateIds: json['defaultGenerateIds'] ?? false,
-      defaultIdPrefix: json['defaultIdPrefix'],
+      // Fallbacks to support various old setting keys
+      dictPath:
+          json['dictPath'] ?? json['dictionaryPath'] ?? json['dictAssetId'],
+      defaultHasIds: json['defaultHasIds'] ?? json['hasIds'] ?? false,
+      defaultGenerateIds:
+          json['defaultGenerateIds'] ?? json['generateIds'] ?? false,
+      defaultIdPrefix: json['defaultIdPrefix'] ?? json['generatedIdPrefix'],
       snapMode: json['snapMode'] ?? 'onset',
       snapOffset: json['snapOffset'],
     );
