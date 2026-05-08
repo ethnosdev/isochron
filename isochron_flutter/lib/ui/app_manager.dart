@@ -53,33 +53,23 @@ class AppManager extends ValueNotifier<AppState> {
     super.dispose();
   }
 
-  Future<void> loadAlignmentPair(AlignmentPair pair, Project project) async {
+  // Update loadAlignmentPair to loadTrack:
+  Future<void> loadTrack(Track track, Project project) async {
     _lastSavedPins = null;
 
     if (value.isPlaying) {
       await _audioService.pause();
     }
 
-    // 1. Resolve Asset Paths from the Pools
-    final audioAsset = project.audioPool
-        .where((a) => a.id == pair.audioAssetId)
-        .firstOrNull;
-    final textAsset = project.textPool
-        .where((a) => a.id == pair.textAssetId)
-        .firstOrNull;
-    final dictAsset = project.dictPool
-        .where((a) => a.id == project.dictAssetId)
-        .firstOrNull;
-
-    if (audioAsset == null || textAsset == null) {
+    if (track.audioPath == null || track.textPath == null) {
       value = value.copyWith(
-        statusMessage: "Error: Missing Audio or Text asset.",
+        statusMessage: "Error: Missing Audio or Text file in Track.",
       );
       return;
     }
 
-    final absJsonPath = pair.getAbsoluteOutputPath(project.directoryPath);
-    final playbackPath = await _ensureWavForPlayback(audioAsset.path);
+    final absJsonPath = track.getAbsoluteOutputPath(project.directoryPath);
+    final playbackPath = await _ensureWavForPlayback(track.audioPath!);
     final duration = await _audioService.load(playbackPath);
 
     List<Fragment> loadedFragments = [];
@@ -101,7 +91,7 @@ class AppManager extends ValueNotifier<AppState> {
       _lastSavedPins = _buildPinsSnapshot(loadedFragments);
     }
 
-    final actualDictPath = dictAsset?.path ?? value.dictPath;
+    final actualDictPath = project.dictPath ?? value.dictPath;
     Map<String, String>? rules = value.transliterationRules;
 
     if (actualDictPath != null &&
@@ -116,25 +106,23 @@ class AppManager extends ValueNotifier<AppState> {
       }
     }
 
-    final pairHasIds = pair.overrideHasIds ?? project.defaultHasIds;
-
     value = value.copyWith(
-      audioPath: audioAsset.path,
-      textPath: textAsset.path,
+      audioPath: track.audioPath,
+      textPath: track.textPath,
       dictPath: actualDictPath,
       transliterationRules: rules,
       autoSavePath: absJsonPath,
       fragments: loadedFragments,
-      hasIds: pairHasIds,
+      hasIds: project.defaultHasIds, // Uses global project settings now
       audioDuration: duration,
-      statusMessage: "Loaded ${audioAsset.filename}",
+      statusMessage: "Loaded ${track.name}",
       hasUnsavedChanges: false,
       clearWaveform: true,
       clearFocus: true,
     );
     playbackPosition.value = Duration.zero;
 
-    _generateWaveform(audioAsset.path);
+    _generateWaveform(track.audioPath!);
 
     if (loadedFragments.isEmpty) {
       await initManualAlignment();

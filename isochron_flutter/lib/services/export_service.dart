@@ -7,28 +7,24 @@ import 'package:path/path.dart' as p;
 
 class ExportService {
   /// Builds the "Export Combined CSV" payload for the whole project.
-  ///
-  /// This intentionally exports only alignments that are finalized enough for
-  /// downstream use (`done` / `reviewed`) to match existing product behavior.
   static Future<String> buildCombinedCsv(Project project) async {
-    final exportablePairs = project.alignments
-        .where((p) => isPhraseExportableStatus(p.status))
+    final exportableTracks = project.collections
+        .expand((c) => c.tracks)
+        .where((t) => isPhraseExportableStatus(t.status))
         .toList();
-    if (exportablePairs.isEmpty) return '';
+
+    if (exportableTracks.isEmpty) return '';
 
     final buffer = StringBuffer();
     buffer.writeln('id,verse_id,recording_id,start,end');
 
-    for (final pair in exportablePairs) {
-      final entries = await _loadAlignmentEntries(project, pair);
+    for (final track in exportableTracks) {
+      final entries = await _loadAlignmentEntries(project, track);
       if (entries.isEmpty) continue;
 
-      final audioAsset = project.audioPool
-          .where((a) => a.id == pair.audioAssetId)
-          .firstOrNull;
-      final displayTitle = audioAsset != null
-          ? p.basenameWithoutExtension(audioAsset.path)
-          : pair.id;
+      final displayTitle = track.audioPath != null
+          ? p.basenameWithoutExtension(track.audioPath!)
+          : track.name;
 
       buffer.write(generateCsv(entries, displayTitle, includeHeader: false));
     }
@@ -36,23 +32,14 @@ class ExportService {
     return buffer.toString();
   }
 
-  /// Builds the phrase-timing payload for a single alignment pair.
-  ///
-  /// Returns `null` when export is not allowed (status) or when the
-  /// alignment JSON has no rows.
-  static Future<String?> buildPhraseTiming(
-    Project project,
-    AlignmentPair pair,
-  ) async {
-    if (!canExportPhraseTiming(pair)) return null;
+  /// Builds the phrase-timing payload for a single track.
+  static Future<String?> buildPhraseTiming(Project project, Track track) async {
+    if (!canExportPhraseTiming(track)) return null;
 
-    final entries = await _loadAlignmentEntries(project, pair);
+    final entries = await _loadAlignmentEntries(project, track);
     if (entries.isEmpty) return null;
 
-    final textAsset = project.textPool
-        .where((a) => a.id == pair.textAssetId)
-        .firstOrNull;
-    final metadata = parsePhraseMetadataFromTextFilename(textAsset?.path);
+    final metadata = parsePhraseMetadataFromTextFilename(track.textPath);
     return generatePhraseTiming(entries, metadata);
   }
 
@@ -78,8 +65,7 @@ class ExportService {
     return buffer.toString();
   }
 
-  /// Serializes a list of alignment rows into phrase timing text format:
-  /// `\id`, `\c`, `\level phrase`, then `<start> <end> <phraseId>` rows.
+  /// Serializes a list of alignment rows into phrase timing text format
   static String generatePhraseTiming(
     List<Map<String, dynamic>> entries,
     TimingExportMetadata metadata,
@@ -90,11 +76,7 @@ class ExportService {
     );
   }
 
-  /// Parses phrase metadata from a source text filename convention:
-  /// `LANG-BOOKID-BOOK-CHAPTERID.*`.
-  ///
-  /// Extension is ignored intentionally so both `.txt` and `.phrase` source
-  /// files can provide naming hints.
+  /// Parses phrase metadata from a source text filename convention
   static TimingExportMetadata parsePhraseMetadataFromTextFilename(
     String? textPath,
   ) {
@@ -105,14 +87,8 @@ class ExportService {
     return '${metadata.languageCode}-${metadata.bookId}-${metadata.bookCode}-${metadata.chapterId}.txt';
   }
 
-  static String defaultPhraseTimingFilenameForPair(
-    Project project,
-    AlignmentPair pair,
-  ) {
-    final textAsset = project.textPool
-        .where((a) => a.id == pair.textAssetId)
-        .firstOrNull;
-    return TimingExport.defaultTimingFilenameFromSourcePath(textAsset?.path);
+  static String defaultPhraseTimingFilenameForTrack(Track track) {
+    return TimingExport.defaultTimingFilenameFromSourcePath(track.textPath);
   }
 
   static String defaultCsvFilename(String projectName) {
@@ -124,20 +100,15 @@ class ExportService {
   }
 
   /// Phrase export is enabled when alignment status is finalized.
-  static bool canExportPhraseTiming(AlignmentPair pair) {
-    return isPhraseExportableStatus(pair.status);
+  static bool canExportPhraseTiming(Track track) {
+    return isPhraseExportableStatus(track.status);
   }
 
-  /// User-facing tooltip reason for export button state.
-  /// Keep this centralized so toolbar and batch tiles stay consistent.
-  static String phraseExportTooltip(AlignmentPair pair) {
-    if (!isPhraseExportableStatus(pair.status)) {
+  static String phraseExportTooltip(Track track) {
+    if (!isPhraseExportableStatus(track.status)) {
       return 'Export is available only for Done/Reviewed alignments';
     }
-    if (canExportPhraseTiming(pair)) {
-      return 'Export phrase timing';
-    }
-    return 'Export unavailable';
+    return 'Export phrase timing';
   }
 
   static String _escape(String input) {
@@ -148,9 +119,9 @@ class ExportService {
   /// Reads per-alignment JSON output persisted by the aligner.
   static Future<List<Map<String, dynamic>>> _loadAlignmentEntries(
     Project project,
-    AlignmentPair pair,
+    Track track,
   ) async {
-    final absJsonPath = pair.getAbsoluteOutputPath(project.directoryPath);
+    final absJsonPath = track.getAbsoluteOutputPath(project.directoryPath);
     final file = File(absJsonPath);
     if (!await file.exists()) return [];
 

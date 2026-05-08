@@ -179,39 +179,43 @@ void main() {
     });
 
     test('combined phrase export gate requires valid status only', () {
-      final donePair = AlignmentPair(
+      final doneTrack = Track(
         id: 'done',
+        name: 'Done Track',
         outputFilename: 'x.json',
         status: AlignmentStatus.done,
       );
-      final pendingPair = AlignmentPair(
+      final pendingTrack = Track(
         id: 'pending',
+        name: 'Pending Track',
         outputFilename: 'x.json',
         status: AlignmentStatus.pending,
       );
 
-      expect(ExportService.canExportPhraseTiming(donePair), isTrue);
-      expect(ExportService.canExportPhraseTiming(pendingPair), isFalse);
+      expect(ExportService.canExportPhraseTiming(doneTrack), isTrue);
+      expect(ExportService.canExportPhraseTiming(pendingTrack), isFalse);
     });
 
     test('tooltip reflects status-only enablement', () {
-      final donePair = AlignmentPair(
+      final doneTrack = Track(
         id: 'ok',
+        name: 'Done Track',
         outputFilename: 'x.json',
         status: AlignmentStatus.done,
       );
-      final pendingPair = AlignmentPair(
+      final pendingTrack = Track(
         id: 'bad_status',
+        name: 'Pending Track',
         outputFilename: 'x.json',
         status: AlignmentStatus.pending,
       );
 
       expect(
-        ExportService.phraseExportTooltip(donePair),
+        ExportService.phraseExportTooltip(doneTrack),
         'Export phrase timing',
       );
       expect(
-        ExportService.phraseExportTooltip(pendingPair),
+        ExportService.phraseExportTooltip(pendingTrack),
         'Export is available only for Done/Reviewed alignments',
       );
     });
@@ -220,14 +224,15 @@ void main() {
   group('ExportService orchestration', () {
     late Directory tempDir;
     late Project project;
-    late AlignmentPair donePair;
-    late AlignmentPair pendingPair;
+    late Collection collection;
+    late Track doneTrack;
+    late Track pendingTrack;
 
-    Future<void> writePairOutput(
-      AlignmentPair pair,
+    Future<void> writeTrackOutput(
+      Track track,
       List<Map<String, dynamic>> rows,
     ) async {
-      final abs = pair.getAbsoluteOutputPath(project.directoryPath);
+      final abs = track.getAbsoluteOutputPath(project.directoryPath);
       await File(abs).create(recursive: true);
       await File(abs).writeAsString(jsonEncode(rows));
     }
@@ -235,38 +240,41 @@ void main() {
     setUp(() async {
       tempDir = await Directory.systemTemp.createTemp('export_service_test_');
 
-      donePair = AlignmentPair(
-        id: 'pair_done',
-        audioAssetId: 'audio_1',
-        textAssetId: 'text_1',
+      doneTrack = Track(
+        id: 'track_done',
+        name: 'Done Track',
+        audioPath: '/audio/rec01.wav',
+        textPath: '/text/TH-01-GEN-01.txt',
         outputFilename: 'done.json',
         status: AlignmentStatus.done,
       );
-      pendingPair = AlignmentPair(
-        id: 'pair_pending',
-        audioAssetId: 'audio_1',
-        textAssetId: 'text_2',
+      pendingTrack = Track(
+        id: 'track_pending',
+        name: 'Pending Track',
+        audioPath: '/audio/rec01.wav',
+        textPath: '/text/BADNAME.txt',
         outputFilename: 'pending.json',
         status: AlignmentStatus.pending,
+      );
+
+      collection = Collection(
+        id: 'col_1',
+        name: 'Main Collection',
+        tracks: [doneTrack, pendingTrack],
       );
 
       project = Project(
         id: 'proj1',
         name: 'My Project',
         directoryPath: tempDir.path,
-        audioPool: [ProjectAsset(id: 'audio_1', path: '/audio/rec01.wav')],
-        textPool: [
-          ProjectAsset(id: 'text_1', path: '/text/TH-01-GEN-01.txt'),
-          ProjectAsset(id: 'text_2', path: '/text/BADNAME.txt'),
-        ],
-        alignments: [donePair, pendingPair],
+        collections: [collection],
       );
 
-      await writePairOutput(donePair, [
+      await writeTrackOutput(doneTrack, [
         {'index': 0, 'id': 's1', 'start': 2.132, 'end': 10.657},
         {'index': 1, 'id': '1a', 'start': 10.657, 'end': 11.545},
       ]);
-      await writePairOutput(pendingPair, [
+      await writeTrackOutput(pendingTrack, [
         {'index': 0, 'id': 'p1', 'start': 0.0, 'end': 1.0},
       ]);
     });
@@ -277,7 +285,7 @@ void main() {
       }
     });
 
-    test('buildCombinedCsv exports done/reviewed alignments only', () async {
+    test('buildCombinedCsv exports done/reviewed tracks only', () async {
       final csv = await ExportService.buildCombinedCsv(project);
 
       expect(csv, startsWith('id,verse_id,recording_id,start,end\n'));
@@ -289,42 +297,40 @@ void main() {
     test('buildPhraseTiming returns null for non-exportable status', () async {
       final payload = await ExportService.buildPhraseTiming(
         project,
-        pendingPair,
+        pendingTrack,
       );
       expect(payload, isNull);
     });
 
-    test('buildPhraseTiming returns phrase payload for done pair', () async {
-      final payload = await ExportService.buildPhraseTiming(project, donePair);
+    test('buildPhraseTiming returns phrase payload for done track', () async {
+      final payload = await ExportService.buildPhraseTiming(project, doneTrack);
       expect(payload, isNotNull);
       expect(payload!, startsWith('\\id GEN\n\\c 01\n\\level phrase\n'));
       expect(payload, contains('2.132\t10.657\ts1\n'));
     });
 
     test(
-      'defaultPhraseTimingFilenameForPair uses parsed filename metadata',
+      'defaultPhraseTimingFilenameForTrack uses parsed filename metadata',
       () {
-        final name = ExportService.defaultPhraseTimingFilenameForPair(
-          project,
-          donePair,
+        final name = ExportService.defaultPhraseTimingFilenameForTrack(
+          doneTrack,
         );
         expect(name, 'TH-01-GEN-01-timing.txt');
       },
     );
 
-    test('defaultPhraseTimingFilenameForPair falls back on parse failure', () {
-      final name = ExportService.defaultPhraseTimingFilenameForPair(
-        project,
-        pendingPair,
+    test('defaultPhraseTimingFilenameForTrack falls back on parse failure', () {
+      final name = ExportService.defaultPhraseTimingFilenameForTrack(
+        pendingTrack,
       );
       expect(name, 'BADNAME-timing.txt');
     });
 
     test(
-      'buildCombinedCsv returns empty when no exportable alignments',
+      'buildCombinedCsv returns empty when no exportable tracks exist',
       () async {
-        pendingPair.status = AlignmentStatus.error;
-        donePair.status = AlignmentStatus.pending;
+        pendingTrack.status = AlignmentStatus.error;
+        doneTrack.status = AlignmentStatus.pending;
 
         final csv = await ExportService.buildCombinedCsv(project);
         expect(csv, isEmpty);
@@ -332,68 +338,53 @@ void main() {
     );
 
     test('buildPhraseTiming still works for done non-.phrase input', () async {
-      donePair.textAssetId = 'text_2';
-      donePair.status = AlignmentStatus.done;
+      doneTrack.textPath = '/text/grctr_071_MRK_01_read.txt';
+      doneTrack.status = AlignmentStatus.done;
 
-      final payload = await ExportService.buildPhraseTiming(project, donePair);
+      final payload = await ExportService.buildPhraseTiming(project, doneTrack);
       expect(payload, isNotNull);
-      expect(payload!, startsWith('\\id BOOK\n\\c 1\n\\level phrase\n'));
+      expect(payload!, startsWith('\\id MRK\n\\c 01\n\\level phrase\n'));
     });
 
     test('default output naming preserves underscore separator', () {
-      final pair = AlignmentPair(
-        id: 'pair_underscore',
-        textAssetId: 'text_3',
+      final track = Track(
+        id: 'track_underscore',
+        name: 'Underscore',
+        textPath: '/text/grctr_071_MRK_01_read.txt',
         outputFilename: 'u.json',
         status: AlignmentStatus.done,
       );
-      project.textPool.add(
-        ProjectAsset(id: 'text_3', path: '/text/grctr_071_MRK_01_read.txt'),
-      );
 
-      final name = ExportService.defaultPhraseTimingFilenameForPair(
-        project,
-        pair,
-      );
+      final name = ExportService.defaultPhraseTimingFilenameForTrack(track);
       expect(name, 'grctr_071_MRK_01_read_timing.txt');
     });
 
     test(
       'default output naming forces .txt extension even for .phrase input',
       () {
-        final pair = AlignmentPair(
-          id: 'pair_phrase_ext',
-          textAssetId: 'text_5',
+        final track = Track(
+          id: 'track_phrase_ext',
+          name: 'Phrase Ext',
+          textPath: '/text/TH-01-GEN-01.phrase',
           outputFilename: 'p.json',
           status: AlignmentStatus.done,
         );
-        project.textPool.add(
-          ProjectAsset(id: 'text_5', path: '/text/TH-01-GEN-01.phrase'),
-        );
 
-        final name = ExportService.defaultPhraseTimingFilenameForPair(
-          project,
-          pair,
-        );
+        final name = ExportService.defaultPhraseTimingFilenameForTrack(track);
         expect(name, 'TH-01-GEN-01-timing.txt');
       },
     );
 
     test('default output naming normalizes space separator to dash', () {
-      final pair = AlignmentPair(
-        id: 'pair_space',
-        textAssetId: 'text_4',
+      final track = Track(
+        id: 'track_space',
+        name: 'Space Name',
+        textPath: '/text/grctr 071 MRK 01 read.txt',
         outputFilename: 's.json',
         status: AlignmentStatus.done,
       );
-      project.textPool.add(
-        ProjectAsset(id: 'text_4', path: '/text/grctr 071 MRK 01 read.txt'),
-      );
 
-      final name = ExportService.defaultPhraseTimingFilenameForPair(
-        project,
-        pair,
-      );
+      final name = ExportService.defaultPhraseTimingFilenameForTrack(track);
       expect(name, 'grctr 071 MRK 01 read-timing.txt');
     });
   });

@@ -5,40 +5,22 @@ import 'package:uuid/uuid.dart';
 
 enum AlignmentStatus { pending, processing, done, reviewed, error }
 
-/// Represents a raw file living in one of the project's pools.
-class ProjectAsset {
+/// Represents a single linked pair of Audio and Text inside a Collection.
+class Track {
   final String id;
-  final String path;
-
-  ProjectAsset({required this.id, required this.path});
-
-  String get filename => p.basename(path);
-
-  Map<String, dynamic> toJson() => {'id': id, 'path': path};
-
-  factory ProjectAsset.fromJson(Map<String, dynamic> json) {
-    return ProjectAsset(id: json['id'], path: json['path']);
-  }
-}
-
-/// Represents the relationship linking an Audio file, a Text file, and a Dictionary.
-class AlignmentPair {
-  final String id;
-  String? audioAssetId;
-  String? textAssetId;
+  String name;
+  String? audioPath;
+  String? textPath;
   final String outputFilename;
   AlignmentStatus status;
 
-  // Local overrides
-  bool? overrideHasIds;
-
-  AlignmentPair({
+  Track({
     required this.id,
-    this.audioAssetId,
-    this.textAssetId,
+    required this.name,
+    this.audioPath,
+    this.textPath,
     required this.outputFilename,
     this.status = AlignmentStatus.pending,
-    this.overrideHasIds,
   });
 
   String getAbsoluteOutputPath(String projectDir) {
@@ -47,21 +29,49 @@ class AlignmentPair {
 
   Map<String, dynamic> toJson() => {
     'id': id,
-    'audioAssetId': audioAssetId,
-    'textAssetId': textAssetId,
+    'name': name,
+    'audioPath': audioPath,
+    'textPath': textPath,
     'outputFilename': outputFilename,
     'status': status.index,
-    'overrideHasIds': overrideHasIds,
   };
 
-  factory AlignmentPair.fromJson(Map<String, dynamic> json) {
-    return AlignmentPair(
+  factory Track.fromJson(Map<String, dynamic> json) {
+    return Track(
       id: json['id'],
-      audioAssetId: json['audioAssetId'],
-      textAssetId: json['textAssetId'],
+      name: json['name'] ?? 'Track',
+      audioPath: json['audioPath'],
+      textPath: json['textPath'],
       outputFilename: json['outputFilename'],
       status: AlignmentStatus.values[json['status'] ?? 0],
-      overrideHasIds: json['overrideHasIds'],
+    );
+  }
+}
+
+/// A grouping of Tracks (e.g. "Gospel of John").
+class Collection {
+  final String id;
+  String name;
+  List<Track> tracks;
+
+  Collection({required this.id, required this.name, List<Track>? tracks})
+    : tracks = tracks ?? [];
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'tracks': tracks.map((t) => t.toJson()).toList(),
+  };
+
+  factory Collection.fromJson(Map<String, dynamic> json) {
+    return Collection(
+      id: json['id'],
+      name: json['name'],
+      tracks:
+          (json['tracks'] as List?)
+              ?.map((i) => Track.fromJson(i as Map<String, dynamic>))
+              .toList() ??
+          [],
     );
   }
 }
@@ -70,17 +80,12 @@ class Project {
   final String id;
   String name;
   final String directoryPath;
-  String? dictAssetId;
 
-  // --- ASSET POOLS ---
-  List<ProjectAsset> audioPool;
-  List<ProjectAsset> textPool;
-  List<ProjectAsset> dictPool;
-
-  // --- ALIGNMENTS ---
-  List<AlignmentPair> alignments;
+  // --- TREE HIERARCHY ---
+  List<Collection> collections;
 
   // --- GLOBAL SETTINGS ---
+  String? dictPath;
   bool defaultHasIds;
   bool defaultGenerateIds;
   String? defaultIdPrefix;
@@ -91,30 +96,21 @@ class Project {
     required this.id,
     required this.name,
     required this.directoryPath,
-    this.dictAssetId,
-    List<ProjectAsset>? audioPool,
-    List<ProjectAsset>? textPool,
-    List<ProjectAsset>? dictPool,
-    List<AlignmentPair>? alignments,
+    List<Collection>? collections,
+    this.dictPath,
     this.defaultHasIds = false,
     this.defaultGenerateIds = false,
     this.defaultIdPrefix,
     this.snapMode = 'onset',
     this.snapOffset,
-  }) : audioPool = audioPool ?? [],
-       textPool = textPool ?? [],
-       dictPool = dictPool ?? [],
-       alignments = alignments ?? [];
+  }) : collections = collections ?? [];
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
     'directoryPath': directoryPath,
-    'dictAssetId': dictAssetId,
-    'audioPool': audioPool.map((a) => a.toJson()).toList(),
-    'textPool': textPool.map((a) => a.toJson()).toList(),
-    'dictPool': dictPool.map((a) => a.toJson()).toList(),
-    'alignments': alignments.map((a) => a.toJson()).toList(),
+    'collections': collections.map((c) => c.toJson()).toList(),
+    'dictPath': dictPath,
     'defaultHasIds': defaultHasIds,
     'defaultGenerateIds': defaultGenerateIds,
     'defaultIdPrefix': defaultIdPrefix,
@@ -123,121 +119,47 @@ class Project {
   };
 
   factory Project.fromJson(Map<String, dynamic> json) {
-    // -------------------------------------------------------------------------
-    // LEGACY MIGRATION: Upgrades old v1 projects automatically on open
-    // -------------------------------------------------------------------------
-    if (json.containsKey('items')) {
-      return _migrateLegacyProject(json);
+    // Legacy Migration from Pools & Alignments -> Collections & Tracks
+    List<Collection> migratedCollections = [];
+    if (json.containsKey('collections')) {
+      migratedCollections = (json['collections'] as List)
+          .map((i) => Collection.fromJson(i as Map<String, dynamic>))
+          .toList();
+    } else if (json.containsKey('alignments')) {
+      final defaultCol = Collection(
+        id: const Uuid().v4(),
+        name: 'Imported Alignments',
+      );
+
+      final audioPool = json['audioPool'] as List? ?? [];
+      final textPool = json['textPool'] as List? ?? [];
+      final audioMap = {for (var a in audioPool) a['id']: a['path']};
+      final textMap = {for (var t in textPool) t['id']: t['path']};
+
+      for (var a in (json['alignments'] as List)) {
+        defaultCol.tracks.add(
+          Track(
+            id: a['id'],
+            name: 'Track ${defaultCol.tracks.length + 1}',
+            audioPath: audioMap[a['audioAssetId']],
+            textPath: textMap[a['textAssetId']],
+            outputFilename: a['outputFilename'],
+            status: AlignmentStatus.values[a['status'] ?? 0],
+          ),
+        );
+      }
+      migratedCollections.add(defaultCol);
     }
 
-    // -------------------------------------------------------------------------
-    // NEW PARSER
-    // -------------------------------------------------------------------------
     return Project(
-      id: json['id'],
-      name: json['name'],
+      id: json['id'] ?? const Uuid().v4(),
+      name: json['name'] ?? 'Project',
       directoryPath: json['directoryPath'],
-      dictAssetId: json['dictAssetId'],
-      audioPool:
-          (json['audioPool'] as List?)
-              ?.map((i) => ProjectAsset.fromJson(i as Map<String, dynamic>))
-              .toList() ??
-          [],
-      textPool:
-          (json['textPool'] as List?)
-              ?.map((i) => ProjectAsset.fromJson(i as Map<String, dynamic>))
-              .toList() ??
-          [],
-      dictPool:
-          (json['dictPool'] as List?)
-              ?.map((i) => ProjectAsset.fromJson(i as Map<String, dynamic>))
-              .toList() ??
-          [],
-      alignments:
-          (json['alignments'] as List?)
-              ?.map((i) => AlignmentPair.fromJson(i as Map<String, dynamic>))
-              .toList() ??
-          [],
+      collections: migratedCollections,
+      dictPath: json['dictPath'] ?? json['dictAssetId'],
       defaultHasIds: json['defaultHasIds'] ?? false,
       defaultGenerateIds: json['defaultGenerateIds'] ?? false,
       defaultIdPrefix: json['defaultIdPrefix'],
-      snapMode: json['snapMode'] ?? 'onset',
-      snapOffset: json['snapOffset'],
-    );
-  }
-
-  static Project _migrateLegacyProject(Map<String, dynamic> json) {
-    final audioPool = <ProjectAsset>[];
-    final textPool = <ProjectAsset>[];
-    final dictPool = <ProjectAsset>[];
-    final alignments = <AlignmentPair>[];
-    const uuid = Uuid();
-
-    // 1. Migrate Dictionary
-    String? dictAssetId;
-    if (json['dictionaryPath'] != null) {
-      dictAssetId = uuid.v4();
-      dictPool.add(ProjectAsset(id: dictAssetId, path: json['dictionaryPath']));
-    }
-
-    // 2. Iterate old items and populate pools and pairings
-    final items = json['items'] as List? ?? [];
-    for (var item in items) {
-      // Find or create Audio Asset
-      String? audioId;
-      if (item['audioPath'] != null) {
-        final existing = audioPool
-            .where((a) => a.path == item['audioPath'])
-            .firstOrNull;
-        if (existing != null) {
-          audioId = existing.id;
-        } else {
-          audioId = uuid.v4();
-          audioPool.add(ProjectAsset(id: audioId, path: item['audioPath']));
-        }
-      }
-
-      // Find or create Text Asset
-      String? textId;
-      if (item['textPath'] != null) {
-        final existing = textPool
-            .where((a) => a.path == item['textPath'])
-            .firstOrNull;
-        if (existing != null) {
-          textId = existing.id;
-        } else {
-          textId = uuid.v4();
-          textPool.add(ProjectAsset(id: textId, path: item['textPath']));
-        }
-      }
-
-      // Create Alignment Link
-      alignments.add(
-        AlignmentPair(
-          id: item['id'] ?? uuid.v4(),
-          audioAssetId: audioId,
-          textAssetId: textId,
-          outputFilename:
-              item['outputFilename'] ??
-              'alignment_${uuid.v4().substring(0, 4)}.json',
-          status: AlignmentStatus.values[item['status'] ?? 0],
-          overrideHasIds: item['hasIds'],
-        ),
-      );
-    }
-
-    return Project(
-      id: json['id'] ?? uuid.v4(),
-      name: json['name'] ?? 'Legacy Project',
-      directoryPath: json['directoryPath'] ?? '',
-      dictAssetId: dictAssetId,
-      audioPool: audioPool,
-      textPool: textPool,
-      dictPool: dictPool,
-      alignments: alignments,
-      defaultHasIds: json['hasIds'] ?? false,
-      defaultGenerateIds: json['generateIds'] ?? false,
-      defaultIdPrefix: json['generatedIdPrefix'],
       snapMode: json['snapMode'] ?? 'onset',
       snapOffset: json['snapOffset'],
     );
