@@ -25,12 +25,27 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
   late bool _hasIds;
   late String _prefix;
 
+  late TextEditingController _prefixController;
+  late TextEditingController _offsetController;
+
   @override
   void initState() {
     super.initState();
     _generateIds = widget.project.defaultGenerateIds;
     _hasIds = widget.project.defaultHasIds;
     _prefix = widget.project.defaultIdPrefix ?? "";
+
+    _prefixController = TextEditingController(text: _prefix);
+    _offsetController = TextEditingController(
+      text: widget.project.snapOffset?.toString() ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _prefixController.dispose();
+    _offsetController.dispose();
+    super.dispose();
   }
 
   String get _idPreview {
@@ -51,6 +66,16 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
   @override
   Widget build(BuildContext context) {
     final theme = MacosTheme.of(context);
+
+    final textFieldDecoration = BoxDecoration(
+      color: theme.brightness == Brightness.dark
+          ? const Color(
+              0xFF2A2A2A,
+            ) // Lighter grey for better contrast in dark mode
+          : const Color(0xFFFFFFFF),
+      border: Border.all(color: theme.dividerColor),
+      borderRadius: BorderRadius.circular(5.0),
+    );
 
     return SingleChildScrollView(
       child: Center(
@@ -172,8 +197,9 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                 SizedBox(
                   width: 300,
                   child: MacosTextField(
-                    controller: TextEditingController(text: _prefix),
+                    controller: _prefixController,
                     placeholder: 'Optional ID Prefix (e.g. 40)',
+                    decoration: textFieldDecoration,
                     onChanged: (val) {
                       setState(() => _prefix = val);
                       _triggerSave();
@@ -250,12 +276,11 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                 SizedBox(
                   width: 150,
                   child: MacosTextField(
-                    controller: TextEditingController(
-                      text: widget.project.snapOffset?.toString() ?? '',
-                    ),
+                    controller: _offsetController,
                     placeholder: 'e.g. 250',
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: textFieldDecoration,
                     onChanged: (val) {
                       widget.project.snapOffset = val.isEmpty
                           ? null
