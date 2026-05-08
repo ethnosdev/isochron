@@ -10,12 +10,13 @@ The core engine is 100% Dart, based on open-domain DSP theory, and completely fr
 
 ## 🌟 Key Features
 
-* **Pro macOS Interface:** Built with `macos_ui`, featuring sliding sidebars, native translucent selection highlights, and seamless macOS menu bar integration.
-* **Smart Auto-Pairing:** Import 50 audio files and 50 text files, click the "Auto-Pair" wand, and Isochron will naturally sort and link them all automatically.
-* **Pro Timeline Gestures:** Navigate the timeline exactly like Logic Pro or Final Cut. Two-finger swipe to pan seamlessly, and two-finger vertical swipe (or pinch) for buttery-smooth exponential zooming anchored right to your mouse pointer.
+* **Pro macOS Interface:** Built with `macos_ui`, featuring a native 3-pane tree sidebar, translucent selection highlights, seamless macOS menu bar integration, and live horizontal progress bars.
+* **Smart Auto-Pairing:** Import bulk audio and text files directly into a "Collection". Isochron will naturally sort and link them all automatically into grouped "Tracks".
+* **Pro Timeline Navigation:** Navigate the timeline exactly like Logic Pro or Final Cut. Use a two-finger swipe to pan seamlessly, and a two-finger vertical swipe to zoom exponentially. Prefer clicking? Use the new Zoom In/Out buttons right on the toolbar.
+* **Dynamic ID Strategies:** Automatically parse verse IDs directly from your text files, or let Isochron auto-generate them sequentially using custom prefixes.
 * **Global Transliteration:** Provide a JSON map of non-Latin to Latin characters to instantly apply transliteration rules across your entire project.
-* **Headless Batch Processor:** Queue up dozens of alignments, hit "Run All", and export everything into a unified CSV database when finished.
-* **Phrase Timing Export:** Export phrase timing text files per alignment from alignment-list tiles or the editor toolbar when the pair is finalized.
+* **Headless Batch Processor:** Queue up dozens of alignments in a Collection, hit "Run Alignment on All", and export everything into a unified CSV database when finished.
+* **Phrase Timing Export:** Export phrase timing text files per track directly from the editor toolbar when the pair is finalized.
 
 ---
 
@@ -31,17 +32,17 @@ flutter run -d macos
 
 ### The Studio Workflow
 
-Isochron uses a professional **Asset Pool** architecture. You don't have to manually match files before importing them.
+Isochron uses a streamlined **Project > Collection > Track** hierarchy. You don't have to manually match files before importing them.
 
-1. **Create a Project:** On the welcome screen, click "Create New Project". Type a name, pick a location (like your Desktop), and Isochron will instantly build the directory structure for you.
-2. **Import Assets:** Use the left sidebar to navigate to the **Audio Pool** and **Text Pool**. Click the `+` icon in the top toolbar to import your `.mp3`/`.wav` and `.txt`/`.phrase` files.
-3. **Auto-Pair:** Navigate to **Alignments** in the sidebar. Click the **Auto-Pair Unlinked** button (the layered wand icon) to instantly create linked pairs from your imported files.
-4. **Align:** Select the **Batch Processor** tab and click "Run All Pending" to process them automatically, OR double-click a single pair to open the manual **Studio Editor**.
+1. **Create a Project:** On the welcome screen, click "Create New Project". Pick a location (like your Desktop), and Isochron will instantly build the directory structure (`project.json` and an `alignments/` folder) for you.
+2. **Setup Collections:** Create a new Collection (e.g., "Gospel of John") using the folder icon in the sidebar.
+3. **Import & Auto-Pair:** Select the Collection and click **Import Files** (or "Select Files..."). Highlight your raw `.mp3`/`.wav` and `.txt`/`.phrase` files. Isochron will naturally sort them and automatically create linked **Tracks**.
+4. **Align:** In the Collection batch view, click **Run Alignment on All** to process them automatically while watching the live progress bar, OR double-click a single Track to open the manual **Studio Editor**.
 
 ### Export Notes
 
-* **Combined CSV Export:** Available from the Batch Processor toolbar. It includes only alignments with status `done` or `reviewed`.
-* **Phrase Timing Export:** Available from alignment-list tiles and in-editor toolbar for a specific alignment.
+* **Combined CSV Export:** Available from the File menu or Batch Processor toolbar. It includes only alignments with a status of `done` or `reviewed`.
+* **Phrase Timing Export:** Available from the in-editor toolbar for a specific track.
   * Enabled only when status is `done` or `reviewed`.
   * Disabled-state tooltip explains when status is not eligible.
   * Suggested output name is derived from input text filename as:
@@ -53,13 +54,14 @@ Isochron uses a professional **Asset Pool** architecture. You don't have to manu
 
 ## 🎛️ Studio Editor Guide
 
-The Studio Editor allows you to manually verify, adjust, or completely dictate timing markers. 
+The Studio Editor allows you to manually verify, adjust, or completely dictate timing markers. Isochron safely stores your pinned manual adjustments in a sidecar `-pins.json` file so you never lose your manual work if you re-run the aligner.
 
-### Trackpad Gestures
-Isochron features full native support for Apple Trackpads:
-* **Two-Finger Swipe Left/Right:** Smoothly pan the timeline horizontally.
-* **Two-Finger Swipe Up/Down:** Smoothly zoom in and out. The zoom is exponentially scaled and anchors perfectly to wherever your mouse cursor is hovering.
+### Trackpad & Mouse Controls
+Isochron features full native support for Apple Trackpads and standard mice:
+* **Two-Finger Swipe Left/Right (or Scroll Wheel):** Smoothly pan the timeline horizontally.
+* **Two-Finger Swipe Up/Down (or Ctrl + Scroll):** Smoothly zoom in and out. The zoom is exponentially scaled and anchors perfectly to wherever your mouse cursor is hovering.
 * **Pinch-to-Zoom:** Standard trackpad pinching to scale the waveform.
+* **Toolbar Buttons:** Dedicated "+" and "-" zoom buttons are available on the top toolbar for accessibility.
 * **Click and Drag:** Grab any boundary line on the waveform to slide it back and forth without moving the playhead.
 
 ### Keyboard Shortcuts
