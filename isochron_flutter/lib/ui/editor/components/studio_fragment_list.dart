@@ -170,12 +170,6 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                               size: 14,
                               color: macBlue,
                             )
-                          else if (f.isPinned)
-                            const Icon(
-                              CupertinoIcons.lock_fill,
-                              size: 12,
-                              color: CupertinoColors.systemYellow,
-                            )
                           else
                             Text(
                               "${f.index}",
@@ -185,6 +179,15 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
+                          // Display the lock independently so the index is never hidden
+                          if (f.isPinned) ...[
+                            const SizedBox(height: 2),
+                            const Icon(
+                              CupertinoIcons.lock_fill,
+                              size: 10,
+                              color: CupertinoColors.systemYellow,
+                            ),
+                          ],
                         ],
                       ),
                     ),
