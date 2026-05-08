@@ -1186,6 +1186,30 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                             )
                           : null,
                     ),
+                    ToolBarIconButton(
+                      label: 'Zoom Out',
+                      icon: MacosIcon(
+                        CupertinoIcons.zoom_out,
+                        color: MacosTheme.of(context).typography.body.color,
+                      ),
+                      showLabel: false,
+                      tooltipMessage: 'Zoom Out',
+                      onPressed: () => _homeManager.setZoom(
+                        _homeManager.value.zoomLevel / 1.5,
+                      ),
+                    ),
+                    ToolBarIconButton(
+                      label: 'Zoom In',
+                      icon: MacosIcon(
+                        CupertinoIcons.zoom_in,
+                        color: MacosTheme.of(context).typography.body.color,
+                      ),
+                      showLabel: false,
+                      tooltipMessage: 'Zoom In',
+                      onPressed: () => _homeManager.setZoom(
+                        _homeManager.value.zoomLevel * 1.5,
+                      ),
+                    ),
                     const ToolBarSpacer(),
                     ToolBarIconButton(
                       label: 'Delete Track',
