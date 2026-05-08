@@ -46,6 +46,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   // Tree State
   TreeSelection? _selectedNode;
   final Set<String> _expandedNodes = {};
+  String? _expandedTrackId;
   String? _editingNodeId;
 
   // Batch State
@@ -467,23 +468,36 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             _project!.save();
           },
           onTap: () async {
-            // If we are currently editing, clicking stops the edit without expanding/collapsing
             if (_editingNodeId != null) {
               setState(() => _editingNodeId = null);
               return;
             }
-            if (await _requestCloseEditor()) {
+
+            // 1. If it's already the active view, just toggle expansion instantly.
+            if (isColSelected) {
               setState(() {
                 if (_expandedNodes.contains(col.id))
                   _expandedNodes.remove(col.id);
                 else
                   _expandedNodes.add(col.id);
-                _selectedNode = TreeSelection(
-                  type: NodeType.collection,
-                  collection: col,
-                );
               });
+              return;
             }
+
+            // 2. Check for unsaved changes ONLY if necessary (avoids async locking)
+            if (_hasUnsavedChanges && _selectedNode?.type == NodeType.track) {
+              final proceed = await _requestCloseEditor();
+              if (!proceed) return;
+            }
+
+            // 3. Switch instantly
+            setState(() {
+              if (!_expandedNodes.contains(col.id)) _expandedNodes.add(col.id);
+              _selectedNode = TreeSelection(
+                type: NodeType.collection,
+                collection: col,
+              );
+            });
           },
         ),
       );
@@ -499,7 +513,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
               icon: CupertinoIcons.waveform_path,
               iconColor: _getTrackColor(track.status),
               isSelected: isTrackSelected,
-              isExpanded: _expandedNodes.contains(track.id),
+              isExpanded: _expandedTrackId == track.id,
               depth: 1,
               hasChildren: true,
               isEditing: _editingNodeId == track.id,
@@ -516,22 +530,51 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                   setState(() => _editingNodeId = null);
                   return;
                 }
-                if (await _requestCloseEditor()) {
+
+                final bool isAlreadyExpanded = _expandedTrackId == track.id;
+
+                // 1. If it's already the active track, toggle instantly and abort.
+                if (isTrackSelected) {
                   setState(() {
-                    _expandedNodes.add(track.id);
-                    _selectedNode = TreeSelection(
-                      type: NodeType.track,
-                      collection: col,
-                      track: track,
-                    );
+                    _expandedTrackId = isAlreadyExpanded ? null : track.id;
                   });
-                  await _homeManager.loadTrack(track, _project!);
+                  return;
                 }
+
+                // 2. Check for unsaved changes safely
+                if (_hasUnsavedChanges &&
+                    _selectedNode?.type == NodeType.track) {
+                  final proceed = await _requestCloseEditor();
+                  if (!proceed) return;
+                }
+
+                // 3. Wipe the previous track from memory so the Editor mounts lightweight
+                _homeManager.value = _homeManager.value.copyWith(
+                  clearWaveform: true,
+                  clearFocus: true,
+                  fragments: [],
+                  statusMessage: "Loading...",
+                );
+
+                // 4. Update the UI state instantly
+                setState(() {
+                  _expandedTrackId = track.id;
+                  _selectedNode = TreeSelection(
+                    type: NodeType.track,
+                    collection: col,
+                    track: track,
+                  );
+                });
+
+                // 5. Delay the heavy hard-drive loading by 50ms so the sidebar animation finishes completely smooth!
+                Future.delayed(const Duration(milliseconds: 50), () {
+                  if (mounted) _homeManager.loadTrack(track, _project!);
+                });
               },
             ),
           );
 
-          if (_expandedNodes.contains(track.id)) {
+          if (_expandedTrackId == track.id) {
             // Audio Node
             final isAudioSelected =
                 _selectedNode?.track == track &&
@@ -550,15 +593,18 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                 depth: 2,
                 hasChildren: false,
                 onTap: () async {
-                  if (await _requestCloseEditor()) {
-                    setState(
-                      () => _selectedNode = TreeSelection(
-                        type: NodeType.audio,
-                        collection: col,
-                        track: track,
-                      ),
-                    );
+                  if (_hasUnsavedChanges &&
+                      _selectedNode?.type == NodeType.track) {
+                    final proceed = await _requestCloseEditor();
+                    if (!proceed) return;
                   }
+                  setState(
+                    () => _selectedNode = TreeSelection(
+                      type: NodeType.audio,
+                      collection: col,
+                      track: track,
+                    ),
+                  );
                 },
               ),
             );
@@ -581,15 +627,18 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                 depth: 2,
                 hasChildren: false,
                 onTap: () async {
-                  if (await _requestCloseEditor()) {
-                    setState(
-                      () => _selectedNode = TreeSelection(
-                        type: NodeType.text,
-                        collection: col,
-                        track: track,
-                      ),
-                    );
+                  if (_hasUnsavedChanges &&
+                      _selectedNode?.type == NodeType.track) {
+                    final proceed = await _requestCloseEditor();
+                    if (!proceed) return;
                   }
+                  setState(
+                    () => _selectedNode = TreeSelection(
+                      type: NodeType.text,
+                      collection: col,
+                      track: track,
+                    ),
+                  );
                 },
               ),
             );
@@ -637,10 +686,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           ),
         ],
       ),
-      builder: (context, scrollController) => ListView(
+      builder: (context, scrollController) => ListView.builder(
         controller: scrollController,
         padding: const EdgeInsets.symmetric(vertical: 8),
-        children: rows,
+        itemCount: rows.length,
+        itemBuilder: (context, index) => rows[index],
       ),
     );
   }
