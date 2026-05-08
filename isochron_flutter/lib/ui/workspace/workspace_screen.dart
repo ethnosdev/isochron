@@ -8,6 +8,7 @@ import 'package:isochron_flutter/services/alignment_service.dart';
 import 'package:isochron_flutter/services/audio_service.dart';
 import 'package:isochron_flutter/services/export_service.dart';
 import 'package:isochron_flutter/services/pins_service.dart';
+import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/utils/id_extraction.dart';
 import 'package:isochron_flutter/ui/app_manager.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
@@ -84,69 +85,59 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   // ---------------------------------------------------------------------------
 
   Future<void> _createNewProject() async {
-    final nameController = TextEditingController();
-    final String? projectName = await showCupertinoDialog<String>(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('Create New Project'),
-        content: Padding(
-          padding: const EdgeInsets.only(top: 8.0),
-          child: CupertinoTextField(
-            controller: nameController,
-            placeholder: 'e.g. Gospel of John',
-            autofocus: true,
-          ),
-        ),
-        actions: [
-          CupertinoDialogAction(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.pop(context, nameController.text.trim()),
-            child: const Text('Next'),
-          ),
-        ],
-      ),
+    final settings = UserSettingsService();
+
+    // 1. ONE NATIVE DESKTOP DIALOG: Name & Location together!
+    // This opens the standard macOS "Save As" sheet.
+    final String? projectPath = await FilePicker.saveFile(
+      dialogTitle: 'Create New Project',
+      fileName: 'Untitled Project',
+      initialDirectory: settings.lastProjectDir,
+      lockParentWindow: true,
     );
 
-    if (projectName == null || projectName.isEmpty) return;
+    if (projectPath == null) return;
 
-    final String? parentDir = await FilePicker.getDirectoryPath(
-      dialogTitle: 'Select Where to Save Project',
-    );
-    if (parentDir == null) return;
+    final projectDir = Directory(projectPath);
+    final projectName = p.basename(projectPath);
 
-    final projectDir = Directory(p.join(parentDir, projectName));
+    // 2. Safety check: Does it already exist?
     if (await projectDir.exists()) {
       if (mounted) {
-        showCupertinoDialog(
+        showMacosAlertDialog(
           context: context,
-          builder: (context) => CupertinoAlertDialog(
+          builder: (context) => MacosAlertDialog(
+            appIcon: const MacosIcon(CupertinoIcons.folder_badge_minus),
             title: const Text('Folder Already Exists'),
-            content: Text('A folder named "$projectName" already exists.'),
-            actions: [
-              CupertinoDialogAction(
-                isDefaultAction: true,
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
+            message: Text(
+              'A project or folder named "$projectName" already exists in this location.\n\nPlease choose a different name or location.',
+              textAlign: TextAlign.center,
+            ),
+            primaryButton: PushButton(
+              controlSize: ControlSize.large,
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
           ),
         );
       }
       return;
     }
 
-    await projectDir.create();
+    // 3. Save the parent directory for the next time they create/open a project
+    settings.setLastProjectDir(p.dirname(projectPath));
+
+    // 4. Create directories
+    await projectDir.create(recursive: true);
     await Directory(p.join(projectDir.path, 'alignments')).create();
 
+    // 5. Create and save project
     final newProject = Project(
       id: _uuid.v4(),
       name: projectName,
       directoryPath: projectDir.path,
     );
+
     // Auto-create initial collection
     final defaultCollection = Collection(
       id: _uuid.v4(),
@@ -168,13 +159,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   Future<void> _openProject() async {
     try {
+      final settings = UserSettingsService();
       final result = await FilePicker.pickFiles(
         dialogTitle: 'Open Project',
         type: FileType.custom,
         allowedExtensions: ['json'],
+        initialDirectory: settings.lastProjectDir,
       );
 
       if (result != null && result.files.single.path != null) {
+        settings.setLastProjectDir(p.dirname(result.files.single.path!));
         final content = await File(result.files.single.path!).readAsString();
         final parsed = jsonDecode(content);
 
@@ -1030,6 +1024,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                         ),
                         type: FileType.custom,
                         allowedExtensions: ['csv'],
+                        initialDirectory: _project!.directoryPath,
                       );
                       if (out != null) {
                         final payload = await ExportService.buildCombinedCsv(
@@ -1132,6 +1127,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       fileName: defaultName,
       type: FileType.custom,
       allowedExtensions: ['txt'],
+      initialDirectory: _project!.directoryPath,
     );
     if (outputFile == null) return;
 
@@ -1169,8 +1165,15 @@ class _CollectionBatchView extends StatelessWidget {
   });
 
   Future<void> _importAndAutoPair() async {
-    final result = await FilePicker.pickFiles(allowMultiple: true);
-    if (result == null) return;
+    final settings = UserSettingsService();
+    final result = await FilePicker.pickFiles(
+      allowMultiple: true,
+      initialDirectory: settings.lastSourceDir,
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    // Save the folder where they keep their raw audio/text!
+    settings.setLastSourceDir(p.dirname(result.files.first.path!));
 
     final List<String> audioFiles = [];
     final List<String> textFiles = [];
@@ -1345,6 +1348,7 @@ class _CollectionBatchView extends StatelessWidget {
                     fileName: ExportService.defaultCsvFilename(project.name),
                     type: FileType.custom,
                     allowedExtensions: ['csv'],
+                    initialDirectory: project.directoryPath,
                   );
                   if (out != null) {
                     final payload = await ExportService.buildCombinedCsv(
@@ -1540,11 +1544,14 @@ class _TextEditorViewState extends State<_TextEditorView> {
   }
 
   Future<void> _replaceFile() async {
+    final settings = UserSettingsService();
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['txt', 'phrases'],
+      initialDirectory: settings.lastSourceDir,
     );
     if (result != null && result.files.single.path != null) {
+      settings.setLastSourceDir(p.dirname(result.files.single.path!));
       widget.onReplaceOrEdit(() async {
         widget.track.textPath = result.files.single.path!;
         await _loadFile();
@@ -1649,8 +1656,13 @@ class _AudioInspectorViewState extends State<_AudioInspectorView> {
   }
 
   Future<void> _replaceFile() async {
-    final result = await FilePicker.pickFiles(type: FileType.audio);
+    final settings = UserSettingsService();
+    final result = await FilePicker.pickFiles(
+      type: FileType.audio,
+      initialDirectory: settings.lastSourceDir,
+    );
     if (result != null && result.files.single.path != null) {
+      settings.setLastSourceDir(p.dirname(result.files.single.path!));
       widget.onReplace(() async {
         widget.track.audioPath = result.files.single.path!;
         await _initAudio();
@@ -1801,14 +1813,20 @@ class _ProjectSettingsModalState extends State<_ProjectSettingsModal> {
                   controlSize: ControlSize.small,
                   secondary: true,
                   onPressed: () async {
+                    final settings = UserSettingsService();
                     final res = await FilePicker.pickFiles(
                       allowedExtensions: ['json'],
                       type: FileType.custom,
+                      initialDirectory: settings.lastDictDir,
                     );
-                    if (res != null)
+                    if (res != null && res.files.single.path != null) {
+                      settings.setLastDictDir(
+                        p.dirname(res.files.single.path!),
+                      );
                       setState(
                         () => widget.project.dictPath = res.files.single.path!,
                       );
+                    }
                   },
                   child: const Text("Select"),
                 ),

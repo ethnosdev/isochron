@@ -441,6 +441,9 @@ class AppManager extends ValueNotifier<AppState> {
       type: FileType.custom,
       allowedExtensions: ['json'],
       lockParentWindow: true,
+      initialDirectory: value.autoSavePath != null
+          ? p.dirname(value.autoSavePath!)
+          : null,
     );
 
     if (outputFile == null) return;
