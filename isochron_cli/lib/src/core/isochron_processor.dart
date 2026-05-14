@@ -137,7 +137,20 @@ class IsochronProcessor {
         final anchorSlice = anchorMfcc.sublist(
             anchorFrameStart, anchorFrameEnd.clamp(0, anchorMfcc.length));
 
-        final relativePath = DtwAligner.align(realSlice, anchorSlice);
+        final relativePath = DtwAligner.align(
+          realSlice,
+          anchorSlice,
+          onProgress: (status, chunkPct) {
+            // Calculate how much of the total audio this chunk represents
+            final double globalStartRatio = realFrameStart / userMfcc.length;
+            final double chunkWidthRatio = realSlice.length / userMfcc.length;
+
+            // Map the chunk's local progress to the global 70% -> 95% span
+            final double overallDtwPct =
+                globalStartRatio + (chunkWidthRatio * chunkPct);
+            onProgress?.call(status, 0.70 + (overallDtwPct * 0.25));
+          },
+        );
         final offsetPath = relativePath
             .map((p) => AlignmentPoint(
                 p.realIndex + realFrameStart, p.anchorIndex + anchorFrameStart))
