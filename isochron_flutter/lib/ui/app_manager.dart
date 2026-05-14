@@ -307,7 +307,7 @@ class AppManager extends ValueNotifier<AppState> {
     );
 
     if ((nextFrag.realStart * 1000) > currentMs + 100) {
-      seekTo(Duration(milliseconds: (nextFrag.realStart * 1000).toInt()));
+      seekTo(Duration(milliseconds: (nextFrag.realStart * 1000).ceil()));
     }
   }
 
@@ -320,7 +320,7 @@ class AppManager extends ValueNotifier<AppState> {
       orElse: () => value.fragments.first,
     );
 
-    seekTo(Duration(milliseconds: (prevFrag.realStart * 1000).toInt()));
+    seekTo(Duration(milliseconds: (prevFrag.realStart * 1000).ceil()));
   }
 
   void enterFocusMode(int index) {
@@ -330,7 +330,8 @@ class AppManager extends ValueNotifier<AppState> {
     final targetZoom = (totalSeconds / 10.0).clamp(1.0, 500.0);
 
     final startSeconds = value.fragments[index].realStart;
-    seekTo(Duration(milliseconds: (startSeconds * 1000).toInt()));
+
+    seekTo(Duration(milliseconds: (startSeconds * 1000).ceil()));
 
     value = value.copyWith(zoomLevel: targetZoom, focusedFragmentIndex: index);
   }
@@ -345,7 +346,7 @@ class AppManager extends ValueNotifier<AppState> {
     if (newStartTime >= frag.realEnd) return;
 
     updateFragment(index, newStartTime, frag.realEnd);
-    seekTo(Duration(milliseconds: (newStartTime * 1000).toInt()));
+    seekTo(Duration(milliseconds: (newStartTime * 1000).ceil()));
 
     if (!value.isPlaying) {
       _audioService.play();

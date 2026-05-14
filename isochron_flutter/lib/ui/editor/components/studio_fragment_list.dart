@@ -125,10 +125,8 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
 
             final isSelected = widget.selectedIndex == i;
 
-            // Highlight if it's currently playing OR if it's selected manually
-            final bool isHighlighted = isPlaying || isSelected;
+            final bool isHighlighted = isPlaying || (isSelected && !hasTime);
 
-            // NEW MAC-LIKE SOFT COLORS
             final macBlue = CupertinoColors.systemBlue.resolveFrom(context);
             final bgColor = isHighlighted
                 ? macBlue.withValues(alpha: 0.15)

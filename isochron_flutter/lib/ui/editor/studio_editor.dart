@@ -68,6 +68,7 @@ class _StudioEditorState extends State<StudioEditor> {
     final idx =
         widget.homeManager.hoveredFragmentIndex ??
         state.focusedFragmentIndex ??
+        _getActivePlayheadIndex() ??
         state.selectedFragmentIndex;
     if (idx != null) widget.homeManager.lockFragmentsUntil(idx);
   }
@@ -77,8 +78,22 @@ class _StudioEditorState extends State<StudioEditor> {
     final idx =
         widget.homeManager.hoveredFragmentIndex ??
         state.focusedFragmentIndex ??
+        _getActivePlayheadIndex() ??
         state.selectedFragmentIndex;
     if (idx != null) widget.homeManager.toggleFragmentPin(idx);
+  }
+
+  int? _getActivePlayheadIndex() {
+    final state = widget.homeManager.value;
+    final currentSec =
+        widget.homeManager.playbackPosition.value.inMilliseconds / 1000.0;
+    final idx = state.fragments.indexWhere(
+      (f) =>
+          f.realStart >= 0 &&
+          currentSec >= f.realStart &&
+          currentSec < f.realEnd,
+    );
+    return idx != -1 ? idx : null;
   }
 
   @override
@@ -211,7 +226,7 @@ class _StudioEditorState extends State<StudioEditor> {
                         final frag = state.fragments[idx];
                         widget.homeManager.seekTo(
                           Duration(
-                            milliseconds: (frag.realStart * 1000).toInt(),
+                            milliseconds: (frag.realStart * 1000).ceil(),
                           ),
                         );
                       },
