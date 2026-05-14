@@ -37,13 +37,19 @@ class Track {
   };
 
   factory Track.fromJson(Map<String, dynamic> json) {
+    // Safely parse status to prevent out-of-bounds crashes
+    int statusIdx = json['status'] is int ? json['status'] : 0;
+    if (statusIdx < 0 || statusIdx >= AlignmentStatus.values.length) {
+      statusIdx = 0;
+    }
+
     return Track(
-      id: json['id'],
-      name: json['name'] ?? 'Track',
-      audioPath: json['audioPath'],
-      textPath: json['textPath'],
-      outputFilename: json['outputFilename'],
-      status: AlignmentStatus.values[json['status'] ?? 0],
+      id: json['id']?.toString() ?? const Uuid().v4(),
+      name: json['name']?.toString() ?? 'Track',
+      audioPath: json['audioPath']?.toString(),
+      textPath: json['textPath']?.toString(),
+      outputFilename: json['outputFilename']?.toString() ?? 'alignment.json',
+      status: AlignmentStatus.values[statusIdx],
     );
   }
 }
@@ -65,11 +71,14 @@ class Collection {
 
   factory Collection.fromJson(Map<String, dynamic> json) {
     return Collection(
-      id: json['id'],
-      name: json['name'],
+      id: json['id']?.toString() ?? const Uuid().v4(),
+      name: json['name']?.toString() ?? 'Collection',
       tracks:
           (json['tracks'] as List?)
-              ?.map((i) => Track.fromJson(i as Map<String, dynamic>))
+              ?.whereType<
+                Map<String, dynamic>
+              >() // Prevent crashes from malformed items
+              .map((i) => Track.fromJson(i))
               .toList() ??
           [],
     );
@@ -121,55 +130,89 @@ class Project {
   factory Project.fromJson(Map<String, dynamic> json) {
     List<Collection> migratedCollections = [];
 
+    // Helper to safely map legacy statuses
+    AlignmentStatus parseStatus(dynamic statusVal) {
+      int idx = statusVal is int ? statusVal : 0;
+      if (idx < 0 || idx >= AlignmentStatus.values.length) {
+        idx = 0;
+      }
+      return AlignmentStatus.values[idx];
+    }
+
     // 1. CURRENT FORMAT
-    if (json.containsKey('collections')) {
+    if (json.containsKey('collections') && json['collections'] is List) {
       migratedCollections = (json['collections'] as List)
-          .map((i) => Collection.fromJson(i as Map<String, dynamic>))
+          .whereType<Map<String, dynamic>>()
+          .map((i) => Collection.fromJson(i))
           .toList();
     }
+
     // 2. LEGACY FORMATS MIGRATION
-    else {
+    // (Only runs if the project didn't have collections, or the collections array was empty)
+    if (migratedCollections.isEmpty) {
       final defaultCol = Collection(
         id: const Uuid().v4(),
         name: 'Imported Alignments',
       );
 
-      // Legacy v1: Direct Paths under "items" (This matches your pasted JSON)
-      if (json.containsKey('items')) {
+      // Legacy v1: Direct Paths under "items"
+      if (json.containsKey('items') && json['items'] is List) {
         for (var item in (json['items'] as List)) {
+          if (item is! Map) continue; // Skip malformed array elements
           defaultCol.tracks.add(
             Track(
-              id: item['id'] ?? const Uuid().v4(),
+              id: item['id']?.toString() ?? const Uuid().v4(),
               // Better track naming based on the output filename instead of "Track 1"
               name: p.basenameWithoutExtension(
-                item['outputFilename'] ?? 'Track',
+                item['outputFilename']?.toString() ?? 'Track',
               ),
-              audioPath: item['audioPath'],
-              textPath: item['textPath'],
+              audioPath: item['audioPath']?.toString(),
+              textPath: item['textPath']?.toString(),
               outputFilename:
-                  item['outputFilename'] ??
+                  item['outputFilename']?.toString() ??
                   'alignment_${defaultCol.tracks.length}.json',
-              status: AlignmentStatus.values[item['status'] ?? 0],
+              status: parseStatus(item['status']),
             ),
           );
         }
       }
       // Legacy v2: Pool IDs under "alignments"
-      else if (json.containsKey('alignments')) {
-        final audioPool = json['audioPool'] as List? ?? [];
-        final textPool = json['textPool'] as List? ?? [];
-        final audioMap = {for (var a in audioPool) a['id']: a['path']};
-        final textMap = {for (var t in textPool) t['id']: t['path']};
+      else if (json.containsKey('alignments') && json['alignments'] is List) {
+        final audioPool = json['audioPool'] is List
+            ? json['audioPool'] as List
+            : [];
+        final textPool = json['textPool'] is List
+            ? json['textPool'] as List
+            : [];
+
+        final audioMap = <String, String>{};
+        final textMap = <String, String>{};
+
+        for (var a in audioPool) {
+          if (a is Map && a['id'] != null && a['path'] != null) {
+            audioMap[a['id'].toString()] = a['path'].toString();
+          }
+        }
+        for (var t in textPool) {
+          if (t is Map && t['id'] != null && t['path'] != null) {
+            textMap[t['id'].toString()] = t['path'].toString();
+          }
+        }
 
         for (var a in (json['alignments'] as List)) {
+          if (a is! Map) continue;
           defaultCol.tracks.add(
             Track(
-              id: a['id'] ?? const Uuid().v4(),
-              name: p.basenameWithoutExtension(a['outputFilename'] ?? 'Track'),
-              audioPath: audioMap[a['audioAssetId']],
-              textPath: textMap[a['textAssetId']],
-              outputFilename: a['outputFilename'],
-              status: AlignmentStatus.values[a['status'] ?? 0],
+              id: a['id']?.toString() ?? const Uuid().v4(),
+              name: p.basenameWithoutExtension(
+                a['outputFilename']?.toString() ?? 'Track',
+              ),
+              audioPath: audioMap[a['audioAssetId']?.toString()],
+              textPath: textMap[a['textAssetId']?.toString()],
+              outputFilename:
+                  a['outputFilename']?.toString() ??
+                  'alignment_${defaultCol.tracks.length}.json',
+              status: parseStatus(a['status']),
             ),
           );
         }
@@ -181,19 +224,23 @@ class Project {
     }
 
     return Project(
-      id: json['id'] ?? const Uuid().v4(),
-      name: json['name'] ?? 'Project',
-      directoryPath: json['directoryPath'],
+      id: json['id']?.toString() ?? const Uuid().v4(),
+      name: json['name']?.toString() ?? 'Project',
+      // Safe fallback ensuring we never pass null to a non-nullable required string
+      directoryPath: json['directoryPath']?.toString() ?? '',
       collections: migratedCollections,
-      // Fallbacks to support various old setting keys
       dictPath:
-          json['dictPath'] ?? json['dictionaryPath'] ?? json['dictAssetId'],
+          json['dictPath']?.toString() ??
+          json['dictionaryPath']?.toString() ??
+          json['dictAssetId']?.toString(),
       defaultHasIds: json['defaultHasIds'] ?? json['hasIds'] ?? false,
       defaultGenerateIds:
           json['defaultGenerateIds'] ?? json['generateIds'] ?? false,
-      defaultIdPrefix: json['defaultIdPrefix'] ?? json['generatedIdPrefix'],
-      snapMode: json['snapMode'] ?? 'onset',
-      snapOffset: json['snapOffset'],
+      defaultIdPrefix:
+          json['defaultIdPrefix']?.toString() ??
+          json['generatedIdPrefix']?.toString(),
+      snapMode: json['snapMode']?.toString() ?? 'onset',
+      snapOffset: json['snapOffset'] is int ? json['snapOffset'] : null,
     );
   }
 
