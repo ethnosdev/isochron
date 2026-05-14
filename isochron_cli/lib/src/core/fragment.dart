@@ -79,6 +79,8 @@ class Fragment {
     f.spokenText = spokenText;
     f.anchorStart = anchorStart;
     f.anchorEnd = anchorEnd;
+    f.pinnedStart = pinnedStart;
+    f.pinnedEnd = pinnedEnd;
     return f;
   }
 
