@@ -214,8 +214,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           );
 
           final alignmentsDir = Directory(p.join(newColDir.path, 'alignments'));
-          if (!await alignmentsDir.exists())
+          if (!await alignmentsDir.exists()) {
             await alignmentsDir.create(recursive: true);
+          }
 
           for (var track in col.tracks) {
             // 1. COPY ALIGNMENT JSONS
@@ -261,8 +262,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
                 if (await oldAudioFile.exists()) {
                   final audioDir = Directory(p.join(newColDir.path, 'audio'));
-                  if (!await audioDir.exists())
+                  if (!await audioDir.exists()) {
                     await audioDir.create(recursive: true);
+                  }
 
                   finalAudio = p.basename(oldAudioFile.path); // Set to relative
                   await oldAudioFile.copy(p.join(audioDir.path, finalAudio));
@@ -284,8 +286,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
                 if (await oldTextFile.exists()) {
                   final textDir = Directory(p.join(newColDir.path, 'text'));
-                  if (!await textDir.exists())
+                  if (!await textDir.exists()) {
                     await textDir.create(recursive: true);
+                  }
 
                   finalText = p.basename(oldTextFile.path); // Set to relative
                   await oldTextFile.copy(p.join(textDir.path, finalText));
@@ -311,7 +314,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
         setState(() {
           _project!.collections.addAll(newCollections);
-          for (var c in newCollections) _expandedNodes.add(c.id);
+          for (var c in newCollections) {
+            _expandedNodes.add(c.id);
+          }
         });
 
         await _project!.save();

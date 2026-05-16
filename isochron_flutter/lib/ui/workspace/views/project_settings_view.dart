@@ -167,7 +167,7 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                     value: widget.project.copyMediaIntoProject,
                     onChanged: (val) {
                       setState(() {
-                        widget.project.copyMediaIntoProject = val ?? false;
+                        widget.project.copyMediaIntoProject = val;
                         // Mark as prompted so they aren't asked again
                         widget.project.hasPromptedForMediaStorage = true;
                       });

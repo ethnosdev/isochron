@@ -41,16 +41,18 @@ class CollectionBatchView extends StatelessWidget {
     );
     if (result == null || result.files.isEmpty) return;
 
-    // --- NEW PROMPT LOGIC ---
     // If we haven't asked them yet, pause and ask how they want to store media.
     if (!project.hasPromptedForMediaStorage) {
+      if (!context.mounted) return;
       bool? shouldCopy = await showMacosAlertDialog<bool>(
         context: context,
         builder: (context) => MacosAlertDialog(
           appIcon: const MacosIcon(CupertinoIcons.folder_badge_plus),
           title: const Text('Project Storage Style'),
           message: const Text(
-            'Do you want to copy these files into the Isochron project folder, or reference them from their current location on your hard drive?\n\nCopying them makes your project portable, but takes up more disk space.',
+            'Do you want to copy these files into the Isochron project folder, '
+            'or reference them from their current location on your hard drive?\n\n'
+            'Copying them makes your project portable, but takes up more disk space.',
             textAlign: TextAlign.center,
           ),
           primaryButton: PushButton(
@@ -118,8 +120,9 @@ class CollectionBatchView extends StatelessWidget {
       String originalPath,
       String subfolderName,
     ) async {
-      if (!project.copyMediaIntoProject)
-        return originalPath; // Keep absolute path
+      if (!project.copyMediaIntoProject) {
+        return originalPath;
+      }
 
       final dir = Directory(
         p.join(
@@ -184,10 +187,12 @@ class CollectionBatchView extends StatelessWidget {
       String? finalAudio;
       String? finalText;
 
-      if (originalAudio != null)
+      if (originalAudio != null) {
         finalAudio = await processFile(originalAudio, 'audio');
-      if (originalText != null)
+      }
+      if (originalText != null) {
         finalText = await processFile(originalText, 'text');
+      }
 
       collection.tracks.add(
         Track(

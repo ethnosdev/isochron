@@ -69,8 +69,9 @@ class Track {
 
   factory Track.fromJson(Map<String, dynamic> json) {
     int statusIdx = json['status'] is int ? json['status'] : 0;
-    if (statusIdx < 0 || statusIdx >= AlignmentStatus.values.length)
+    if (statusIdx < 0 || statusIdx >= AlignmentStatus.values.length) {
       statusIdx = 0;
+    }
 
     return Track(
       id: json['id']?.toString() ?? const Uuid().v4(),

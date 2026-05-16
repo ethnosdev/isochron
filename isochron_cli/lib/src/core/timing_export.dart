@@ -114,7 +114,7 @@ class TimingExport {
     final inputBase = p.basenameWithoutExtension(sourcePath);
     final detected = _detectFilenameSeparator(inputBase);
     final outputSep = detected == ' ' ? '-' : detected;
-    return '${inputBase}${outputSep}timing.txt';
+    return '$inputBase${outputSep}timing.txt';
   }
 
   static String defaultJsonFilenameFromSourcePath(String? sourcePath) {
@@ -147,8 +147,7 @@ class TimingExport {
   }) {
     // Keep the saved filename extension aligned with the resolved format so
     // callers never get JSON content in a .txt (or timing in a .json) file.
-    final expectedExtension =
-        format == CliOutputFormat.json ? '.json' : '.txt';
+    final expectedExtension = format == CliOutputFormat.json ? '.json' : '.txt';
     final currentExtension = p.extension(outputPath).toLowerCase();
     if (currentExtension == expectedExtension) return outputPath;
     return p.setExtension(outputPath, expectedExtension);
