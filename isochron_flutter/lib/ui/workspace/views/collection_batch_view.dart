@@ -33,7 +33,7 @@ class CollectionBatchView extends StatelessWidget {
     required this.onOpenTrack,
   });
 
-  Future<void> _importAndAutoPair() async {
+  Future<void> _importAndAutoPair(BuildContext context) async {
     final settings = UserSettingsService();
     final result = await FilePicker.pickFiles(
       allowMultiple: true,
@@ -41,7 +41,39 @@ class CollectionBatchView extends StatelessWidget {
     );
     if (result == null || result.files.isEmpty) return;
 
-    // Save the folder where they keep their raw audio/text!
+    // --- NEW PROMPT LOGIC ---
+    // If we haven't asked them yet, pause and ask how they want to store media.
+    if (!project.hasPromptedForMediaStorage) {
+      bool? shouldCopy = await showMacosAlertDialog<bool>(
+        context: context,
+        builder: (context) => MacosAlertDialog(
+          appIcon: const MacosIcon(CupertinoIcons.folder_badge_plus),
+          title: const Text('Project Storage Style'),
+          message: const Text(
+            'Do you want to copy these files into the Isochron project folder, or reference them from their current location on your hard drive?\n\nCopying them makes your project portable, but takes up more disk space.',
+            textAlign: TextAlign.center,
+          ),
+          primaryButton: PushButton(
+            controlSize: ControlSize.large,
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Copy to Project'),
+          ),
+          secondaryButton: PushButton(
+            controlSize: ControlSize.large,
+            secondary: true,
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep in Place'),
+          ),
+        ),
+      );
+
+      if (shouldCopy == null) return; // User pressed Escape or aborted
+      project.copyMediaIntoProject = shouldCopy;
+      project.hasPromptedForMediaStorage = true;
+    }
+    // -------------------------
+
+    // Save the folder where they keep their raw audio/text so the picker opens there next time
     settings.setLastSourceDir(p.dirname(result.files.first.path!));
 
     final List<String> audioFiles = [];
@@ -59,7 +91,7 @@ class CollectionBatchView extends StatelessWidget {
 
     if (audioFiles.isEmpty && textFiles.isEmpty) return;
 
-    // Natural sort helper
+    // Natural sort helper (ensures Track 2 comes before Track 10)
     int naturalCompare(String a, String b) {
       final regex = RegExp(r'\d+|\D+');
       final matchesA = regex.allMatches(a).map((m) => m.group(0)!).toList();
@@ -81,6 +113,31 @@ class CollectionBatchView extends StatelessWidget {
     audioFiles.sort(naturalCompare);
     textFiles.sort(naturalCompare);
 
+    // Helper: Copies the file if settings require it, then returns the correct path string to save in the Track
+    Future<String> processFile(
+      String originalPath,
+      String subfolderName,
+    ) async {
+      if (!project.copyMediaIntoProject)
+        return originalPath; // Keep absolute path
+
+      final dir = Directory(
+        p.join(
+          project.directoryPath,
+          'collections',
+          collection.id,
+          subfolderName,
+        ),
+      );
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+
+      final newPath = p.join(dir.path, p.basename(originalPath));
+      await File(originalPath).copy(newPath);
+      return p.basename(originalPath); // Return relative filename
+    }
+
     // 1. FILL HOLES IN EXISTING TRACKS FIRST
     if (audioFiles.isNotEmpty) {
       final tracksNeedingAudio = collection.tracks
@@ -90,7 +147,11 @@ class CollectionBatchView extends StatelessWidget {
           ? tracksNeedingAudio.length
           : audioFiles.length;
       for (int i = 0; i < fillCount; i++) {
-        tracksNeedingAudio[i].audioPath = audioFiles.removeAt(0);
+        final originalAudio = audioFiles.removeAt(0);
+        tracksNeedingAudio[i].audioPath = await processFile(
+          originalAudio,
+          'audio',
+        );
       }
     }
 
@@ -102,7 +163,8 @@ class CollectionBatchView extends StatelessWidget {
           ? tracksNeedingText.length
           : textFiles.length;
       for (int i = 0; i < fillCount; i++) {
-        tracksNeedingText[i].textPath = textFiles.removeAt(0);
+        final originalText = textFiles.removeAt(0);
+        tracksNeedingText[i].textPath = await processFile(originalText, 'text');
       }
     }
 
@@ -110,26 +172,36 @@ class CollectionBatchView extends StatelessWidget {
     int maxCount = audioFiles.length > textFiles.length
         ? audioFiles.length
         : textFiles.length;
-    for (int i = 0; i < maxCount; i++) {
-      final audio = i < audioFiles.length ? audioFiles[i] : null;
-      final text = i < textFiles.length ? textFiles[i] : null;
 
-      final name = audio != null
-          ? p.basenameWithoutExtension(audio)
-          : p.basenameWithoutExtension(text!);
+    for (int i = 0; i < maxCount; i++) {
+      final originalAudio = i < audioFiles.length ? audioFiles[i] : null;
+      final originalText = i < textFiles.length ? textFiles[i] : null;
+
+      final name = originalAudio != null
+          ? p.basenameWithoutExtension(originalAudio)
+          : p.basenameWithoutExtension(originalText!);
+
+      String? finalAudio;
+      String? finalText;
+
+      if (originalAudio != null)
+        finalAudio = await processFile(originalAudio, 'audio');
+      if (originalText != null)
+        finalText = await processFile(originalText, 'text');
 
       collection.tracks.add(
         Track(
           id: const Uuid().v4(),
+          collectionId: collection.id, // Link to collection
           name: name,
-          audioPath: audio,
-          textPath: text,
+          audioPath: finalAudio,
+          textPath: finalText,
           outputFilename: '${name}_timing.json',
         ),
       );
     }
 
-    onChanged();
+    onChanged(); // Triggers UI update and save
   }
 
   @override
@@ -157,7 +229,7 @@ class CollectionBatchView extends StatelessWidget {
             const SizedBox(height: 24),
             PushButton(
               controlSize: ControlSize.large,
-              onPressed: _importAndAutoPair,
+              onPressed: () => _importAndAutoPair(context),
               child: const Text("Select Files..."),
             ),
           ],
@@ -197,7 +269,7 @@ class CollectionBatchView extends StatelessWidget {
               PushButton(
                 controlSize: ControlSize.regular,
                 secondary: true,
-                onPressed: _importAndAutoPair,
+                onPressed: () => _importAndAutoPair(context),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [

@@ -61,7 +61,10 @@ class AppManager extends ValueNotifier<AppState> {
       await _audioService.pause();
     }
 
-    if (track.audioPath == null || track.textPath == null) {
+    final resolvedAudio = track.getResolvedAudioPath(project.directoryPath);
+    final resolvedText = track.getResolvedTextPath(project.directoryPath);
+
+    if (resolvedAudio == null || resolvedText == null) {
       value = value.copyWith(
         statusMessage: "Error: Missing Audio or Text file in Track.",
       );
@@ -69,7 +72,7 @@ class AppManager extends ValueNotifier<AppState> {
     }
 
     final absJsonPath = track.getAbsoluteOutputPath(project.directoryPath);
-    final playbackPath = await _ensureWavForPlayback(track.audioPath!);
+    final playbackPath = await _ensureWavForPlayback(resolvedAudio);
     final duration = await _audioService.load(playbackPath);
 
     List<Fragment> loadedFragments = [];
@@ -107,13 +110,13 @@ class AppManager extends ValueNotifier<AppState> {
     }
 
     value = value.copyWith(
-      audioPath: track.audioPath,
-      textPath: track.textPath,
+      audioPath: resolvedAudio,
+      textPath: resolvedText,
       dictPath: actualDictPath,
       transliterationRules: rules,
       autoSavePath: absJsonPath,
       fragments: loadedFragments,
-      hasIds: project.defaultHasIds, // Uses global project settings now
+      hasIds: project.defaultHasIds,
       audioDuration: duration,
       statusMessage: "Loaded ${track.name}",
       hasUnsavedChanges: false,
@@ -122,7 +125,7 @@ class AppManager extends ValueNotifier<AppState> {
     );
     playbackPosition.value = Duration.zero;
 
-    _generateWaveform(track.audioPath!);
+    _generateWaveform(resolvedAudio);
 
     if (loadedFragments.isEmpty) {
       await initManualAlignment();

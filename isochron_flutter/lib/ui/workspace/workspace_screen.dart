@@ -127,7 +127,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     settings.setLastProjectDir(p.dirname(projectPath));
 
     await projectDir.create(recursive: true);
-    await Directory(p.join(projectDir.path, 'alignments')).create();
+    await Directory(p.join(projectDir.path, 'collections')).create();
 
     final newProject = Project(
       id: _uuid.v4(),
@@ -202,56 +202,104 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         final content = await File(importedFilePath).readAsString();
         final parsed = jsonDecode(content);
 
-        // We use our bulletproof legacy parser to handle old or new projects
         final importedProject = Project.fromJson(parsed);
-
-        final currentAlignmentsDir = Directory(
-          p.join(_project!.directoryPath, 'alignments'),
-        );
-        if (!await currentAlignmentsDir.exists()) {
-          await currentAlignmentsDir.create(recursive: true);
-        }
 
         List<Collection> newCollections = [];
         int importedTrackCount = 0;
 
         for (var col in importedProject.collections) {
           final newCol = Collection(id: _uuid.v4(), name: col.name);
+          final newColDir = Directory(
+            p.join(_project!.directoryPath, 'collections', newCol.id),
+          );
+
+          final alignmentsDir = Directory(p.join(newColDir.path, 'alignments'));
+          if (!await alignmentsDir.exists())
+            await alignmentsDir.create(recursive: true);
 
           for (var track in col.tracks) {
-            // Determine where the old alignment JSON is located
+            // 1. COPY ALIGNMENT JSONS
             File oldJsonFile = File(
               p.join(importedProjectDir, 'alignments', track.outputFilename),
             );
             if (!await oldJsonFile.exists()) {
-              // Fallback for very old projects that dumped JSONs directly in the root
               oldJsonFile = File(
                 p.join(importedProjectDir, track.outputFilename),
               );
             }
 
-            // Generate a safe unique filename to prevent collisions in the new project
             final safeFilename =
                 '${_uuid.v4().substring(0, 8)}_${track.outputFilename}';
-            final newJsonPath = p.join(currentAlignmentsDir.path, safeFilename);
-            final newPinsPath = PinsService.pinsPath(newJsonPath);
+            final newJsonPath = p.join(alignmentsDir.path, safeFilename);
 
             if (await oldJsonFile.exists()) {
               await oldJsonFile.copy(newJsonPath);
-
-              // Check for and copy sidecar pins
               final oldPinsFile = File(PinsService.pinsPath(oldJsonFile.path));
               if (await oldPinsFile.exists()) {
-                await oldPinsFile.copy(newPinsPath);
+                await oldPinsFile.copy(PinsService.pinsPath(newJsonPath));
+              }
+            }
+
+            // 2. COPY MEDIA (If setting is enabled)
+            String? finalAudio = track.audioPath;
+            String? finalText = track.textPath;
+
+            if (_project!.copyMediaIntoProject) {
+              if (finalAudio != null) {
+                // Resolve the old absolute path (handling edge cases where the old project used relative paths)
+                final oldAudioFile = File(
+                  p.isAbsolute(finalAudio)
+                      ? finalAudio
+                      : p.join(
+                          importedProjectDir,
+                          'collections',
+                          col.id,
+                          'audio',
+                          finalAudio,
+                        ),
+                );
+
+                if (await oldAudioFile.exists()) {
+                  final audioDir = Directory(p.join(newColDir.path, 'audio'));
+                  if (!await audioDir.exists())
+                    await audioDir.create(recursive: true);
+
+                  finalAudio = p.basename(oldAudioFile.path); // Set to relative
+                  await oldAudioFile.copy(p.join(audioDir.path, finalAudio));
+                }
+              }
+
+              if (finalText != null) {
+                final oldTextFile = File(
+                  p.isAbsolute(finalText)
+                      ? finalText
+                      : p.join(
+                          importedProjectDir,
+                          'collections',
+                          col.id,
+                          'text',
+                          finalText,
+                        ),
+                );
+
+                if (await oldTextFile.exists()) {
+                  final textDir = Directory(p.join(newColDir.path, 'text'));
+                  if (!await textDir.exists())
+                    await textDir.create(recursive: true);
+
+                  finalText = p.basename(oldTextFile.path); // Set to relative
+                  await oldTextFile.copy(p.join(textDir.path, finalText));
+                }
               }
             }
 
             newCol.tracks.add(
               Track(
                 id: _uuid.v4(),
+                collectionId: newCol.id,
                 name: track.name,
-                audioPath: track.audioPath,
-                textPath: track.textPath,
+                audioPath: finalAudio,
+                textPath: finalText,
                 outputFilename: safeFilename,
                 status: track.status,
               ),
@@ -263,9 +311,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
         setState(() {
           _project!.collections.addAll(newCollections);
-          for (var c in newCollections) {
-            _expandedNodes.add(c.id);
-          }
+          for (var c in newCollections) _expandedNodes.add(c.id);
         });
 
         await _project!.save();
@@ -418,7 +464,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     for (var track in pendingTracks) {
       if (!_isBatchRunning) break;
 
-      if (track.audioPath == null || track.textPath == null) {
+      // --- Resolve paths for the batch! ---
+      final resolvedAudio = track.getResolvedAudioPath(_project!.directoryPath);
+      final resolvedText = track.getResolvedTextPath(_project!.directoryPath);
+
+      if (resolvedAudio == null || resolvedText == null) {
         setState(() => track.status = AlignmentStatus.error);
         continue;
       }
@@ -430,11 +480,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
       File? tempCleanTextFile;
       List<String> extractedIds = [];
-      String actualTextPath = track.textPath!;
+      String actualTextPath = resolvedText;
 
       try {
         if (_project!.defaultHasIds) {
-          final lines = await File(track.textPath!).readAsLines();
+          final lines = await File(resolvedText).readAsLines();
           final cleanLines = <String>[];
           for (var line in lines) {
             if (line.trim().isEmpty) continue;
@@ -457,7 +507,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
         List<Fragment> fragments = await _alignmentService.runIsochron(
           textPath: actualTextPath,
-          audioPath: track.audioPath!,
+          audioPath: resolvedAudio, // Use the resolved audio path
           dictPath: _project!.dictPath,
           snapMode: _project!.snapMode,
           snapOffsetMs: _project!.snapOffset ?? 0,
@@ -494,7 +544,15 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           }
         }
 
+        // Figure out where to save the alignment JSON
         final absPath = track.getAbsoluteOutputPath(_project!.directoryPath);
+
+        // --- Ensure the nested alignments directory exists! ---
+        final alignDir = Directory(p.dirname(absPath));
+        if (!await alignDir.exists()) {
+          await alignDir.create(recursive: true);
+        }
+
         final List<Map<String, dynamic>> jsonList = fragments
             .map(
               (f) => {
@@ -510,6 +568,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         await File(
           absPath,
         ).writeAsString(const JsonEncoder.withIndent('  ').convert(jsonList));
+
         setState(() => track.status = AlignmentStatus.done);
       } catch (e) {
         if (!_isBatchRunning) {
@@ -787,7 +846,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             rows.add(
               _buildTreeRow(
                 label: track.audioPath != null
-                    ? p.basename(track.audioPath!)
+                    ? p.basename(
+                        track.getResolvedAudioPath(_project!.directoryPath)!,
+                      )
                     : '[⚠️ Missing Audio]',
                 icon: CupertinoIcons.speaker_2_fill,
                 iconColor: track.audioPath != null
@@ -821,7 +882,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             rows.add(
               _buildTreeRow(
                 label: track.textPath != null
-                    ? p.basename(track.textPath!)
+                    ? p.basename(
+                        track.getResolvedTextPath(_project!.directoryPath)!,
+                      )
                     : '[⚠️ Missing Text]',
                 icon: CupertinoIcons.doc_text_fill,
                 iconColor: track.textPath != null
@@ -1054,12 +1117,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       case NodeType.text:
         return TextEditorView(
           track: _selectedNode!.track!,
+          project: _project!,
+          collection: _selectedNode!.collection!,
           onReplaceOrEdit: (action) =>
               _invalidateAndReplace(_selectedNode!.track!, action),
         );
       case NodeType.audio:
         return AudioInspectorView(
           track: _selectedNode!.track!,
+          project: _project!,
+          collection: _selectedNode!.collection!,
           onReplace: (action) =>
               _invalidateAndReplace(_selectedNode!.track!, action),
         );

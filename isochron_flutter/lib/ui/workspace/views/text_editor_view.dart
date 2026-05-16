@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
@@ -9,11 +8,15 @@ import 'package:path/path.dart' as p;
 
 class TextEditorView extends StatefulWidget {
   final Track track;
+  final Project project;
+  final Collection collection;
   final Future<void> Function(Future<void> Function()) onReplaceOrEdit;
 
   const TextEditorView({
     super.key,
     required this.track,
+    required this.project,
+    required this.collection,
     required this.onReplaceOrEdit,
   });
 
@@ -33,9 +36,11 @@ class _TextEditorViewState extends State<TextEditorView> {
   }
 
   Future<void> _loadFile() async {
-    if (widget.track.textPath != null &&
-        await File(widget.track.textPath!).exists()) {
-      _controller.text = await File(widget.track.textPath!).readAsString();
+    final resolvedPath = widget.track.getResolvedTextPath(
+      widget.project.directoryPath,
+    );
+    if (resolvedPath != null && await File(resolvedPath).exists()) {
+      _controller.text = await File(resolvedPath).readAsString();
     }
   }
 
@@ -50,6 +55,10 @@ class _TextEditorViewState extends State<TextEditorView> {
         ),
       );
     }
+
+    final resolvedPath = widget.track.getResolvedTextPath(
+      widget.project.directoryPath,
+    )!;
 
     return Column(
       children: [
@@ -66,7 +75,9 @@ class _TextEditorViewState extends State<TextEditorView> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  widget.track.textPath!,
+                  widget
+                      .track
+                      .textPath!, // Show relative or absolute name in UI
                   style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
               ),
@@ -75,9 +86,7 @@ class _TextEditorViewState extends State<TextEditorView> {
                   controlSize: ControlSize.regular,
                   onPressed: () {
                     widget.onReplaceOrEdit(() async {
-                      await File(
-                        widget.track.textPath!,
-                      ).writeAsString(_controller.text);
+                      await File(resolvedPath).writeAsString(_controller.text);
                       setState(() => _isEditing = false);
                     });
                   },
@@ -117,9 +126,26 @@ class _TextEditorViewState extends State<TextEditorView> {
       initialDirectory: settings.lastSourceDir,
     );
     if (result != null && result.files.single.path != null) {
-      settings.setLastSourceDir(p.dirname(result.files.single.path!));
+      final originalPath = result.files.single.path!;
+      settings.setLastSourceDir(p.dirname(originalPath));
+
       widget.onReplaceOrEdit(() async {
-        widget.track.textPath = result.files.single.path!;
+        if (widget.project.copyMediaIntoProject) {
+          final textDir = Directory(
+            p.join(
+              widget.project.directoryPath,
+              'collections',
+              widget.collection.id,
+              'text',
+            ),
+          );
+          if (!await textDir.exists()) await textDir.create(recursive: true);
+          final newPath = p.join(textDir.path, p.basename(originalPath));
+          await File(originalPath).copy(newPath);
+          widget.track.textPath = p.basename(originalPath);
+        } else {
+          widget.track.textPath = originalPath;
+        }
         await _loadFile();
       });
     }

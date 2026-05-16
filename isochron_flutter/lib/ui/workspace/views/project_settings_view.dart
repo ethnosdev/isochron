@@ -150,6 +150,39 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
               Container(height: 1, color: theme.dividerColor),
               const SizedBox(height: 32),
 
+              // --- FILE MANAGEMENT ---
+              Text("File Management", style: theme.typography.headline),
+              const SizedBox(height: 8),
+              Text(
+                'By default, Isochron references your original audio and text files on your hard drive. '
+                'If you prefer, it can copy them into the project folder so your project is portable.',
+                style: TextStyle(
+                  color: theme.typography.body.color?.withValues(alpha: 0.7),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  MacosCheckbox(
+                    value: widget.project.copyMediaIntoProject,
+                    onChanged: (val) {
+                      setState(() {
+                        widget.project.copyMediaIntoProject = val ?? false;
+                        // Mark as prompted so they aren't asked again
+                        widget.project.hasPromptedForMediaStorage = true;
+                      });
+                      _triggerSave();
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  const Text("Copy imported media into project folder"),
+                ],
+              ),
+
+              const SizedBox(height: 32),
+              Container(height: 1, color: theme.dividerColor),
+              const SizedBox(height: 32),
+
               // --- ID STRATEGY ---
               Text("Verse ID Strategy", style: theme.typography.headline),
               const SizedBox(height: 8),

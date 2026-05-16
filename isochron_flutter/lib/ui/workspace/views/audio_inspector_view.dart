@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:isochron_flutter/services/audio_service.dart';
@@ -10,11 +9,15 @@ import 'package:path/path.dart' as p;
 
 class AudioInspectorView extends StatefulWidget {
   final Track track;
+  final Project project;
+  final Collection collection;
   final Future<void> Function(Future<void> Function()) onReplace;
 
   const AudioInspectorView({
     super.key,
     required this.track,
+    required this.project,
+    required this.collection,
     required this.onReplace,
   });
 
@@ -37,9 +40,11 @@ class _AudioInspectorViewState extends State<AudioInspectorView> {
   }
 
   Future<void> _initAudio() async {
-    if (widget.track.audioPath != null &&
-        await File(widget.track.audioPath!).exists()) {
-      _duration = await _audio.load(widget.track.audioPath!);
+    final resolvedPath = widget.track.getResolvedAudioPath(
+      widget.project.directoryPath,
+    );
+    if (resolvedPath != null && await File(resolvedPath).exists()) {
+      _duration = await _audio.load(resolvedPath);
       setState(() {});
     }
   }
@@ -115,9 +120,26 @@ class _AudioInspectorViewState extends State<AudioInspectorView> {
       initialDirectory: settings.lastSourceDir,
     );
     if (result != null && result.files.single.path != null) {
-      settings.setLastSourceDir(p.dirname(result.files.single.path!));
+      final originalPath = result.files.single.path!;
+      settings.setLastSourceDir(p.dirname(originalPath));
+
       widget.onReplace(() async {
-        widget.track.audioPath = result.files.single.path!;
+        if (widget.project.copyMediaIntoProject) {
+          final audioDir = Directory(
+            p.join(
+              widget.project.directoryPath,
+              'collections',
+              widget.collection.id,
+              'audio',
+            ),
+          );
+          if (!await audioDir.exists()) await audioDir.create(recursive: true);
+          final newPath = p.join(audioDir.path, p.basename(originalPath));
+          await File(originalPath).copy(newPath);
+          widget.track.audioPath = p.basename(originalPath);
+        } else {
+          widget.track.audioPath = originalPath;
+        }
         await _initAudio();
       });
     }

@@ -8,6 +8,7 @@ enum AlignmentStatus { pending, processing, done, reviewed, error }
 /// Represents a single linked pair of Audio and Text inside a Collection.
 class Track {
   final String id;
+  String collectionId;
   String name;
   String? audioPath;
   String? textPath;
@@ -16,6 +17,7 @@ class Track {
 
   Track({
     required this.id,
+    this.collectionId = '',
     required this.name,
     this.audioPath,
     this.textPath,
@@ -23,8 +25,37 @@ class Track {
     this.status = AlignmentStatus.pending,
   });
 
+  /// Resolves the absolute path for the output JSON.
+  /// Falls back to the legacy root `alignments/` folder if it already exists,
+  /// otherwise uses the new `collections/<ID>/alignments/` structure.
   String getAbsoluteOutputPath(String projectDir) {
-    return p.join(projectDir, 'alignments', outputFilename);
+    final legacyPath = p.join(projectDir, 'alignments', outputFilename);
+    final newPath = p.join(
+      projectDir,
+      'collections',
+      collectionId,
+      'alignments',
+      outputFilename,
+    );
+
+    if (File(legacyPath).existsSync() && !File(newPath).existsSync()) {
+      return legacyPath;
+    }
+    return newPath;
+  }
+
+  /// Resolves audio path (handles both legacy absolute paths and new relative paths)
+  String? getResolvedAudioPath(String projectDir) {
+    if (audioPath == null) return null;
+    if (p.isAbsolute(audioPath!)) return audioPath;
+    return p.join(projectDir, 'collections', collectionId, 'audio', audioPath);
+  }
+
+  /// Resolves text path (handles both legacy absolute paths and new relative paths)
+  String? getResolvedTextPath(String projectDir) {
+    if (textPath == null) return null;
+    if (p.isAbsolute(textPath!)) return textPath;
+    return p.join(projectDir, 'collections', collectionId, 'text', textPath);
   }
 
   Map<String, dynamic> toJson() => {
@@ -37,11 +68,9 @@ class Track {
   };
 
   factory Track.fromJson(Map<String, dynamic> json) {
-    // Safely parse status to prevent out-of-bounds crashes
     int statusIdx = json['status'] is int ? json['status'] : 0;
-    if (statusIdx < 0 || statusIdx >= AlignmentStatus.values.length) {
+    if (statusIdx < 0 || statusIdx >= AlignmentStatus.values.length)
       statusIdx = 0;
-    }
 
     return Track(
       id: json['id']?.toString() ?? const Uuid().v4(),
@@ -70,16 +99,16 @@ class Collection {
   };
 
   factory Collection.fromJson(Map<String, dynamic> json) {
+    final colId = json['id']?.toString() ?? const Uuid().v4();
     return Collection(
-      id: json['id']?.toString() ?? const Uuid().v4(),
+      id: colId,
       name: json['name']?.toString() ?? 'Collection',
       tracks:
-          (json['tracks'] as List?)
-              ?.whereType<
-                Map<String, dynamic>
-              >() // Prevent crashes from malformed items
-              .map((i) => Track.fromJson(i))
-              .toList() ??
+          (json['tracks'] as List?)?.whereType<Map<String, dynamic>>().map((i) {
+            final t = Track.fromJson(i);
+            t.collectionId = colId;
+            return t;
+          }).toList() ??
           [],
     );
   }
@@ -101,6 +130,9 @@ class Project {
   String snapMode;
   int? snapOffset;
 
+  bool copyMediaIntoProject;
+  bool hasPromptedForMediaStorage;
+
   Project({
     required this.id,
     required this.name,
@@ -112,6 +144,8 @@ class Project {
     this.defaultIdPrefix,
     this.snapMode = 'onset',
     this.snapOffset,
+    this.copyMediaIntoProject = false,
+    this.hasPromptedForMediaStorage = false,
   }) : collections = collections ?? [];
 
   Map<String, dynamic> toJson() => {
@@ -125,6 +159,8 @@ class Project {
     'defaultIdPrefix': defaultIdPrefix,
     'snapMode': snapMode,
     'snapOffset': snapOffset,
+    'copyMediaIntoProject': copyMediaIntoProject,
+    'hasPromptedForMediaStorage': hasPromptedForMediaStorage,
   };
 
   factory Project.fromJson(Map<String, dynamic> json) {
@@ -241,6 +277,8 @@ class Project {
           json['generatedIdPrefix']?.toString(),
       snapMode: json['snapMode']?.toString() ?? 'onset',
       snapOffset: json['snapOffset'] is int ? json['snapOffset'] : null,
+      copyMediaIntoProject: json['copyMediaIntoProject'] ?? false,
+      hasPromptedForMediaStorage: json['hasPromptedForMediaStorage'] ?? false,
     );
   }
 
