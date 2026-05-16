@@ -184,6 +184,134 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     }
   }
 
+  Future<void> _importCollectionsFromProject() async {
+    if (_project == null) return;
+
+    final settings = UserSettingsService();
+    final result = await FilePicker.pickFiles(
+      dialogTitle: 'Import Collections from Project',
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+      initialDirectory: settings.lastProjectDir,
+    );
+
+    if (result != null && result.files.single.path != null) {
+      try {
+        final importedFilePath = result.files.single.path!;
+        final importedProjectDir = p.dirname(importedFilePath);
+        final content = await File(importedFilePath).readAsString();
+        final parsed = jsonDecode(content);
+
+        // We use our bulletproof legacy parser to handle old or new projects
+        final importedProject = Project.fromJson(parsed);
+
+        final currentAlignmentsDir = Directory(
+          p.join(_project!.directoryPath, 'alignments'),
+        );
+        if (!await currentAlignmentsDir.exists()) {
+          await currentAlignmentsDir.create(recursive: true);
+        }
+
+        List<Collection> newCollections = [];
+        int importedTrackCount = 0;
+
+        for (var col in importedProject.collections) {
+          final newCol = Collection(id: _uuid.v4(), name: col.name);
+
+          for (var track in col.tracks) {
+            // Determine where the old alignment JSON is located
+            File oldJsonFile = File(
+              p.join(importedProjectDir, 'alignments', track.outputFilename),
+            );
+            if (!await oldJsonFile.exists()) {
+              // Fallback for very old projects that dumped JSONs directly in the root
+              oldJsonFile = File(
+                p.join(importedProjectDir, track.outputFilename),
+              );
+            }
+
+            // Generate a safe unique filename to prevent collisions in the new project
+            final safeFilename =
+                '${_uuid.v4().substring(0, 8)}_${track.outputFilename}';
+            final newJsonPath = p.join(currentAlignmentsDir.path, safeFilename);
+            final newPinsPath = PinsService.pinsPath(newJsonPath);
+
+            if (await oldJsonFile.exists()) {
+              await oldJsonFile.copy(newJsonPath);
+
+              // Check for and copy sidecar pins
+              final oldPinsFile = File(PinsService.pinsPath(oldJsonFile.path));
+              if (await oldPinsFile.exists()) {
+                await oldPinsFile.copy(newPinsPath);
+              }
+            }
+
+            newCol.tracks.add(
+              Track(
+                id: _uuid.v4(),
+                name: track.name,
+                audioPath: track.audioPath,
+                textPath: track.textPath,
+                outputFilename: safeFilename,
+                status: track.status,
+              ),
+            );
+            importedTrackCount++;
+          }
+          newCollections.add(newCol);
+        }
+
+        setState(() {
+          _project!.collections.addAll(newCollections);
+          for (var c in newCollections) {
+            _expandedNodes.add(c.id);
+          }
+        });
+
+        await _project!.save();
+
+        if (mounted) {
+          showMacosAlertDialog(
+            context: context,
+            builder: (context) => MacosAlertDialog(
+              appIcon: const MacosIcon(CupertinoIcons.check_mark_circled),
+              title: const Text('Import Complete'),
+              message: Text(
+                'Successfully imported ${newCollections.length} collection(s) containing $importedTrackCount tracks.',
+                textAlign: TextAlign.center,
+              ),
+              primaryButton: PushButton(
+                controlSize: ControlSize.large,
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ),
+          );
+        }
+      } catch (e) {
+        debugPrint("Error importing collections: $e");
+        if (mounted) {
+          showMacosAlertDialog(
+            context: context,
+            builder: (context) => MacosAlertDialog(
+              appIcon: const MacosIcon(CupertinoIcons.exclamationmark_triangle),
+              title: const Text('Import Failed'),
+              message: Text(
+                'Could not parse the selected project file.\n\nError: $e',
+                textAlign: TextAlign.center,
+              ),
+              primaryButton: PushButton(
+                controlSize: ControlSize.large,
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ),
+          );
+        }
+      }
+    }
+  }
+
   Future<bool> _requestCloseEditor() async {
     if (_selectedNode?.type == NodeType.track && _hasUnsavedChanges) {
       final result = await showCupertinoDialog<String>(
@@ -1016,6 +1144,15 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           if (_project != null)
             PlatformMenuItemGroup(
               members: [
+                PlatformMenuItem(
+                  label: 'Import Collections from Project...',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.keyI,
+                    meta: true,
+                    shift: true,
+                  ),
+                  onSelected: _importCollectionsFromProject,
+                ),
                 PlatformMenuItem(
                   label: 'Save',
                   shortcut: const SingleActivator(
