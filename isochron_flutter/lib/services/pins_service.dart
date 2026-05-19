@@ -39,6 +39,11 @@ class PinsService {
       return;
     }
 
+    final file = File(path);
+    if (!await file.parent.exists()) {
+      await file.parent.create(recursive: true);
+    }
+
     final map = <String, dynamic>{
       for (final f in pinned)
         '${f.index}': {
@@ -46,9 +51,8 @@ class PinsService {
           'end': double.parse(f.pinnedEnd!.toStringAsFixed(3)),
         },
     };
-    await File(
-      path,
-    ).writeAsString(const JsonEncoder.withIndent('  ').convert(map));
+
+    await file.writeAsString(const JsonEncoder.withIndent('  ').convert(map));
     debugPrint('[PIN] Saved pins to $path');
   }
 

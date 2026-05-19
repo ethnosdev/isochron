@@ -155,7 +155,12 @@ class AppManager extends ValueNotifier<AppState> {
           .toList();
 
       final jsonString = const JsonEncoder.withIndent('  ').convert(jsonList);
-      await File(value.autoSavePath!).writeAsString(jsonString);
+
+      final outFile = File(value.autoSavePath!);
+      if (!await outFile.parent.exists()) {
+        await outFile.parent.create(recursive: true);
+      }
+      await outFile.writeAsString(jsonString);
 
       // Persist pins and update snapshot so discard now targets this save
       await savePinsFile();
