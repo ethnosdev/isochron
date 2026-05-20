@@ -237,7 +237,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           }
 
           for (var track in col.tracks) {
-            // 1. COPY ALIGNMENT JSONS
             File oldJsonFile = File(
               p.join(importedProjectDir, 'alignments', track.outputFilename),
             );
@@ -259,7 +258,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
               }
             }
 
-            // 2. COPY MEDIA (If setting is enabled)
             String? finalAudio = track.audioPath;
             String? finalText = track.textPath;
 
@@ -465,7 +463,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // BATCH LOGIC
+  // BATCH & HEALING LOGIC
   // ---------------------------------------------------------------------------
 
   Future<void> _runBatch(Collection collection) async {
@@ -610,6 +608,104 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       _batchStatus = "Batch Complete";
       _batchProgress = 1.0;
     });
+  }
+
+  Future<void> _healBrokenLinks(Collection collection) async {
+    final String? selectedFolder = await FilePicker.getDirectoryPath(
+      dialogTitle: 'Select Root Folder of Missing Media',
+    );
+    if (selectedFolder == null) return;
+
+    final dir = Directory(selectedFolder);
+    final Map<String, String> fileMap = {};
+
+    try {
+      await for (final entity in dir.list(
+        recursive: true,
+        followLinks: false,
+      )) {
+        if (entity is File) {
+          final name = p.basename(entity.path);
+          fileMap[name] = entity.path;
+        }
+      }
+    } catch (e) {
+      debugPrint("Error scanning directory: $e");
+      return;
+    }
+
+    int healedCount = 0;
+
+    for (var track in collection.tracks) {
+      if (track.audioPath != null) {
+        final resolvedPath = track.getResolvedAudioPath(
+          _project!.directoryPath,
+        )!;
+        if (!File(resolvedPath).existsSync()) {
+          final filename = p.basename(resolvedPath);
+          if (fileMap.containsKey(filename)) {
+            track.audioPath = fileMap[filename]!;
+            healedCount++;
+          }
+        }
+      }
+      if (track.textPath != null) {
+        final resolvedPath = track.getResolvedTextPath(
+          _project!.directoryPath,
+        )!;
+        if (!File(resolvedPath).existsSync()) {
+          final filename = p.basename(resolvedPath);
+          if (fileMap.containsKey(filename)) {
+            track.textPath = fileMap[filename]!;
+            healedCount++;
+          }
+        }
+      }
+    }
+
+    if (healedCount > 0) {
+      await _project!.save();
+      setState(() {});
+      if (mounted) {
+        showMacosAlertDialog(
+          context: context,
+          builder: (context) => MacosAlertDialog(
+            appIcon: const MacosIcon(CupertinoIcons.checkmark_seal_fill),
+            title: const Text('Broken Links Healed'),
+            message: Text(
+              'Successfully located and updated $healedCount missing files.',
+              textAlign: TextAlign.center,
+            ),
+            primaryButton: PushButton(
+              controlSize: ControlSize.large,
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        showMacosAlertDialog(
+          context: context,
+          builder: (context) => MacosAlertDialog(
+            appIcon: const MacosIcon(
+              CupertinoIcons.exclamationmark_triangle_fill,
+            ),
+            title: const Text('No Matches Found'),
+            message: const Text(
+              'Scanned the directory but could not find any files matching the missing filenames.',
+              textAlign: TextAlign.center,
+            ),
+            primaryButton: PushButton(
+              controlSize: ControlSize.large,
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _exportPhraseTimingForTrack(Track track) async {
@@ -964,15 +1060,17 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       case SidebarNodeType.audio:
         final track = node.track!;
         final col = node.collection!;
+        final resolved = track.getResolvedAudioPath(_project!.directoryPath);
+        final fileExists = resolved != null && File(resolved).existsSync();
         final isAudioSelected =
             _selectedNode?.track == track &&
             _selectedNode?.type == NodeType.audio;
         return _buildTreeRow(
           label: track.audioPath != null
-              ? p.basename(track.getResolvedAudioPath(_project!.directoryPath)!)
+              ? p.basename(resolved!)
               : '[⚠️ Missing Audio]',
           icon: CupertinoIcons.speaker_2_fill,
-          iconColor: track.audioPath != null
+          iconColor: fileExists
               ? CupertinoColors.systemGrey
               : CupertinoColors.destructiveRed,
           isSelected: isAudioSelected,
@@ -997,15 +1095,17 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       case SidebarNodeType.text:
         final track = node.track!;
         final col = node.collection!;
+        final resolved = track.getResolvedTextPath(_project!.directoryPath);
+        final fileExists = resolved != null && File(resolved).existsSync();
         final isTextSelected =
             _selectedNode?.track == track &&
             _selectedNode?.type == NodeType.text;
         return _buildTreeRow(
           label: track.textPath != null
-              ? p.basename(track.getResolvedTextPath(_project!.directoryPath)!)
+              ? p.basename(resolved!)
               : '[⚠️ Missing Text]',
           icon: CupertinoIcons.doc_text_fill,
-          iconColor: track.textPath != null
+          iconColor: fileExists
               ? CupertinoColors.systemGrey
               : CupertinoColors.destructiveRed,
           isSelected: isTextSelected,
@@ -1168,6 +1268,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
               if (mounted) _homeManager.loadTrack(track, _project!);
             });
           },
+          onHealBrokenLinks: () => _healBrokenLinks(_selectedNode!.collection!),
         );
       case NodeType.track:
         return StudioEditor(homeManager: _homeManager);

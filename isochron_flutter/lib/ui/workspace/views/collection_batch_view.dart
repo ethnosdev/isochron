@@ -32,6 +32,7 @@ class CollectionBatchView extends StatelessWidget {
   final VoidCallback onStopBatch;
   final VoidCallback onChanged;
   final void Function(Track track) onOpenTrack;
+  final VoidCallback onHealBrokenLinks;
 
   const CollectionBatchView({
     super.key,
@@ -44,6 +45,7 @@ class CollectionBatchView extends StatelessWidget {
     required this.onStopBatch,
     required this.onChanged,
     required this.onOpenTrack,
+    required this.onHealBrokenLinks,
   });
 
   List<_SortPart> _getSortParts(String filename) {
@@ -143,7 +145,6 @@ class CollectionBatchView extends StatelessWidget {
 
     if (audioFiles.isEmpty && textFiles.isEmpty) return;
 
-    // Apply Schwartzian Transform natural sort
     _naturalSort(audioFiles);
     _naturalSort(textFiles);
 
@@ -271,8 +272,55 @@ class CollectionBatchView extends StatelessWidget {
       );
     }
 
+    final List<Track> brokenTracks = collection.tracks.where((t) {
+      if (t.audioPath != null) {
+        final p = t.getResolvedAudioPath(project.directoryPath);
+        if (p == null || !File(p).existsSync()) return true;
+      }
+      if (t.textPath != null) {
+        final p = t.getResolvedTextPath(project.directoryPath);
+        if (p == null || !File(p).existsSync()) return true;
+      }
+      return false;
+    }).toList();
+
+    final bool hasBroken = brokenTracks.isNotEmpty;
+
     return Column(
       children: [
+        if (hasBroken)
+          Container(
+            margin: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(12.0),
+            decoration: BoxDecoration(
+              color: CupertinoColors.systemRed.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8.0),
+              border: Border.all(
+                color: CupertinoColors.systemRed.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  CupertinoIcons.exclamationmark_triangle_fill,
+                  color: CupertinoColors.destructiveRed,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '${brokenTracks.length} tracks in this collection have missing source files. This happens if the media directory was renamed or moved.',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                PushButton(
+                  controlSize: ControlSize.regular,
+                  onPressed: onHealBrokenLinks,
+                  child: const Text('Locate Missing Media...'),
+                ),
+              ],
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.all(16.0),
           child: Row(
