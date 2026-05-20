@@ -22,15 +22,15 @@ class AppManager extends ValueNotifier<AppState> {
   final PinsService _pinsService = PinsService();
   final _settings = UserSettingsService();
   VoidCallback? onSaveCallback;
+
+  // Callback to notify that a track has completed alignment in the background
+  void Function(String trackId, List<Fragment> fragments)?
+  onBackgroundAlignmentComplete;
+
   final playbackPosition = ValueNotifier(Duration.zero);
 
-  /// Snapshot of pin state as of the last explicit save (or file load).
-  /// Used by discardChanges() to revert both in-memory and on-disk pins
-  /// without losing pins that were already saved.
-  /// Null means no pins were saved.
   Map<int, ({double start, double end})>? _lastSavedPins;
 
-  /// Builds a snapshot map from the pinned fragments in [frags].
   static Map<int, ({double start, double end})> _buildPinsSnapshot(
     List<Fragment> frags,
   ) => {
@@ -53,7 +53,6 @@ class AppManager extends ValueNotifier<AppState> {
     super.dispose();
   }
 
-  // Update loadAlignmentPair to loadTrack:
   Future<void> loadTrack(Track track, Project project) async {
     _lastSavedPins = null;
 
@@ -162,7 +161,6 @@ class AppManager extends ValueNotifier<AppState> {
       }
       await outFile.writeAsString(jsonString);
 
-      // Persist pins and update snapshot so discard now targets this save
       await savePinsFile();
       _lastSavedPins = _buildPinsSnapshot(value.fragments);
 
@@ -174,7 +172,6 @@ class AppManager extends ValueNotifier<AppState> {
   }
 
   Future<void> discardChanges() async {
-    // Revert in-memory fragment pins to the last-saved snapshot
     final frags = List<Fragment>.from(value.fragments);
     final snapshot = _lastSavedPins ?? {};
 
@@ -187,7 +184,6 @@ class AppManager extends ValueNotifier<AppState> {
       }
     }
 
-    // Rewrite (or delete) the sidecar to match the reverted state
     if (value.autoSavePath != null) {
       await _pinsService.save(value.autoSavePath!, frags);
     }
@@ -196,10 +192,19 @@ class AppManager extends ValueNotifier<AppState> {
   }
 
   Future<void> runAlignment({
+    required String trackId,
     String snapMode = 'onset',
     int snapOffsetMs = 0,
   }) async {
     if (value.audioPath == null || value.textPath == null) return;
+
+    // Capture the target context before starting async work
+    final String initiatingTrackId = trackId;
+    final String initiatingAudioPath = value.audioPath!;
+    final String initiatingTextPath = value.textPath!;
+    final String? initiatingSavePath = value.autoSavePath;
+    final String? initiatingDictPath = value.dictPath;
+    final bool initiatingHasIds = value.hasIds;
 
     value = value.copyWith(
       isProcessing: true,
@@ -211,13 +216,12 @@ class AppManager extends ValueNotifier<AppState> {
     List<String> extractedIds = [];
 
     try {
-      String actualTextPath = value.textPath!;
+      String actualTextPath = initiatingTextPath;
 
-      // --- PRE-PROCESSING ---
-      if (value.hasIds) {
+      if (initiatingHasIds) {
         value = value.copyWith(statusMessage: "Preprocessing text...");
 
-        final lines = await File(value.textPath!).readAsLines();
+        final lines = await File(initiatingTextPath).readAsLines();
         final cleanLines = <String>[];
 
         for (var line in lines) {
@@ -240,24 +244,28 @@ class AppManager extends ValueNotifier<AppState> {
         actualTextPath = tempCleanTextFile.path;
       }
 
-      final activePinsPath = _pinsPath;
+      final String? activePinsPath = initiatingSavePath == null
+          ? null
+          : PinsService.pinsPath(initiatingSavePath);
       final passPins =
           activePinsPath != null && await File(activePinsPath).exists();
 
       List<Fragment> fragments = await _alignmentService.runIsochron(
         textPath: actualTextPath,
-        audioPath: value.audioPath!,
-        dictPath: value.dictPath,
+        audioPath: initiatingAudioPath,
+        dictPath: initiatingDictPath,
         pinsPath: passPins ? activePinsPath : null,
         snapMode: snapMode,
         snapOffsetMs: snapOffsetMs,
         onProgress: (status, prog) {
-          value = value.copyWith(statusMessage: status, progress: prog);
+          // Only update UI progress if user is still actively viewing the initiating track
+          if (value.autoSavePath == initiatingSavePath) {
+            value = value.copyWith(statusMessage: status, progress: prog);
+          }
         },
       );
 
-      // --- POST-PROCESSING ---
-      if (value.hasIds && extractedIds.isNotEmpty) {
+      if (initiatingHasIds && extractedIds.isNotEmpty) {
         final mergedFragments = <Fragment>[];
 
         for (int i = 0; i < fragments.length; i++) {
@@ -271,32 +279,69 @@ class AppManager extends ValueNotifier<AppState> {
         fragments = mergedFragments;
       }
 
-      if (value.waveform == null) await _generateWaveform(value.audioPath!);
+      final bool isStillActive = (value.autoSavePath == initiatingSavePath);
 
-      final previousFragments = value.fragments;
-      bool hasAlignmentChanges = previousFragments.length != fragments.length;
-      if (!hasAlignmentChanges) {
-        for (int i = 0; i < fragments.length; i++) {
-          final oldFrag = previousFragments[i];
-          final newFrag = fragments[i];
-          if (oldFrag.realStart != newFrag.realStart ||
-              oldFrag.realEnd != newFrag.realEnd ||
-              oldFrag.id != newFrag.id) {
-            hasAlignmentChanges = true;
-            break;
+      if (isStillActive) {
+        if (value.waveform == null)
+          await _generateWaveform(initiatingAudioPath);
+
+        final previousFragments = value.fragments;
+        bool hasAlignmentChanges = previousFragments.length != fragments.length;
+        if (!hasAlignmentChanges) {
+          for (int i = 0; i < fragments.length; i++) {
+            final oldFrag = previousFragments[i];
+            final newFrag = fragments[i];
+            if (oldFrag.realStart != newFrag.realStart ||
+                oldFrag.realEnd != newFrag.realEnd ||
+                oldFrag.id != newFrag.id) {
+              hasAlignmentChanges = true;
+              break;
+            }
           }
+        }
+
+        value = value.copyWith(
+          fragments: fragments,
+          statusMessage: "Done.",
+          progress: 1.0,
+          isProcessing: false,
+          hasUnsavedChanges: hasAlignmentChanges || value.hasUnsavedChanges,
+        );
+      } else {
+        // Track has changed (Background alignment completed). Write results directly to its JSON output.
+        if (initiatingSavePath != null) {
+          final List<Map<String, dynamic>> jsonList = fragments
+              .map(
+                (f) => {
+                  'index': f.index,
+                  if (f.id != null) 'id': f.id,
+                  'text': f.text,
+                  'start': double.parse(f.realStart.toStringAsFixed(3)),
+                  'end': double.parse(f.realEnd.toStringAsFixed(3)),
+                },
+              )
+              .toList();
+
+          final jsonString = const JsonEncoder.withIndent(
+            '  ',
+          ).convert(jsonList);
+          final outFile = File(initiatingSavePath);
+          if (!await outFile.parent.exists()) {
+            await outFile.parent.create(recursive: true);
+          }
+          await outFile.writeAsString(jsonString);
+          debugPrint(
+            "[ALIGN] Background alignment completed and saved directly for: $initiatingSavePath",
+          );
         }
       }
 
-      value = value.copyWith(
-        fragments: fragments,
-        statusMessage: "Done.",
-        progress: 1.0,
-        isProcessing: false,
-        hasUnsavedChanges: hasAlignmentChanges || value.hasUnsavedChanges,
-      );
+      // Fire completion callback so parent can update track list status indicators
+      onBackgroundAlignmentComplete?.call(initiatingTrackId, fragments);
     } catch (e) {
-      value = value.copyWith(isProcessing: false, statusMessage: "Error: $e");
+      if (value.autoSavePath == initiatingSavePath) {
+        value = value.copyWith(isProcessing: false, statusMessage: "Error: $e");
+      }
       throw Exception(e.toString());
     } finally {
       if (tempCleanTextFile != null && await tempCleanTextFile.exists()) {
@@ -556,7 +601,6 @@ class AppManager extends ValueNotifier<AppState> {
 
     value = value.copyWith(statusMessage: "Optimizing audio for playback...");
 
-    // Using native macOS afconvert for 44.1kHz Stereo PCM WAV
     final result = await Process.run('/usr/bin/afconvert', [
       '-f',
       'WAVE',
@@ -570,7 +614,7 @@ class AppManager extends ValueNotifier<AppState> {
 
     if (result.exitCode != 0) {
       debugPrint("afconvert conversion failed: ${result.stderr}");
-      return originalPath; // Fallback to original if it fails
+      return originalPath;
     }
 
     return outPath;

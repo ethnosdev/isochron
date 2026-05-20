@@ -86,6 +86,24 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         _project?.save();
       }
     };
+
+    // Wire up the new background completion handler
+    _homeManager.onBackgroundAlignmentComplete = (trackId, fragments) {
+      if (_project != null) {
+        for (var col in _project!.collections) {
+          for (var track in col.tracks) {
+            if (track.id == trackId) {
+              setState(() {
+                track.status = AlignmentStatus.done;
+              });
+              _project!.save();
+              break;
+            }
+          }
+        }
+      }
+    };
+
     _homeManager.addListener(() {
       if (_homeManager.value.hasUnsavedChanges != _hasUnsavedChanges) {
         setState(
@@ -1471,6 +1489,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                       onPressed: () async {
                         try {
                           await _homeManager.runAlignment(
+                            trackId: _selectedNode!.track!.id,
                             snapMode: _project!.snapMode,
                             snapOffsetMs: _project!.snapOffset ?? 0,
                           );
