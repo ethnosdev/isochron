@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
 enum AlignmentStatus { pending, processing, done, reviewed, error }
 
-/// Represents a single linked pair of Audio and Text inside a Collection.
 class Track {
   final String id;
   String collectionId;
@@ -26,14 +26,12 @@ class Track {
   });
 
   /// Resolves the absolute path for the output JSON.
-  /// Falls back to the legacy root `alignments/` folder if it already exists,
-  /// otherwise uses the new `collections/<ID>/alignments/` structure.
-  String getAbsoluteOutputPath(String projectDir) {
+  String getAbsoluteOutputPath(String projectDir, String collectionFolderName) {
     final legacyPath = p.join(projectDir, 'alignments', outputFilename);
     final newPath = p.join(
       projectDir,
       'collections',
-      collectionId,
+      collectionFolderName,
       'alignments',
       outputFilename,
     );
@@ -44,18 +42,30 @@ class Track {
     return newPath;
   }
 
-  /// Resolves audio path (handles both legacy absolute paths and new relative paths)
-  String? getResolvedAudioPath(String projectDir) {
+  /// Resolves audio path using the collection's friendly folder name
+  String? getResolvedAudioPath(String projectDir, String collectionFolderName) {
     if (audioPath == null) return null;
     if (p.isAbsolute(audioPath!)) return audioPath;
-    return p.join(projectDir, 'collections', collectionId, 'audio', audioPath);
+    return p.join(
+      projectDir,
+      'collections',
+      collectionFolderName,
+      'audio',
+      audioPath,
+    );
   }
 
-  /// Resolves text path (handles both legacy absolute paths and new relative paths)
-  String? getResolvedTextPath(String projectDir) {
+  /// Resolves text path using the collection's friendly folder name
+  String? getResolvedTextPath(String projectDir, String collectionFolderName) {
     if (textPath == null) return null;
     if (p.isAbsolute(textPath!)) return textPath;
-    return p.join(projectDir, 'collections', collectionId, 'text', textPath);
+    return p.join(
+      projectDir,
+      'collections',
+      collectionFolderName,
+      'text',
+      textPath,
+    );
   }
 
   Map<String, dynamic> toJson() => {
@@ -84,7 +94,6 @@ class Track {
   }
 }
 
-/// A grouping of Tracks (e.g. "Gospel of John").
 class Collection {
   final String id;
   String name;
@@ -92,6 +101,13 @@ class Collection {
 
   Collection({required this.id, required this.name, List<Track>? tracks})
     : tracks = tracks ?? [];
+
+  /// Safely sanitizes the collection name for use as a folder directory name.
+  /// Replaces non-alphanumeric characters with underscores. Falls back to UUID if empty.
+  String get folderName {
+    final sanitized = name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    return sanitized.trim().isEmpty ? id : sanitized;
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -119,18 +135,13 @@ class Project {
   final String id;
   String name;
   final String directoryPath;
-
-  // --- TREE HIERARCHY ---
   List<Collection> collections;
-
-  // --- GLOBAL SETTINGS ---
   String? dictPath;
   bool defaultHasIds;
   bool defaultGenerateIds;
   String? defaultIdPrefix;
   String snapMode;
   int? snapOffset;
-
   bool copyMediaIntoProject;
   bool hasPromptedForMediaStorage;
 
@@ -167,7 +178,6 @@ class Project {
   factory Project.fromJson(Map<String, dynamic> json) {
     List<Collection> migratedCollections = [];
 
-    // Helper to safely map legacy statuses
     AlignmentStatus parseStatus(dynamic statusVal) {
       int idx = statusVal is int ? statusVal : 0;
       if (idx < 0 || idx >= AlignmentStatus.values.length) {
@@ -176,7 +186,6 @@ class Project {
       return AlignmentStatus.values[idx];
     }
 
-    // 1. CURRENT FORMAT
     if (json.containsKey('collections') && json['collections'] is List) {
       migratedCollections = (json['collections'] as List)
           .whereType<Map<String, dynamic>>()
@@ -184,22 +193,18 @@ class Project {
           .toList();
     }
 
-    // 2. LEGACY FORMATS MIGRATION
-    // (Only runs if the project didn't have collections, or the collections array was empty)
     if (migratedCollections.isEmpty) {
       final defaultCol = Collection(
         id: const Uuid().v4(),
         name: 'Imported Alignments',
       );
 
-      // Legacy v1: Direct Paths under "items"
       if (json.containsKey('items') && json['items'] is List) {
         for (var item in (json['items'] as List)) {
-          if (item is! Map) continue; // Skip malformed array elements
+          if (item is! Map) continue;
           defaultCol.tracks.add(
             Track(
               id: item['id']?.toString() ?? const Uuid().v4(),
-              // Better track naming based on the output filename instead of "Track 1"
               name: p.basenameWithoutExtension(
                 item['outputFilename']?.toString() ?? 'Track',
               ),
@@ -212,9 +217,7 @@ class Project {
             ),
           );
         }
-      }
-      // Legacy v2: Pool IDs under "alignments"
-      else if (json.containsKey('alignments') && json['alignments'] is List) {
+      } else if (json.containsKey('alignments') && json['alignments'] is List) {
         final audioPool = json['audioPool'] is List
             ? json['audioPool'] as List
             : [];
@@ -260,10 +263,9 @@ class Project {
       }
     }
 
-    return Project(
+    final project = Project(
       id: json['id']?.toString() ?? const Uuid().v4(),
       name: json['name']?.toString() ?? 'Project',
-      // Safe fallback ensuring we never pass null to a non-nullable required string
       directoryPath: json['directoryPath']?.toString() ?? '',
       collections: migratedCollections,
       dictPath:
@@ -281,6 +283,40 @@ class Project {
       copyMediaIntoProject: json['copyMediaIntoProject'] ?? false,
       hasPromptedForMediaStorage: json['hasPromptedForMediaStorage'] ?? false,
     );
+
+    // Run safe folder migration on load
+    _migrateLegacyCollectionFolders(project);
+
+    return project;
+  }
+
+  /// Automatically renames any folder named by a UUID to its friendly name on disk.
+  static void _migrateLegacyCollectionFolders(Project project) {
+    final collectionsDir = Directory(
+      p.join(project.directoryPath, 'collections'),
+    );
+    if (!collectionsDir.existsSync()) return;
+
+    for (var col in project.collections) {
+      final legacyPath = p.join(project.directoryPath, 'collections', col.id);
+      final friendlyPath = p.join(
+        project.directoryPath,
+        'collections',
+        col.folderName,
+      );
+
+      if (Directory(legacyPath).existsSync() &&
+          !Directory(friendlyPath).existsSync()) {
+        try {
+          Directory(legacyPath).renameSync(friendlyPath);
+          debugPrint(
+            '[MIGRATION] Seamlessly migrated legacy folder to: ${col.folderName}',
+          );
+        } catch (e) {
+          debugPrint('[MIGRATION] Folder migration failed for ${col.name}: $e');
+        }
+      }
+    }
   }
 
   Future<void> save() async {

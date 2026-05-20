@@ -176,7 +176,10 @@ void main() {
       Track track,
       List<Map<String, dynamic>> rows,
     ) async {
-      final abs = track.getAbsoluteOutputPath(project.directoryPath);
+      final abs = track.getAbsoluteOutputPath(
+        project.directoryPath,
+        collection.folderName,
+      );
       await File(abs).create(recursive: true);
       await File(abs).writeAsString(jsonEncode(rows));
     }
@@ -186,6 +189,7 @@ void main() {
 
       doneTrack = Track(
         id: 'track_done',
+        collectionId: 'col_1', // Explicitly set collectionId for mock testing
         name: 'Done Track',
         audioPath: '/audio/rec01.wav',
         textPath: '/text/TH-01-GEN-01.txt',
@@ -194,6 +198,7 @@ void main() {
       );
       pendingTrack = Track(
         id: 'track_pending',
+        collectionId: 'col_1', // Explicitly set collectionId for mock testing
         name: 'Pending Track',
         audioPath: '/audio/rec01.wav',
         textPath: '/text/BADNAME.txt',

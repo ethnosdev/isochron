@@ -42,6 +42,7 @@ class _AudioInspectorViewState extends State<AudioInspectorView> {
   Future<void> _initAudio() async {
     final resolvedPath = widget.track.getResolvedAudioPath(
       widget.project.directoryPath,
+      widget.collection.folderName,
     );
     if (resolvedPath != null && await File(resolvedPath).exists()) {
       _duration = await _audio.load(resolvedPath);
@@ -129,7 +130,7 @@ class _AudioInspectorViewState extends State<AudioInspectorView> {
             p.join(
               widget.project.directoryPath,
               'collections',
-              widget.collection.id,
+              widget.collection.folderName,
               'audio',
             ),
           );

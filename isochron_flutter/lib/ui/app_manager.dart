@@ -60,8 +60,21 @@ class AppManager extends ValueNotifier<AppState> {
       await _audioService.pause();
     }
 
-    final resolvedAudio = track.getResolvedAudioPath(project.directoryPath);
-    final resolvedText = track.getResolvedTextPath(project.directoryPath);
+    // Lookup the track's parent collection to retrieve its folder name
+    final collection = project.collections.firstWhere(
+      (c) => c.id == track.collectionId,
+      orElse: () => Collection(id: track.collectionId, name: 'Default'),
+    );
+    final String folderName = collection.folderName;
+
+    final resolvedAudio = track.getResolvedAudioPath(
+      project.directoryPath,
+      folderName,
+    );
+    final resolvedText = track.getResolvedTextPath(
+      project.directoryPath,
+      folderName,
+    );
 
     if (resolvedAudio == null || resolvedText == null) {
       value = value.copyWith(
@@ -70,7 +83,10 @@ class AppManager extends ValueNotifier<AppState> {
       return;
     }
 
-    final absJsonPath = track.getAbsoluteOutputPath(project.directoryPath);
+    final absJsonPath = track.getAbsoluteOutputPath(
+      project.directoryPath,
+      folderName,
+    );
     final playbackPath = await _ensureWavForPlayback(resolvedAudio);
     final duration = await _audioService.load(playbackPath);
 

@@ -471,7 +471,14 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
     await action();
 
-    final jsonPath = track.getAbsoluteOutputPath(_project!.directoryPath);
+    // Pass parent collection folder name
+    final collection = _project!.collections.firstWhere(
+      (c) => c.id == track.collectionId,
+    );
+    final jsonPath = track.getAbsoluteOutputPath(
+      _project!.directoryPath,
+      collection.folderName,
+    );
     final pinsPath = PinsService.pinsPath(jsonPath);
     if (await File(jsonPath).exists()) await File(jsonPath).delete();
     if (await File(pinsPath).exists()) await File(pinsPath).delete();
@@ -502,8 +509,14 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     for (var track in pendingTracks) {
       if (!_isBatchRunning) break;
 
-      final resolvedAudio = track.getResolvedAudioPath(_project!.directoryPath);
-      final resolvedText = track.getResolvedTextPath(_project!.directoryPath);
+      final resolvedAudio = track.getResolvedAudioPath(
+        _project!.directoryPath,
+        collection.folderName,
+      );
+      final resolvedText = track.getResolvedTextPath(
+        _project!.directoryPath,
+        collection.folderName,
+      );
 
       if (resolvedAudio == null || resolvedText == null) {
         setState(() => track.status = AlignmentStatus.error);
@@ -581,7 +594,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           }
         }
 
-        final absPath = track.getAbsoluteOutputPath(_project!.directoryPath);
+        final absPath = track.getAbsoluteOutputPath(
+          _project!.directoryPath,
+          collection.folderName,
+        );
 
         final alignDir = Directory(p.dirname(absPath));
         if (!await alignDir.exists()) {
@@ -658,6 +674,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       if (track.audioPath != null) {
         final resolvedPath = track.getResolvedAudioPath(
           _project!.directoryPath,
+          collection.folderName,
         )!;
         if (!File(resolvedPath).existsSync()) {
           final filename = p.basename(resolvedPath);
@@ -670,6 +687,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       if (track.textPath != null) {
         final resolvedPath = track.getResolvedTextPath(
           _project!.directoryPath,
+          collection.folderName,
         )!;
         if (!File(resolvedPath).existsSync()) {
           final filename = p.basename(resolvedPath);
@@ -822,7 +840,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
     if (confirm != true) return;
 
-    final jsonPath = track.getAbsoluteOutputPath(_project!.directoryPath);
+    final jsonPath = track.getAbsoluteOutputPath(
+      _project!.directoryPath,
+      collection.folderName,
+    );
     final pinsPath = PinsService.pinsPath(jsonPath);
     if (await File(jsonPath).exists()) await File(jsonPath).delete();
     if (await File(pinsPath).exists()) await File(pinsPath).delete();
@@ -971,12 +992,46 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           hasChildren: true,
           isEditing: _editingNodeId == col.id,
           onDoubleTap: () => setState(() => _editingNodeId = col.id),
-          onEditComplete: (newName) {
-            setState(() {
-              if (newName.trim().isNotEmpty) col.name = newName.trim();
-              _editingNodeId = null;
-            });
-            _project!.save();
+
+          // Updated to dynamically rename the friendly directory on disk
+          onEditComplete: (newName) async {
+            final cleanNewName = newName.trim();
+            if (cleanNewName.isNotEmpty && cleanNewName != col.name) {
+              final oldFolderName = col.folderName;
+              final oldPath = p.join(
+                _project!.directoryPath,
+                'collections',
+                oldFolderName,
+              );
+
+              // Generate temporary folder name to pre-calculate the new location
+              final dummyCol = Collection(id: col.id, name: cleanNewName);
+              final newFolderName = dummyCol.folderName;
+              final newPath = p.join(
+                _project!.directoryPath,
+                'collections',
+                newFolderName,
+              );
+
+              if (Directory(oldPath).existsSync() &&
+                  !Directory(newPath).existsSync()) {
+                try {
+                  await Directory(oldPath).rename(newPath);
+                } catch (e) {
+                  debugPrint("Failed to rename physical collection folder: $e");
+                }
+              }
+
+              setState(() {
+                col.name = cleanNewName;
+                _editingNodeId = null;
+              });
+              await _project!.save();
+            } else {
+              setState(() {
+                _editingNodeId = null;
+              });
+            }
           },
           onTap: () async {
             if (_editingNodeId != null) {
@@ -1031,6 +1086,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             if (cleanNewName.isNotEmpty && cleanNewName != track.name) {
               final oldJsonPath = track.getAbsoluteOutputPath(
                 _project!.directoryPath,
+                col.folderName,
               );
               final oldPinsPath = PinsService.pinsPath(oldJsonPath);
 
@@ -1043,6 +1099,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
               final newJsonPath = track.getAbsoluteOutputPath(
                 _project!.directoryPath,
+                col.folderName,
               );
               final newPinsPath = PinsService.pinsPath(newJsonPath);
 
@@ -1052,7 +1109,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                   await alignDir.create(recursive: true);
                 }
 
-                // If physical files already exist on disk, rename them to match the new track name
                 if (await File(oldJsonPath).exists()) {
                   await File(oldJsonPath).rename(newJsonPath);
                 }
@@ -1114,7 +1170,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       case SidebarNodeType.audio:
         final track = node.track!;
         final col = node.collection!;
-        final resolved = track.getResolvedAudioPath(_project!.directoryPath);
+        final resolved = track.getResolvedAudioPath(
+          _project!.directoryPath,
+          col.folderName,
+        );
         final fileExists = resolved != null && File(resolved).existsSync();
         final isAudioSelected =
             _selectedNode?.track == track &&
@@ -1149,7 +1208,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       case SidebarNodeType.text:
         final track = node.track!;
         final col = node.collection!;
-        final resolved = track.getResolvedTextPath(_project!.directoryPath);
+        final resolved = track.getResolvedTextPath(
+          _project!.directoryPath,
+          col.folderName,
+        );
         final fileExists = resolved != null && File(resolved).existsSync();
         final isTextSelected =
             _selectedNode?.track == track &&

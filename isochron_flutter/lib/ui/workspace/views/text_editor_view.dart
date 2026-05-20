@@ -38,6 +38,7 @@ class _TextEditorViewState extends State<TextEditorView> {
   Future<void> _loadFile() async {
     final resolvedPath = widget.track.getResolvedTextPath(
       widget.project.directoryPath,
+      widget.collection.folderName,
     );
     if (resolvedPath != null && await File(resolvedPath).exists()) {
       _controller.text = await File(resolvedPath).readAsString();
@@ -58,6 +59,7 @@ class _TextEditorViewState extends State<TextEditorView> {
 
     final resolvedPath = widget.track.getResolvedTextPath(
       widget.project.directoryPath,
+      widget.collection.folderName,
     )!;
 
     return Column(
@@ -75,9 +77,7 @@ class _TextEditorViewState extends State<TextEditorView> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  widget
-                      .track
-                      .textPath!, // Show relative or absolute name in UI
+                  widget.track.textPath!,
                   style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
               ),
@@ -135,7 +135,7 @@ class _TextEditorViewState extends State<TextEditorView> {
             p.join(
               widget.project.directoryPath,
               'collections',
-              widget.collection.id,
+              widget.collection.folderName,
               'text',
             ),
           );

@@ -160,7 +160,7 @@ class CollectionBatchView extends StatelessWidget {
         p.join(
           project.directoryPath,
           'collections',
-          collection.id,
+          collection.folderName,
           subfolderName,
         ),
       );
@@ -274,11 +274,17 @@ class CollectionBatchView extends StatelessWidget {
 
     final List<Track> brokenTracks = collection.tracks.where((t) {
       if (t.audioPath != null) {
-        final p = t.getResolvedAudioPath(project.directoryPath);
+        final p = t.getResolvedAudioPath(
+          project.directoryPath,
+          collection.folderName,
+        );
         if (p == null || !File(p).existsSync()) return true;
       }
       if (t.textPath != null) {
-        final p = t.getResolvedTextPath(project.directoryPath);
+        final p = t.getResolvedTextPath(
+          project.directoryPath,
+          collection.folderName,
+        );
         if (p == null || !File(p).existsSync()) return true;
       }
       return false;

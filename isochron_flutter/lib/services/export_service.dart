@@ -64,7 +64,16 @@ class ExportService {
     Project project,
     Track track,
   ) async {
-    final absJsonPath = track.getAbsoluteOutputPath(project.directoryPath);
+    // Find the collection to extract the friendly folderName
+    final collection = project.collections.firstWhere(
+      (c) => c.id == track.collectionId,
+      orElse: () => Collection(id: track.collectionId, name: 'Default'),
+    );
+
+    final absJsonPath = track.getAbsoluteOutputPath(
+      project.directoryPath,
+      collection.folderName,
+    );
     final file = File(absJsonPath);
     if (!await file.exists()) return [];
 
