@@ -109,11 +109,27 @@ class Collection {
     return sanitized.trim().isEmpty ? id : sanitized;
   }
 
+  /// Serializes only the collection shell for the master project.json
+  Map<String, dynamic> toMasterJson() => {'id': id, 'name': name};
+
+  /// Serializes the collection tracks for collection.json
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
     'tracks': tracks.map((t) => t.toJson()).toList(),
   };
+
+  /// Saves this collection's tracks asynchronously to disk
+  Future<void> saveTracks(String projectDir) async {
+    final file = File(
+      p.join(projectDir, 'collections', folderName, 'collection.json'),
+    );
+    if (!await file.parent.exists()) {
+      await file.parent.create(recursive: true);
+    }
+    final jsonString = const JsonEncoder.withIndent('  ').convert(toJson());
+    await file.writeAsString(jsonString);
+  }
 
   factory Collection.fromJson(Map<String, dynamic> json) {
     final colId = json['id']?.toString() ?? const Uuid().v4();
@@ -160,11 +176,12 @@ class Project {
     this.hasPromptedForMediaStorage = false,
   }) : collections = collections ?? [];
 
+  /// Returns the master project state mapping (Collections are stripped of track details)
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
     'directoryPath': directoryPath,
-    'collections': collections.map((c) => c.toJson()).toList(),
+    'collections': collections.map((c) => c.toMasterJson()).toList(),
     'dictPath': dictPath,
     'defaultHasIds': defaultHasIds,
     'defaultGenerateIds': defaultGenerateIds,
@@ -177,6 +194,7 @@ class Project {
 
   factory Project.fromJson(Map<String, dynamic> json) {
     List<Collection> migratedCollections = [];
+    bool migrationNeeded = false;
 
     AlignmentStatus parseStatus(dynamic statusVal) {
       int idx = statusVal is int ? statusVal : 0;
@@ -187,10 +205,16 @@ class Project {
     }
 
     if (json.containsKey('collections') && json['collections'] is List) {
-      migratedCollections = (json['collections'] as List)
-          .whereType<Map<String, dynamic>>()
-          .map((i) => Collection.fromJson(i))
-          .toList();
+      for (var colJson in json['collections']) {
+        if (colJson is Map<String, dynamic>) {
+          final col = Collection.fromJson(colJson);
+          if (colJson.containsKey('tracks') &&
+              (colJson['tracks'] as List).isNotEmpty) {
+            migrationNeeded = true;
+          }
+          migratedCollections.add(col);
+        }
+      }
     }
 
     if (migratedCollections.isEmpty) {
@@ -284,13 +308,79 @@ class Project {
       hasPromptedForMediaStorage: json['hasPromptedForMediaStorage'] ?? false,
     );
 
-    // Run safe folder migration on load
+    // 1. Convert legacy UUID folder names first to guarantee valid paths
     _migrateLegacyCollectionFolders(project);
+
+    // 2. Either split the monolithic project or load already distributed collection files
+    if (migrationNeeded) {
+      _migrateLegacyCollectionTracks(project);
+    } else {
+      _loadDistributedCollectionTracks(project);
+    }
 
     return project;
   }
 
-  /// Automatically renames any folder named by a UUID to its friendly name on disk.
+  /// Splits legacy monolithic tracks into distributed collection.json files synchronously
+  static void _migrateLegacyCollectionTracks(Project project) {
+    for (var col in project.collections) {
+      final colDir = Directory(
+        p.join(project.directoryPath, 'collections', col.folderName),
+      );
+      if (!colDir.existsSync()) {
+        colDir.createSync(recursive: true);
+      }
+      final file = File(p.join(colDir.path, 'collection.json'));
+      final Map<String, dynamic> colJson = col.toJson();
+      file.writeAsStringSync(
+        const JsonEncoder.withIndent('  ').convert(colJson),
+      );
+    }
+    debugPrint(
+      '[DECOUPLE] Successfully split monolithic project data to distributed collections.',
+    );
+
+    // Save cleaned master project.json synchronously to commit migration
+    final file = File(p.join(project.directoryPath, 'project.json'));
+    file.writeAsStringSync(
+      const JsonEncoder.withIndent('  ').convert(project.toJson()),
+    );
+  }
+
+  /// Loads distributed collection.json files synchronously on startup
+  static void _loadDistributedCollectionTracks(Project project) {
+    for (var col in project.collections) {
+      final file = File(
+        p.join(
+          project.directoryPath,
+          'collections',
+          col.folderName,
+          'collection.json',
+        ),
+      );
+      if (file.existsSync()) {
+        try {
+          final content = file.readAsStringSync();
+          final Map<String, dynamic> colJson = jsonDecode(content);
+          col.tracks =
+              (colJson['tracks'] as List?)
+                  ?.whereType<Map<String, dynamic>>()
+                  .map((i) {
+                    final t = Track.fromJson(i);
+                    t.collectionId = col.id;
+                    return t;
+                  })
+                  .toList() ??
+              [];
+        } catch (e) {
+          debugPrint(
+            '[DECOUPLE] Failed to load tracks synchronously for collection ${col.name}: $e',
+          );
+        }
+      }
+    }
+  }
+
   static void _migrateLegacyCollectionFolders(Project project) {
     final collectionsDir = Directory(
       p.join(project.directoryPath, 'collections'),
@@ -319,9 +409,15 @@ class Project {
     }
   }
 
+  /// Persists project configurations and distributed collections asynchronously
   Future<void> save() async {
     final file = File(p.join(directoryPath, 'project.json'));
     const encoder = JsonEncoder.withIndent('  ');
     await file.writeAsString(encoder.convert(toJson()));
+
+    // Save each nested collection's track metadata asynchronously
+    for (var col in collections) {
+      await col.saveTracks(directoryPath);
+    }
   }
 }
