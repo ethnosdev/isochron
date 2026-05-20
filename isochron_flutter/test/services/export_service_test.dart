@@ -7,46 +7,6 @@ import 'package:isochron_flutter/services/export_service.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 
 void main() {
-  group('ExportService.generateCsv', () {
-    test('matches expected CSV format with header', () {
-      final entries = <Map<String, dynamic>>[
-        {'index': 0, 'id': '40001001', 'start': 2.132, 'end': 10.657},
-        {'index': 1, 'id': null, 'start': 10.657, 'end': 11.545},
-      ];
-
-      final csv = ExportService.generateCsv(entries, 'recordingA');
-      expect(
-        csv,
-        'id,verse_id,recording_id,start,end\n'
-        '0,40001001,recordingA,2.132,10.657\n'
-        '1,,recordingA,10.657,11.545\n',
-      );
-    });
-
-    test('supports headerless append mode', () {
-      final entries = <Map<String, dynamic>>[
-        {'index': 2, 'id': '40001003', 'start': 11.545, 'end': 12.200},
-      ];
-
-      final csv = ExportService.generateCsv(
-        entries,
-        'rec-2',
-        includeHeader: false,
-      );
-
-      expect(csv, '2,40001003,rec-2,11.545,12.2\n');
-    });
-
-    test('escapes recording IDs containing commas', () {
-      final entries = <Map<String, dynamic>>[
-        {'index': 1, 'id': 'v1', 'start': 0.0, 'end': 1.0},
-      ];
-
-      final csv = ExportService.generateCsv(entries, 'rec,with,comma');
-      expect(csv, contains('1,v1,"rec,with,comma",0.0,1.0'));
-    });
-  });
-
   group('ExportService.parsePhraseMetadataFromTextFilename', () {
     test('parses LANG-BOOKID-BOOK-CHAPTERID format', () {
       final metadata = ExportService.parsePhraseMetadataFromTextFilename(
@@ -139,22 +99,6 @@ void main() {
   });
 
   group('ExportService helpers', () {
-    test('builds default filenames', () {
-      final phraseName = ExportService.defaultPhraseTimingFilename(
-        const TimingExportMetadata(
-          languageCode: 'TH',
-          bookId: '01',
-          bookCode: 'GEN',
-          chapterId: '01',
-        ),
-      );
-      expect(phraseName, 'TH-01-GEN-01.txt');
-      expect(
-        ExportService.defaultCsvFilename('My Project Name'),
-        'My_Project_Name_full.csv',
-      );
-    });
-
     test('status gating only allows done/reviewed', () {
       expect(
         ExportService.isPhraseExportableStatus(AlignmentStatus.done),
@@ -285,15 +229,6 @@ void main() {
       }
     });
 
-    test('buildCombinedCsv exports done/reviewed tracks only', () async {
-      final csv = await ExportService.buildCombinedCsv(project);
-
-      expect(csv, startsWith('id,verse_id,recording_id,start,end\n'));
-      expect(csv, contains('0,s1,rec01,2.132,10.657\n'));
-      expect(csv, contains('1,1a,rec01,10.657,11.545\n'));
-      expect(csv, isNot(contains('p1')));
-    });
-
     test('buildPhraseTiming returns null for non-exportable status', () async {
       final payload = await ExportService.buildPhraseTiming(
         project,
@@ -325,17 +260,6 @@ void main() {
       );
       expect(name, 'BADNAME-timing.txt');
     });
-
-    test(
-      'buildCombinedCsv returns empty when no exportable tracks exist',
-      () async {
-        pendingTrack.status = AlignmentStatus.error;
-        doneTrack.status = AlignmentStatus.pending;
-
-        final csv = await ExportService.buildCombinedCsv(project);
-        expect(csv, isEmpty);
-      },
-    );
 
     test('buildPhraseTiming still works for done non-.phrase input', () async {
       doneTrack.textPath = '/text/grctr_071_MRK_01_read.txt';

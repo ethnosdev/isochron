@@ -27,6 +27,24 @@ import 'views/audio_inspector_view.dart';
 import 'views/text_editor_view.dart';
 import 'views/collection_batch_view.dart';
 
+enum SidebarNodeType { collection, track, audio, text }
+
+class SidebarNode {
+  final String id;
+  final SidebarNodeType type;
+  final Collection? collection;
+  final Track? track;
+  final int depth;
+
+  const SidebarNode({
+    required this.id,
+    required this.type,
+    this.collection,
+    this.track,
+    required this.depth,
+  });
+}
+
 class WorkspaceScreen extends StatefulWidget {
   const WorkspaceScreen({super.key});
 
@@ -247,7 +265,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
             if (_project!.copyMediaIntoProject) {
               if (finalAudio != null) {
-                // Resolve the old absolute path (handling edge cases where the old project used relative paths)
                 final oldAudioFile = File(
                   p.isAbsolute(finalAudio)
                       ? finalAudio
@@ -448,7 +465,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // BATCH & EXPORT LOGIC
+  // BATCH LOGIC
   // ---------------------------------------------------------------------------
 
   Future<void> _runBatch(Collection collection) async {
@@ -469,7 +486,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     for (var track in pendingTracks) {
       if (!_isBatchRunning) break;
 
-      // --- Resolve paths for the batch! ---
       final resolvedAudio = track.getResolvedAudioPath(_project!.directoryPath);
       final resolvedText = track.getResolvedTextPath(_project!.directoryPath);
 
@@ -512,7 +528,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
         List<Fragment> fragments = await _alignmentService.runIsochron(
           textPath: actualTextPath,
-          audioPath: resolvedAudio, // Use the resolved audio path
+          audioPath: resolvedAudio,
           dictPath: _project!.dictPath,
           snapMode: _project!.snapMode,
           snapOffsetMs: _project!.snapOffset ?? 0,
@@ -549,10 +565,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           }
         }
 
-        // Figure out where to save the alignment JSON
         final absPath = track.getAbsoluteOutputPath(_project!.directoryPath);
 
-        // --- Ensure the nested alignments directory exists! ---
         final alignDir = Directory(p.dirname(absPath));
         if (!await alignDir.exists()) {
           await alignDir.create(recursive: true);
@@ -713,17 +727,125 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     _project!.save();
   }
 
+  List<SidebarNode> _getFlatNodes() {
+    if (_project == null) return const [];
+    final List<SidebarNode> nodes = [];
+
+    for (final col in _project!.collections) {
+      nodes.add(
+        SidebarNode(
+          id: col.id,
+          type: SidebarNodeType.collection,
+          collection: col,
+          depth: 0,
+        ),
+      );
+
+      if (_expandedNodes.contains(col.id)) {
+        for (final track in col.tracks) {
+          nodes.add(
+            SidebarNode(
+              id: track.id,
+              type: SidebarNodeType.track,
+              collection: col,
+              track: track,
+              depth: 1,
+            ),
+          );
+
+          if (_expandedTrackId == track.id) {
+            nodes.add(
+              SidebarNode(
+                id: '${track.id}_audio',
+                type: SidebarNodeType.audio,
+                collection: col,
+                track: track,
+                depth: 2,
+              ),
+            );
+            nodes.add(
+              SidebarNode(
+                id: '${track.id}_text',
+                type: SidebarNodeType.text,
+                collection: col,
+                track: track,
+                depth: 2,
+              ),
+            );
+          }
+        }
+      }
+    }
+    return nodes;
+  }
+
   Sidebar _buildTreeSidebar(BuildContext context) {
-    List<Widget> rows = [];
     final theme = MacosTheme.of(context);
+    final flatNodes = _getFlatNodes();
 
-    for (var col in _project!.collections) {
-      final isColSelected =
-          _selectedNode?.collection == col &&
-          _selectedNode?.type == NodeType.collection;
+    return Sidebar(
+      minWidth: 220,
+      startWidth: 260,
+      maxWidth: 350,
+      top: Padding(
+        padding: const EdgeInsets.only(
+          left: 16.0,
+          right: 8.0,
+          top: 12.0,
+          bottom: 8.0,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                _project!.name,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            MacosTooltip(
+              message: "New Collection",
+              child: MacosIconButton(
+                icon: MacosIcon(
+                  CupertinoIcons.folder_badge_plus,
+                  size: 18,
+                  color: theme.typography.body.color,
+                ),
+                onPressed: _addCollection,
+                boxConstraints: const BoxConstraints(
+                  minHeight: 28,
+                  minWidth: 28,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      builder: (context, scrollController) => ListView.builder(
+        controller: scrollController,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        itemCount: flatNodes.length,
+        itemBuilder: (context, index) {
+          final node = flatNodes[index];
+          return _buildTreeRowForNode(context, node);
+        },
+      ),
+    );
+  }
 
-      rows.add(
-        _buildTreeRow(
+  Widget _buildTreeRowForNode(BuildContext context, SidebarNode node) {
+    final theme = MacosTheme.of(context);
+    switch (node.type) {
+      case SidebarNodeType.collection:
+        final col = node.collection!;
+        final isColSelected =
+            _selectedNode?.collection == col &&
+            _selectedNode?.type == NodeType.collection;
+        return _buildTreeRow(
           label: col.name,
           icon: isColSelected
               ? CupertinoIcons.folder_solid
@@ -772,203 +894,139 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
               );
             });
           },
-        ),
-      );
+        );
 
-      if (_expandedNodes.contains(col.id)) {
-        for (var track in col.tracks) {
-          final isTrackSelected =
-              _selectedNode?.track == track &&
-              _selectedNode?.type == NodeType.track;
+      case SidebarNodeType.track:
+        final track = node.track!;
+        final col = node.collection!;
+        final isTrackSelected =
+            _selectedNode?.track == track &&
+            _selectedNode?.type == NodeType.track;
+        return _buildTreeRow(
+          label: track.name,
+          icon: CupertinoIcons.waveform_path,
+          iconColor: _getTrackColor(context, track.status),
+          isSelected: isTrackSelected,
+          isExpanded: _expandedTrackId == track.id,
+          depth: 1,
+          hasChildren: true,
+          isEditing: _editingNodeId == track.id,
+          onDoubleTap: () => setState(() => _editingNodeId = track.id),
+          onEditComplete: (newName) {
+            setState(() {
+              if (newName.trim().isNotEmpty) track.name = newName.trim();
+              _editingNodeId = null;
+            });
+            _project!.save();
+          },
+          onTap: () async {
+            if (_editingNodeId != null) {
+              setState(() => _editingNodeId = null);
+              return;
+            }
 
-          rows.add(
-            _buildTreeRow(
-              label: track.name,
-              icon: CupertinoIcons.waveform_path,
-              iconColor: _getTrackColor(context, track.status),
-              isSelected: isTrackSelected,
-              isExpanded: _expandedTrackId == track.id,
-              depth: 1,
-              hasChildren: true,
-              isEditing: _editingNodeId == track.id,
-              onDoubleTap: () => setState(() => _editingNodeId = track.id),
-              onEditComplete: (newName) {
-                setState(() {
-                  if (newName.trim().isNotEmpty) track.name = newName.trim();
-                  _editingNodeId = null;
-                });
-                _project!.save();
-              },
-              onTap: () async {
-                if (_editingNodeId != null) {
-                  setState(() => _editingNodeId = null);
-                  return;
-                }
+            final bool isAlreadyExpanded = _expandedTrackId == track.id;
 
-                final bool isAlreadyExpanded = _expandedTrackId == track.id;
+            if (isTrackSelected) {
+              setState(() {
+                _expandedTrackId = isAlreadyExpanded ? null : track.id;
+              });
+              return;
+            }
 
-                if (isTrackSelected) {
-                  setState(() {
-                    _expandedTrackId = isAlreadyExpanded ? null : track.id;
-                  });
-                  return;
-                }
+            if (_hasUnsavedChanges && _selectedNode?.type == NodeType.track) {
+              final proceed = await _requestCloseEditor();
+              if (!proceed) return;
+            }
 
-                if (_hasUnsavedChanges &&
-                    _selectedNode?.type == NodeType.track) {
-                  final proceed = await _requestCloseEditor();
-                  if (!proceed) return;
-                }
-
-                _homeManager.value = _homeManager.value.copyWith(
-                  clearWaveform: true,
-                  clearFocus: true,
-                  fragments: [],
-                  statusMessage: "Loading...",
-                );
-
-                setState(() {
-                  _expandedTrackId = track.id;
-                  _selectedNode = TreeSelection(
-                    type: NodeType.track,
-                    collection: col,
-                    track: track,
-                  );
-                });
-
-                Future.delayed(const Duration(milliseconds: 50), () {
-                  if (mounted) _homeManager.loadTrack(track, _project!);
-                });
-              },
-            ),
-          );
-
-          if (_expandedTrackId == track.id) {
-            // Audio Node
-            final isAudioSelected =
-                _selectedNode?.track == track &&
-                _selectedNode?.type == NodeType.audio;
-            rows.add(
-              _buildTreeRow(
-                label: track.audioPath != null
-                    ? p.basename(
-                        track.getResolvedAudioPath(_project!.directoryPath)!,
-                      )
-                    : '[⚠️ Missing Audio]',
-                icon: CupertinoIcons.speaker_2_fill,
-                iconColor: track.audioPath != null
-                    ? CupertinoColors.systemGrey
-                    : CupertinoColors.destructiveRed,
-                isSelected: isAudioSelected,
-                isExpanded: false,
-                depth: 2,
-                hasChildren: false,
-                onTap: () async {
-                  if (_hasUnsavedChanges &&
-                      _selectedNode?.type == NodeType.track) {
-                    final proceed = await _requestCloseEditor();
-                    if (!proceed) return;
-                  }
-                  setState(
-                    () => _selectedNode = TreeSelection(
-                      type: NodeType.audio,
-                      collection: col,
-                      track: track,
-                    ),
-                  );
-                },
-              ),
+            _homeManager.value = _homeManager.value.copyWith(
+              clearWaveform: true,
+              clearFocus: true,
+              fragments: [],
+              statusMessage: "Loading...",
             );
 
-            // Text Node
-            final isTextSelected =
-                _selectedNode?.track == track &&
-                _selectedNode?.type == NodeType.text;
-            rows.add(
-              _buildTreeRow(
-                label: track.textPath != null
-                    ? p.basename(
-                        track.getResolvedTextPath(_project!.directoryPath)!,
-                      )
-                    : '[⚠️ Missing Text]',
-                icon: CupertinoIcons.doc_text_fill,
-                iconColor: track.textPath != null
-                    ? CupertinoColors.systemGrey
-                    : CupertinoColors.destructiveRed,
-                isSelected: isTextSelected,
-                isExpanded: false,
-                depth: 2,
-                hasChildren: false,
-                onTap: () async {
-                  if (_hasUnsavedChanges &&
-                      _selectedNode?.type == NodeType.track) {
-                    final proceed = await _requestCloseEditor();
-                    if (!proceed) return;
-                  }
-                  setState(
-                    () => _selectedNode = TreeSelection(
-                      type: NodeType.text,
-                      collection: col,
-                      track: track,
-                    ),
-                  );
-                },
+            setState(() {
+              _expandedTrackId = track.id;
+              _selectedNode = TreeSelection(
+                type: NodeType.track,
+                collection: col,
+                track: track,
+              );
+            });
+
+            Future.delayed(const Duration(milliseconds: 50), () {
+              if (mounted) _homeManager.loadTrack(track, _project!);
+            });
+          },
+        );
+
+      case SidebarNodeType.audio:
+        final track = node.track!;
+        final col = node.collection!;
+        final isAudioSelected =
+            _selectedNode?.track == track &&
+            _selectedNode?.type == NodeType.audio;
+        return _buildTreeRow(
+          label: track.audioPath != null
+              ? p.basename(track.getResolvedAudioPath(_project!.directoryPath)!)
+              : '[⚠️ Missing Audio]',
+          icon: CupertinoIcons.speaker_2_fill,
+          iconColor: track.audioPath != null
+              ? CupertinoColors.systemGrey
+              : CupertinoColors.destructiveRed,
+          isSelected: isAudioSelected,
+          isExpanded: false,
+          depth: 2,
+          hasChildren: false,
+          onTap: () async {
+            if (_hasUnsavedChanges && _selectedNode?.type == NodeType.track) {
+              final proceed = await _requestCloseEditor();
+              if (!proceed) return;
+            }
+            setState(
+              () => _selectedNode = TreeSelection(
+                type: NodeType.audio,
+                collection: col,
+                track: track,
               ),
             );
-          }
-        }
-      }
+          },
+        );
+
+      case SidebarNodeType.text:
+        final track = node.track!;
+        final col = node.collection!;
+        final isTextSelected =
+            _selectedNode?.track == track &&
+            _selectedNode?.type == NodeType.text;
+        return _buildTreeRow(
+          label: track.textPath != null
+              ? p.basename(track.getResolvedTextPath(_project!.directoryPath)!)
+              : '[⚠️ Missing Text]',
+          icon: CupertinoIcons.doc_text_fill,
+          iconColor: track.textPath != null
+              ? CupertinoColors.systemGrey
+              : CupertinoColors.destructiveRed,
+          isSelected: isTextSelected,
+          isExpanded: false,
+          depth: 2,
+          hasChildren: false,
+          onTap: () async {
+            if (_hasUnsavedChanges && _selectedNode?.type == NodeType.track) {
+              final proceed = await _requestCloseEditor();
+              if (!proceed) return;
+            }
+            setState(
+              () => _selectedNode = TreeSelection(
+                type: NodeType.text,
+                collection: col,
+                track: track,
+              ),
+            );
+          },
+        );
     }
-
-    return Sidebar(
-      minWidth: 220,
-      startWidth: 260,
-      maxWidth: 350,
-      top: Padding(
-        padding: const EdgeInsets.only(
-          left: 16.0,
-          right: 8.0,
-          top: 12.0,
-          bottom: 8.0,
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                _project!.name,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            MacosTooltip(
-              message: "New Collection",
-              child: MacosIconButton(
-                icon: MacosIcon(
-                  CupertinoIcons.folder_badge_plus,
-                  size: 18,
-                  color: theme.typography.body.color,
-                ),
-                onPressed: _addCollection,
-                boxConstraints: const BoxConstraints(
-                  minHeight: 28,
-                  minWidth: 28,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      builder: (context, scrollController) => ListView.builder(
-        controller: scrollController,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: rows.length,
-        itemBuilder: (context, index) => rows[index],
-      ),
-    );
   }
 
   Widget _buildTreeRow({
@@ -1051,21 +1109,15 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     switch (status) {
       case AlignmentStatus.done:
       case AlignmentStatus.reviewed:
-        return isDark
-            ? CupertinoColors.activeGreen
-            : const Color(0xFF198754); // Deeper Green
+        return isDark ? CupertinoColors.activeGreen : const Color(0xFF198754);
       case AlignmentStatus.processing:
-        return isDark
-            ? CupertinoColors.activeBlue
-            : const Color(0xFF0056B3); // Deeper Blue
+        return isDark ? CupertinoColors.activeBlue : const Color(0xFF0056B3);
       case AlignmentStatus.error:
         return isDark
             ? CupertinoColors.destructiveRed
-            : const Color(0xFFDC3545); // Deeper Red
+            : const Color(0xFFDC3545);
       case AlignmentStatus.pending:
-        return isDark
-            ? CupertinoColors.systemYellow
-            : const Color(0xFFD97706); // Dark Amber instead of pale yellow
+        return isDark ? CupertinoColors.systemYellow : const Color(0xFFD97706);
     }
   }
 
@@ -1242,36 +1294,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                             _project!.save();
                           }
                         },
-                ),
-              ],
-            ),
-          if (_project != null)
-            PlatformMenuItemGroup(
-              members: [
-                PlatformMenuItem(
-                  label: 'Export CSV...',
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyE,
-                    meta: true,
-                    shift: true,
-                  ),
-                  onSelected: () async {
-                    final out = await FilePicker.saveFile(
-                      dialogTitle: 'Export CSV',
-                      fileName: ExportService.defaultCsvFilename(
-                        _project!.name,
-                      ),
-                      type: FileType.custom,
-                      allowedExtensions: ['csv'],
-                      initialDirectory: _project!.directoryPath,
-                    );
-                    if (out != null) {
-                      final payload = await ExportService.buildCombinedCsv(
-                        _project!,
-                      );
-                      await File(out).writeAsString(payload);
-                    }
-                  },
                 ),
               ],
             ),

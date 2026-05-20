@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:isochron_flutter/services/export_service.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:macos_ui/macos_ui.dart';
@@ -41,7 +40,6 @@ class CollectionBatchView extends StatelessWidget {
     );
     if (result == null || result.files.isEmpty) return;
 
-    // If we haven't asked them yet, pause and ask how they want to store media.
     if (!project.hasPromptedForMediaStorage) {
       if (!context.mounted) return;
       bool? shouldCopy = await showMacosAlertDialog<bool>(
@@ -69,13 +67,11 @@ class CollectionBatchView extends StatelessWidget {
         ),
       );
 
-      if (shouldCopy == null) return; // User pressed Escape or aborted
+      if (shouldCopy == null) return;
       project.copyMediaIntoProject = shouldCopy;
       project.hasPromptedForMediaStorage = true;
     }
-    // -------------------------
 
-    // Save the folder where they keep their raw audio/text so the picker opens there next time
     settings.setLastSourceDir(p.dirname(result.files.first.path!));
 
     final List<String> audioFiles = [];
@@ -93,7 +89,6 @@ class CollectionBatchView extends StatelessWidget {
 
     if (audioFiles.isEmpty && textFiles.isEmpty) return;
 
-    // Natural sort helper (ensures Track 2 comes before Track 10)
     int naturalCompare(String a, String b) {
       final regex = RegExp(r'\d+|\D+');
       final matchesA = regex.allMatches(a).map((m) => m.group(0)!).toList();
@@ -115,7 +110,6 @@ class CollectionBatchView extends StatelessWidget {
     audioFiles.sort(naturalCompare);
     textFiles.sort(naturalCompare);
 
-    // Helper: Copies the file if settings require it, then returns the correct path string to save in the Track
     Future<String> processFile(
       String originalPath,
       String subfolderName,
@@ -138,10 +132,9 @@ class CollectionBatchView extends StatelessWidget {
 
       final newPath = p.join(dir.path, p.basename(originalPath));
       await File(originalPath).copy(newPath);
-      return p.basename(originalPath); // Return relative filename
+      return p.basename(originalPath);
     }
 
-    // 1. FILL HOLES IN EXISTING TRACKS FIRST
     if (audioFiles.isNotEmpty) {
       final tracksNeedingAudio = collection.tracks
           .where((t) => t.audioPath == null)
@@ -171,7 +164,6 @@ class CollectionBatchView extends StatelessWidget {
       }
     }
 
-    // 2. PAIR AND CREATE NEW TRACKS WITH WHATEVER IS LEFT OVER
     int maxCount = audioFiles.length > textFiles.length
         ? audioFiles.length
         : textFiles.length;
@@ -197,7 +189,7 @@ class CollectionBatchView extends StatelessWidget {
       collection.tracks.add(
         Track(
           id: const Uuid().v4(),
-          collectionId: collection.id, // Link to collection
+          collectionId: collection.id,
           name: name,
           audioPath: finalAudio,
           textPath: finalText,
@@ -206,7 +198,7 @@ class CollectionBatchView extends StatelessWidget {
       );
     }
 
-    onChanged(); // Triggers UI update and save
+    onChanged();
   }
 
   @override
@@ -270,7 +262,6 @@ class CollectionBatchView extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              // ADDED: Import button always available
               PushButton(
                 controlSize: ControlSize.regular,
                 secondary: true,
@@ -283,27 +274,6 @@ class CollectionBatchView extends StatelessWidget {
                     Text("Import Files"),
                   ],
                 ),
-              ),
-              const Spacer(),
-              PushButton(
-                controlSize: ControlSize.regular,
-                secondary: true,
-                onPressed: () async {
-                  final out = await FilePicker.saveFile(
-                    dialogTitle: 'Export CSV',
-                    fileName: ExportService.defaultCsvFilename(project.name),
-                    type: FileType.custom,
-                    allowedExtensions: ['csv'],
-                    initialDirectory: project.directoryPath,
-                  );
-                  if (out != null) {
-                    final payload = await ExportService.buildCombinedCsv(
-                      project,
-                    );
-                    await File(out).writeAsString(payload);
-                  }
-                },
-                child: const Text("Export Combined CSV"),
               ),
             ],
           ),
