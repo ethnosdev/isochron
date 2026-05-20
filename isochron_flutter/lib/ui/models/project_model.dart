@@ -12,7 +12,7 @@ class Track {
   String name;
   String? audioPath;
   String? textPath;
-  final String outputFilename;
+  String outputFilename;
   AlignmentStatus status;
 
   Track({

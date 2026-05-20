@@ -1026,12 +1026,48 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           hasChildren: true,
           isEditing: _editingNodeId == track.id,
           onDoubleTap: () => setState(() => _editingNodeId = track.id),
-          onEditComplete: (newName) {
+          onEditComplete: (newName) async {
+            final cleanNewName = newName.trim();
+            if (cleanNewName.isNotEmpty && cleanNewName != track.name) {
+              final oldJsonPath = track.getAbsoluteOutputPath(
+                _project!.directoryPath,
+              );
+              final oldPinsPath = PinsService.pinsPath(oldJsonPath);
+
+              final newFilename = '${cleanNewName}_timing.json';
+
+              setState(() {
+                track.name = cleanNewName;
+                track.outputFilename = newFilename;
+              });
+
+              final newJsonPath = track.getAbsoluteOutputPath(
+                _project!.directoryPath,
+              );
+              final newPinsPath = PinsService.pinsPath(newJsonPath);
+
+              try {
+                final alignDir = Directory(p.dirname(newJsonPath));
+                if (!await alignDir.exists()) {
+                  await alignDir.create(recursive: true);
+                }
+
+                // If physical files already exist on disk, rename them to match the new track name
+                if (await File(oldJsonPath).exists()) {
+                  await File(oldJsonPath).rename(newJsonPath);
+                }
+                if (await File(oldPinsPath).exists()) {
+                  await File(oldPinsPath).rename(newPinsPath);
+                }
+              } catch (e) {
+                debugPrint("Failed to rename physical files: $e");
+              }
+
+              await _project!.save();
+            }
             setState(() {
-              if (newName.trim().isNotEmpty) track.name = newName.trim();
               _editingNodeId = null;
             });
-            _project!.save();
           },
           onTap: () async {
             if (_editingNodeId != null) {
