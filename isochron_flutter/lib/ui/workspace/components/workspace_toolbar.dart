@@ -159,10 +159,10 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
           ),
           showLabel: true,
           tooltipMessage: ExportService.phraseExportTooltip(
-            selectedNode!.track!,
+            selectedNode.track!,
           ),
-          onPressed: ExportService.canExportPhraseTiming(selectedNode!.track!)
-              ? () => handleExportPhraseTimingForTrack(selectedNode!.track!)
+          onPressed: ExportService.canExportPhraseTiming(selectedNode.track!)
+              ? () => handleExportPhraseTimingForTrack(selectedNode.track!)
               : null,
         ),
         ToolBarIconButton(
@@ -198,10 +198,8 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
           ),
           showLabel: false,
           tooltipMessage: 'Delete Track',
-          onPressed: () => requestDeleteTrack(
-            selectedNode!.track!,
-            selectedNode!.collection!,
-          ),
+          onPressed: () =>
+              requestDeleteTrack(selectedNode.track!, selectedNode.collection!),
         ),
       ]
       // --- COLLECTION ACTIONS ---
