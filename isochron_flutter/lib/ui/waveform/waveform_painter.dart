@@ -13,6 +13,7 @@ class IsochronWaveformPainter extends CustomPainter {
   final Color accentColor;
   final Color waveColor;
   final Color playheadColor;
+  final Color pinnedColor;
 
   final double contentWidth;
   final double padding;
@@ -26,6 +27,7 @@ class IsochronWaveformPainter extends CustomPainter {
     required this.accentColor,
     required this.waveColor,
     required this.playheadColor,
+    required this.pinnedColor,
     required this.contentWidth,
     required this.padding,
   });
@@ -65,16 +67,13 @@ class IsochronWaveformPainter extends CustomPainter {
     }
   }
 
-  // Amber used for pinned fragment boundaries — semantic, not theme-dependent.
-  static const Color _pinnedColor = Color(0xFFFFC107); // Colors.amber
-
   void _drawFragments(Canvas canvas, Size size) {
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
 
     for (final frag in fragments) {
       if (frag.realStart < 0) continue;
       final bool pinned = frag.isPinned;
-      final Color lineColor = pinned ? _pinnedColor : accentColor;
+      final Color lineColor = pinned ? pinnedColor : accentColor;
 
       final paintLine = Paint()
         ..color = lineColor

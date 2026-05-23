@@ -6,6 +6,7 @@ import 'package:isochron_flutter/ui/models/app_state.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'waveform_painter.dart';
 import 'dart:math' as math;
+import 'package:isochron_flutter/ui/theme/app_theme.dart';
 
 class WaveformView extends StatefulWidget {
   final AppManager controller;
@@ -151,8 +152,6 @@ class _WaveformViewState extends State<WaveformView> {
         final viewportWidth = constraints.maxWidth;
         final contentWidth = viewportWidth * widget.state.zoomLevel;
         final fullPainterWidth = contentWidth + (_hPadding * 2);
-
-        final theme = MacosTheme.of(context);
 
         // --- HELPER: Perfectly Anchored Exponential Zoom ---
         void applyZoom(double zoomIntensity, double viewportX) {
@@ -324,11 +323,12 @@ class _WaveformViewState extends State<WaveformView> {
                                   currentPos.inMilliseconds / 1000.0,
                               totalSeconds: totalSec,
                               zoomLevel: widget.state.zoomLevel,
-                              accentColor: theme.primaryColor,
-                              waveColor: CupertinoColors.systemGrey.withValues(
+                              accentColor: AppTheme.accent(context),
+                              waveColor: AppTheme.grey(context).withValues(
                                 alpha: 0.5,
                               ),
-                              playheadColor: CupertinoColors.destructiveRed,
+                              playheadColor: AppTheme.playhead(context),
+                              pinnedColor: AppTheme.warning(context),
                               contentWidth: contentWidth,
                               padding: _hPadding,
                             ),
@@ -346,10 +346,10 @@ class _WaveformViewState extends State<WaveformView> {
                                 _hPadding -
                                 8,
                             top: 4,
-                            child: const Icon(
+                            child: Icon(
                               CupertinoIcons.lock_fill,
                               size: 14,
-                              color: CupertinoColors.systemYellow,
+                              color: AppTheme.warning(context),
                             ),
                           ),
                     ],

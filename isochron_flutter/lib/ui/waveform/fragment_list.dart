@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:isochron_cli/isochron_cli.dart';
+import 'package:isochron_flutter/ui/theme/app_theme.dart';
 
 class FragmentList extends StatefulWidget {
   final List<Fragment> fragments;
@@ -141,7 +142,7 @@ class _FragmentListState extends State<FragmentList> {
                   CircleAvatar(
                     radius: 10,
                     backgroundColor: f.isPinned
-                        ? const Color(0xFFFFC107)
+                        ? AppTheme.warning(context)
                         : isActive
                         ? colorScheme.primary
                         : colorScheme.surfaceContainerHighest,
@@ -160,7 +161,7 @@ class _FragmentListState extends State<FragmentList> {
                   ),
                   if (f.isPinned) ...[
                     const SizedBox(height: 4),
-                    const Icon(Icons.lock, size: 12, color: Color(0xFFFFC107)),
+                    Icon(Icons.lock, size: 12, color: AppTheme.warning(context)),
                   ],
                 ],
               ),

@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:isochron_cli/isochron_cli.dart';
+import 'package:isochron_flutter/ui/theme/app_theme.dart';
 
 class StudioFragmentList extends StatefulWidget {
   final List<Fragment> fragments;
@@ -92,7 +93,7 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
           "No text fragments available.",
           style: MacosTheme.of(
             context,
-          ).typography.callout.copyWith(color: CupertinoColors.systemGrey),
+          ).typography.callout.copyWith(color: AppTheme.grey(context)),
         ),
       );
     }
@@ -127,13 +128,13 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
 
             final bool isHighlighted = isPlaying || (isSelected && !hasTime);
 
-            final macBlue = CupertinoColors.systemBlue.resolveFrom(context);
+            final macBlue = AppTheme.accent(context);
             final bgColor = isHighlighted
                 ? macBlue.withValues(alpha: 0.15)
                 : CupertinoColors.transparent;
 
             final textColor = theme.typography.body.color;
-            final subTextColor = CupertinoColors.systemGrey;
+            final subTextColor = AppTheme.grey(context);
 
             final badgeBgColor = macBlue.withValues(alpha: 0.15);
             final badgeTextColor = macBlue;
@@ -180,10 +181,10 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                           // Display the lock independently so the index is never hidden
                           if (f.isPinned) ...[
                             const SizedBox(height: 2),
-                            const Icon(
+                            Icon(
                               CupertinoIcons.lock_fill,
                               size: 10,
-                              color: CupertinoColors.systemYellow,
+                              color: AppTheme.warning(context),
                             ),
                           ],
                         ],
@@ -268,9 +269,9 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                             ),
                             const SizedBox(width: 8),
                             MacosIconButton(
-                              icon: const Icon(
+                              icon: Icon(
                                 CupertinoIcons.clear_circled_solid,
-                                color: CupertinoColors.destructiveRed,
+                                color: AppTheme.destructive(context),
                                 size: 16,
                               ),
                               onPressed: () => widget.onClear(i),

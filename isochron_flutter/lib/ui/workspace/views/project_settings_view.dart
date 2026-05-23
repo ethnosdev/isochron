@@ -5,6 +5,7 @@ import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:path/path.dart' as p;
+import 'package:isochron_flutter/ui/theme/app_theme.dart';
 
 class ProjectSettingsView extends StatefulWidget {
   final Project project;
@@ -243,9 +244,9 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
               const SizedBox(height: 8),
               Text(
                 _idPreview,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: CupertinoColors.systemGrey,
+                  color: AppTheme.grey(context),
                   fontStyle: FontStyle.italic,
                 ),
               ),
@@ -376,9 +377,9 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                       ),
                     ),
                     MacosIconButton(
-                      icon: const MacosIcon(
+                      icon: MacosIcon(
                         CupertinoIcons.clear_circled_solid,
-                        color: CupertinoColors.systemGrey,
+                        color: AppTheme.grey(context),
                       ),
                       onPressed: () {
                         setState(() => widget.project.dictPath = null);
@@ -386,9 +387,9 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                       },
                     ),
                   ] else
-                    const Text(
+                    Text(
                       "No dictionary selected.",
-                      style: TextStyle(color: CupertinoColors.systemGrey),
+                      style: TextStyle(color: AppTheme.grey(context)),
                     ),
                 ],
               ),

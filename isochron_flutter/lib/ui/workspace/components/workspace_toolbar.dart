@@ -7,6 +7,7 @@ import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
 import 'package:isochron_flutter/ui/workspace/workspace_manager.dart';
 import 'package:macos_ui/macos_ui.dart';
+import 'package:isochron_flutter/ui/theme/app_theme.dart';
 
 ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
   final selectedNode = manager.selectedNode;
@@ -192,9 +193,9 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
         const ToolBarSpacer(),
         ToolBarIconButton(
           label: 'Delete Track',
-          icon: const MacosIcon(
+          icon: MacosIcon(
             CupertinoIcons.trash,
-            color: CupertinoColors.destructiveRed,
+            color: AppTheme.destructive(context),
           ),
           showLabel: false,
           tooltipMessage: 'Delete Track',
@@ -207,9 +208,9 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
         const ToolBarSpacer(),
         ToolBarIconButton(
           label: 'Delete Collection',
-          icon: const MacosIcon(
+          icon: MacosIcon(
             CupertinoIcons.trash,
-            color: CupertinoColors.destructiveRed,
+            color: AppTheme.destructive(context),
           ),
           showLabel: true,
           tooltipMessage: 'Delete Collection',

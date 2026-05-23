@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
+import 'package:isochron_flutter/ui/theme/app_theme.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
@@ -417,8 +418,8 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                                     : CupertinoIcons.clear_circled,
                                 size: 14,
                                 color: hasAudio
-                                    ? CupertinoColors.activeGreen
-                                    : CupertinoColors.systemRed,
+                                    ? AppTheme.success(context)
+                                    : AppTheme.destructive(context),
                               ),
                               const SizedBox(width: 4),
                               Expanded(
@@ -430,7 +431,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                                     fontSize: 11,
                                     color: hasAudio
                                         ? theme.typography.body.color
-                                        : CupertinoColors.systemRed,
+                                        : AppTheme.destructive(context),
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -449,8 +450,8 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                                     : CupertinoIcons.clear_circled,
                                 size: 14,
                                 color: hasText
-                                    ? CupertinoColors.activeGreen
-                                    : CupertinoColors.systemRed,
+                                    ? AppTheme.success(context)
+                                    : AppTheme.destructive(context),
                               ),
                               const SizedBox(width: 4),
                               Expanded(
@@ -462,7 +463,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                                     fontSize: 11,
                                     color: hasText
                                         ? theme.typography.body.color
-                                        : CupertinoColors.systemRed,
+                                        : AppTheme.destructive(context),
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -480,18 +481,18 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
           ),
         ] else ...[
           const Spacer(),
-          const Center(
+          Center(
             child: Column(
               children: [
                 Icon(
                   CupertinoIcons.folder_badge_plus,
                   size: 48,
-                  color: CupertinoColors.systemGrey,
+                  color: AppTheme.grey(context),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Text(
                   "Please select your transcripts and audio files.",
-                  style: TextStyle(color: CupertinoColors.systemGrey),
+                  style: TextStyle(color: AppTheme.grey(context)),
                 ),
               ],
             ),
@@ -583,9 +584,9 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                 : (_hasIds
                       ? "Preview: ID [40001001] / Text [In the beginning...]"
                       : "Preview: ID [] / Text [In the beginning...]"),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
-              color: CupertinoColors.systemGrey,
+              color: AppTheme.grey(context),
               fontStyle: FontStyle.italic,
             ),
           ),
@@ -638,18 +639,18 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                   ),
                 ),
                 MacosIconButton(
-                  icon: const MacosIcon(
+                  icon: MacosIcon(
                     CupertinoIcons.clear_circled_solid,
-                    color: CupertinoColors.systemGrey,
+                    color: AppTheme.grey(context),
                   ),
                   onPressed: () {
                     setState(() => _dictPath = null);
                   },
                 ),
               ] else
-                const Text(
+                Text(
                   "No dictionary configured.",
-                  style: TextStyle(color: CupertinoColors.systemGrey),
+                  style: TextStyle(color: AppTheme.grey(context)),
                 ),
             ],
           ),
@@ -660,8 +661,8 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
 
   Widget _buildWizardSidebar(BuildContext context) {
     final theme = MacosTheme.of(context);
-    final activeColor = CupertinoColors.systemBlue.resolveFrom(context);
-    final inactiveColor = CupertinoColors.systemGrey.resolveFrom(context);
+    final activeColor = AppTheme.accent(context);
+    final inactiveColor = AppTheme.grey(context);
 
     final stepLabels = [
       'Identity & Storage',
@@ -675,8 +676,8 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: theme.brightness == Brightness.dark
-            ? const Color(0xFF1E1E1E)
-            : const Color(0xFFF5F5F7),
+            ? AppTheme.darkSurfaceContainerLow
+            : AppTheme.lightSurfaceContainerLow,
         border: Border(right: BorderSide(color: theme.dividerColor)),
       ),
       child: Column(
@@ -705,7 +706,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                               : CupertinoIcons.circle),
                     size: 14,
                     color: isCompleted
-                        ? CupertinoColors.systemGreen
+                        ? AppTheme.success(context)
                         : (isActive ? activeColor : inactiveColor),
                   ),
                   const SizedBox(width: 8),
@@ -842,10 +843,10 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const MacosIcon(
+          MacosIcon(
             CupertinoIcons.tray_arrow_down,
             size: 64,
-            color: CupertinoColors.systemGrey,
+            color: AppTheme.grey(context),
           ),
           const SizedBox(height: 16),
           Text(
@@ -853,9 +854,9 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
             style: MacosTheme.of(context).typography.title1,
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             "Configure collection details and import resource files.",
-            style: TextStyle(color: CupertinoColors.systemGrey),
+            style: TextStyle(color: AppTheme.grey(context)),
           ),
           const SizedBox(height: 24),
           PushButton(
@@ -909,17 +910,17 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
             margin: const EdgeInsets.all(16.0),
             padding: const EdgeInsets.all(12.0),
             decoration: BoxDecoration(
-              color: CupertinoColors.systemRed.withValues(alpha: 0.1),
+              color: AppTheme.destructive(context).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8.0),
               border: Border.all(
-                color: CupertinoColors.systemRed.withValues(alpha: 0.3),
+                color: AppTheme.destructive(context).withValues(alpha: 0.3),
               ),
             ),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   CupertinoIcons.exclamationmark_triangle_fill,
-                  color: CupertinoColors.destructiveRed,
+                  color: AppTheme.destructive(context),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -956,7 +957,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                           : CupertinoIcons.play_arrow_solid,
                       size: 14,
                       color: widget.isRunning
-                          ? CupertinoColors.destructiveRed
+                          ? AppTheme.destructive(context)
                           : CupertinoColors.white,
                     ),
                     const SizedBox(width: 8),
@@ -1023,9 +1024,9 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                         if (t.status == AlignmentStatus.processing)
                           const ProgressCircle()
                         else
-                          const MacosIcon(
+                          MacosIcon(
                             CupertinoIcons.waveform_path,
-                            color: CupertinoColors.systemGrey,
+                            color: AppTheme.grey(context),
                           ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -1044,9 +1045,9 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                                   t.audioPath == null
                                       ? "Missing Audio"
                                       : "Missing Text",
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 11,
-                                    color: CupertinoColors.destructiveRed,
+                                    color: AppTheme.destructive(context),
                                   ),
                                 ),
                             ],
@@ -1054,10 +1055,10 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                         ),
                         Text(
                           t.status.name.toUpperCase(),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
-                            color: CupertinoColors.systemGrey,
+                            color: AppTheme.grey(context),
                           ),
                         ),
                       ],

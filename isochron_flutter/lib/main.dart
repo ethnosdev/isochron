@@ -3,6 +3,8 @@ import 'package:macos_ui/macos_ui.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'ui/workspace/workspace_screen.dart';
 
+import 'package:isochron_flutter/ui/theme/app_theme.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -39,8 +41,16 @@ class IsochronApp extends StatelessWidget {
           title: 'Isochron Studio',
           debugShowCheckedModeBanner: false,
           themeMode: _mapTheme(currentMode),
-          theme: MacosThemeData.light(),
-          darkTheme: MacosThemeData.dark(),
+          theme: MacosThemeData.light().copyWith(
+            canvasColor: AppTheme.lightBg,
+            primaryColor: AppTheme.lightAccent,
+            accentColor: AccentColor.green,
+          ),
+          darkTheme: MacosThemeData.dark().copyWith(
+            canvasColor: AppTheme.darkBg,
+            primaryColor: AppTheme.darkAccent,
+            accentColor: AccentColor.green,
+          ),
           home: const WorkspaceScreen(), // Our new 3-pane shell
         );
       },

@@ -6,6 +6,7 @@ import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:path/path.dart' as p;
+import 'package:isochron_flutter/ui/theme/app_theme.dart';
 
 class AudioInspectorView extends StatefulWidget {
   final Track track;
@@ -72,10 +73,10 @@ class _AudioInspectorViewState extends State<AudioInspectorView> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const MacosIcon(
+          MacosIcon(
             CupertinoIcons.speaker_3_fill,
             size: 80,
-            color: CupertinoColors.activeBlue,
+            color: AppTheme.accent(context),
           ),
           const SizedBox(height: 24),
           Text(
@@ -87,7 +88,7 @@ class _AudioInspectorViewState extends State<AudioInspectorView> {
             _duration != null
                 ? "${_duration!.inSeconds} seconds"
                 : "Loading...",
-            style: const TextStyle(color: CupertinoColors.systemGrey),
+            style: TextStyle(color: AppTheme.grey(context)),
           ),
           const SizedBox(height: 32),
           MacosIconButton(
@@ -98,7 +99,7 @@ class _AudioInspectorViewState extends State<AudioInspectorView> {
               size: 24,
               color: CupertinoColors.white,
             ),
-            backgroundColor: CupertinoColors.activeBlue,
+            backgroundColor: AppTheme.accent(context),
             shape: BoxShape.circle,
             onPressed: () => _isPlaying ? _audio.pause() : _audio.play(),
           ),

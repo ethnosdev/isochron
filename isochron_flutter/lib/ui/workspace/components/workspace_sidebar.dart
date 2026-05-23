@@ -8,6 +8,7 @@ import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
 import 'package:isochron_flutter/ui/workspace/workspace_manager.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:path/path.dart' as p;
+import 'package:isochron_flutter/ui/theme/app_theme.dart';
 
 Sidebar buildWorkspaceSidebar(
   BuildContext context,
@@ -126,17 +127,16 @@ List<SidebarNode> _getFlatNodes(WorkspaceManager manager) {
 }
 
 Color _getTrackColor(BuildContext context, AlignmentStatus status) {
-  final isDark = MacosTheme.of(context).brightness == Brightness.dark;
   switch (status) {
     case AlignmentStatus.done:
     case AlignmentStatus.reviewed:
-      return isDark ? CupertinoColors.activeGreen : const Color(0xFF198754);
+      return AppTheme.success(context);
     case AlignmentStatus.processing:
-      return isDark ? CupertinoColors.activeBlue : const Color(0xFF0056B3);
+      return AppTheme.accent(context);
     case AlignmentStatus.error:
-      return isDark ? CupertinoColors.destructiveRed : const Color(0xFFDC3545);
+      return AppTheme.destructive(context);
     case AlignmentStatus.pending:
-      return isDark ? CupertinoColors.systemYellow : const Color(0xFFD97706);
+      return AppTheme.warning(context);
   }
 }
 
@@ -268,8 +268,8 @@ Widget _buildTreeRowForNode(
             ? CupertinoIcons.speaker_2_fill
             : CupertinoIcons.doc_text_fill,
         iconColor: fileExists
-            ? CupertinoColors.systemGrey
-            : CupertinoColors.destructiveRed,
+            ? AppTheme.grey(context)
+            : AppTheme.destructive(context),
         isSelected: isNodeSelected,
         isExpanded: false,
         depth: 2,
@@ -307,7 +307,7 @@ Widget _buildTreeRow({
   ValueChanged<String>? onEditComplete,
 }) {
   final theme = MacosTheme.of(context);
-  final blue = CupertinoColors.systemBlue.resolveFrom(context);
+  final selectionBg = AppTheme.selectionBg(context);
 
   return GestureDetector(
     onTap: onTap,
@@ -318,7 +318,7 @@ Widget _buildTreeRow({
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
       padding: EdgeInsets.only(left: depth * 16.0 + 8.0, right: 8.0),
       decoration: BoxDecoration(
-        color: isSelected ? blue : CupertinoColors.transparent,
+        color: isSelected ? selectionBg : CupertinoColors.transparent,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
@@ -330,7 +330,7 @@ Widget _buildTreeRow({
                   : CupertinoIcons.chevron_right,
               size: 12,
               color: isSelected
-                  ? CupertinoColors.white
+                  ? AppTheme.selectionText(context)
                   : CupertinoColors.systemGrey,
             )
           else
@@ -339,7 +339,7 @@ Widget _buildTreeRow({
           Icon(
             icon,
             size: 14,
-            color: isSelected ? CupertinoColors.white : iconColor,
+            color: isSelected ? AppTheme.selectionText(context) : iconColor,
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -358,7 +358,7 @@ Widget _buildTreeRow({
                           ? FontWeight.w600
                           : FontWeight.normal,
                       color: isSelected
-                          ? CupertinoColors.white
+                          ? AppTheme.selectionText(context)
                           : theme.typography.body.color,
                     ),
                   ),

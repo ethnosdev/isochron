@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:macos_ui/macos_ui.dart';
+import 'package:isochron_flutter/ui/theme/app_theme.dart';
 
 class WelcomeView extends StatelessWidget {
   final VoidCallback onCreateNewProject;
@@ -22,10 +23,10 @@ class WelcomeView extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const MacosIcon(
+                  MacosIcon(
                     CupertinoIcons.waveform_path_ecg,
                     size: 80,
-                    color: CupertinoColors.activeBlue,
+                    color: AppTheme.accent(context),
                   ),
                   const SizedBox(height: 24),
                   Text(
