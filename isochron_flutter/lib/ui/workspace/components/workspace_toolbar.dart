@@ -69,8 +69,10 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
   }
 
   Future<void> handleExportPhraseTimingForTrack(Track track) async {
-    if (manager.project == null || !ExportService.canExportPhraseTiming(track))
+    if (manager.project == null ||
+        !ExportService.canExportPhraseTiming(track)) {
       return;
+    }
 
     final defaultName = ExportService.defaultPhraseTimingFilenameForTrack(
       track,

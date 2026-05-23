@@ -298,8 +298,9 @@ class AppManager extends ValueNotifier<AppState> {
       final bool isStillActive = (value.autoSavePath == initiatingSavePath);
 
       if (isStillActive) {
-        if (value.waveform == null)
+        if (value.waveform == null) {
           await _generateWaveform(initiatingAudioPath);
+        }
 
         final previousFragments = value.fragments;
         bool hasAlignmentChanges = previousFragments.length != fragments.length;

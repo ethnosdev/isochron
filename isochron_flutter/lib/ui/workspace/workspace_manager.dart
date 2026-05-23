@@ -141,8 +141,9 @@ class WorkspaceManager extends ChangeNotifier {
   }
 
   Future<ImportResult> importCollections(String importedFilePath) async {
-    if (project == null)
+    if (project == null) {
       return ImportResult(collectionsCount: 0, tracksCount: 0);
+    }
 
     final importedProjectDir = p.dirname(importedFilePath);
     final content = await File(importedFilePath).readAsString();
@@ -365,10 +366,12 @@ class WorkspaceManager extends ChangeNotifier {
         final alignDir = Directory(p.dirname(newJsonPath));
         if (!await alignDir.exists()) await alignDir.create(recursive: true);
 
-        if (await File(oldJsonPath).exists())
+        if (await File(oldJsonPath).exists()) {
           await File(oldJsonPath).rename(newJsonPath);
-        if (await File(oldPinsPath).exists())
+        }
+        if (await File(oldPinsPath).exists()) {
           await File(oldPinsPath).rename(newPinsPath);
+        }
       } catch (e) {
         debugPrint("Failed to rename physical files: $e");
       }
