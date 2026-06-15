@@ -111,7 +111,8 @@ class WorkspaceManager extends ChangeNotifier {
 
   Future<void> openProject(String path) async {
     final content = await File(path).readAsString();
-    final parsed = jsonDecode(content);
+    final parsed = jsonDecode(content) as Map<String, dynamic>;
+    parsed['directoryPath'] = p.dirname(path);
 
     project = Project.fromJson(parsed);
     if (project!.collections.isNotEmpty) {
@@ -147,7 +148,8 @@ class WorkspaceManager extends ChangeNotifier {
 
     final importedProjectDir = p.dirname(importedFilePath);
     final content = await File(importedFilePath).readAsString();
-    final parsed = jsonDecode(content);
+    final parsed = jsonDecode(content) as Map<String, dynamic>;
+    parsed['directoryPath'] = importedProjectDir;
 
     final importedProject = Project.fromJson(parsed);
 
