@@ -44,14 +44,12 @@ class IsochronApp extends StatelessWidget {
           theme: MacosThemeData.light().copyWith(
             canvasColor: AppTheme.lightBg,
             primaryColor: AppTheme.lightAccent,
-            accentColor: AccentColor.green,
           ),
           darkTheme: MacosThemeData.dark().copyWith(
             canvasColor: AppTheme.darkBg,
             primaryColor: AppTheme.darkAccent,
-            accentColor: AccentColor.green,
           ),
-          home: const WorkspaceScreen(), // Our new 3-pane shell
+          home: const WorkspaceScreen(),
         );
       },
     );

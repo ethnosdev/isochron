@@ -321,6 +321,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
             children: [
               MacosCheckbox(
                 value: _copyMedia,
+                activeColor: AppTheme.accent(context),
                 onChanged: (val) {
                   setState(() => _copyMedia = val);
                 },

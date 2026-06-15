@@ -166,6 +166,7 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                 children: [
                   MacosCheckbox(
                     value: widget.project.copyMediaIntoProject,
+                    activeColor: AppTheme.accent(context),
                     onChanged: (val) {
                       setState(() {
                         widget.project.copyMediaIntoProject = val;
