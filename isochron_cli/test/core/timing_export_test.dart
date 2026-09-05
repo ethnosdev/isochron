@@ -77,6 +77,94 @@ void main() {
       expect(payload, contains('\n1\t2\t1\n'));
       expect(payload, contains('\n2\t3\t2\n'));
     });
+
+    test('throws MissingPhraseIdException when requireIds is true and id is missing', () {
+      final fragments = [
+        Fragment(index: 0, id: 's1', text: 'line one')
+          ..setRealTiming(start: 1.0, end: 2.0),
+        Fragment(index: 1, text: 'line two without id')
+          ..setRealTiming(start: 2.0, end: 3.0),
+      ];
+
+      expect(
+        () => TimingExport.generateTimingPayload(
+          fragments,
+          TimingExportMetadata.fallback,
+          requireIds: true,
+        ),
+        throwsA(isA<MissingPhraseIdException>()),
+      );
+    });
+
+    test('preserves sequential-number fallback when requireIds is false', () {
+      final fragments = [
+        Fragment(index: 0, id: 's1', text: 'line one')
+          ..setRealTiming(start: 1.0, end: 2.0),
+        Fragment(index: 1, text: 'line two without id')
+          ..setRealTiming(start: 2.0, end: 3.0),
+      ];
+
+      final payload = TimingExport.generateTimingPayload(
+        fragments,
+        TimingExportMetadata.fallback,
+        requireIds: false,
+      );
+
+      expect(payload, contains('1\t2\ts1\n'));
+      expect(payload, contains('2\t3\t2\n'));
+    });
+
+    test('exports tab-delimited verse-letter fixture phrase IDs exactly', () {
+      const phraseFileContent = '''
+s1\tlaa nethantogto be go pezi kor.
+1a\tkon chhog gi ku dunlu nge
+1b\tmi sonpo nge shi song mi tshu lu
+is1\tIntroductory Section
+4-5a\tCombined verse phrase
+''';
+      final fragments = TextParser.parse(phraseFileContent, hasIds: true);
+      expect(fragments.length, 5);
+
+      final timings = [
+        (0.06, 3.478),
+        (3.478, 6.005),
+        (6.005, 8.182),
+        (8.182, 10.500),
+        (10.500, 14.230),
+      ];
+      for (int i = 0; i < fragments.length; i++) {
+        fragments[i].setRealTiming(
+          start: timings[i].$1,
+          end: timings[i].$2,
+        );
+      }
+
+      const metadata = TimingExportMetadata(
+        languageCode: 'dz',
+        bookId: '56',
+        bookCode: 'TIT',
+        chapterId: '01',
+      );
+
+      final payload = TimingExport.generateTimingPayload(
+        fragments,
+        metadata,
+        requireIds: true,
+      );
+
+      final expectedLines = [
+        '\\id TIT',
+        '\\c 01',
+        '\\level phrase',
+        '0.06\t3.478\ts1',
+        '3.478\t6.005\t1a',
+        '6.005\t8.182\t1b',
+        '8.182\t10.5\tis1',
+        '10.5\t14.23\t4-5a',
+      ];
+
+      expect(payload.trim().split('\n'), equals(expectedLines));
+    });
   });
 
   group('TimingExport output naming and format resolution', () {

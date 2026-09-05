@@ -33,6 +33,7 @@ class IsochronProcessor {
     /// Pinned fragments are used as hard boundaries; all other fragments are
     /// aligned via DTW within the windows that pins define.
     Map<int, ({double start, double end})>? pinnedTimings,
+    bool hasIds = false,
   }) async {
     final stopwatch = Stopwatch()..start();
 
@@ -43,7 +44,7 @@ class IsochronProcessor {
 
     // 1. Text Parsing (0.00 - 0.05)
     onProgress?.call("Parsing Text...", 0.0);
-    final fragments = TextParser.parse(text);
+    final fragments = TextParser.parse(text, hasIds: hasIds);
     if (fragments.isEmpty) throw Exception("No text found in file.");
 
     if (transliterationRules != null && transliterationRules.isNotEmpty) {

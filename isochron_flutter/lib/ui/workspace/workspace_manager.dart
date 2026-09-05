@@ -447,7 +447,17 @@ class WorkspaceManager extends ChangeNotifier {
       String actualTextPath = resolvedText;
 
       try {
-        if (project!.defaultHasIds) {
+        bool shouldExtractIds = project!.defaultHasIds;
+        if (!shouldExtractIds && !project!.defaultGenerateIds) {
+          try {
+            final sample = await File(resolvedText).readAsString();
+            if (detectTabDelimitedIds(sample)) {
+              shouldExtractIds = true;
+            }
+          } catch (_) {}
+        }
+
+        if (shouldExtractIds) {
           final lines = await File(resolvedText).readAsLines();
           final cleanLines = <String>[];
           for (var line in lines) {
@@ -490,7 +500,7 @@ class WorkspaceManager extends ChangeNotifier {
           break;
         }
 
-        if (project!.defaultHasIds && extractedIds.isNotEmpty) {
+        if (shouldExtractIds && extractedIds.isNotEmpty) {
           for (int i = 0; i < fragments.length; i++) {
             if (i < extractedIds.length) {
               fragments[i] = fragments[i].copyWith(id: extractedIds[i]);

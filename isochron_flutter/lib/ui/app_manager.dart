@@ -124,6 +124,16 @@ class AppManager extends ValueNotifier<AppState> {
       }
     }
 
+    bool effectiveHasIds = project.defaultHasIds;
+    if (!effectiveHasIds && File(resolvedText).existsSync()) {
+      try {
+        final sample = File(resolvedText).readAsStringSync();
+        if (detectTabDelimitedIds(sample)) {
+          effectiveHasIds = true;
+        }
+      } catch (_) {}
+    }
+
     value = value.copyWith(
       audioPath: resolvedAudio,
       textPath: resolvedText,
@@ -131,7 +141,7 @@ class AppManager extends ValueNotifier<AppState> {
       transliterationRules: rules,
       autoSavePath: absJsonPath,
       fragments: loadedFragments,
-      hasIds: project.defaultHasIds,
+      hasIds: effectiveHasIds,
       audioDuration: duration,
       statusMessage: "Loaded ${track.name}",
       hasUnsavedChanges: false,
@@ -655,10 +665,10 @@ class AppManager extends ValueNotifier<AppState> {
       String text = line;
 
       if (value.hasIds) {
-        final parts = line.trim().split(' ');
-        if (parts.length > 1) {
-          id = parts.first;
-          text = parts.sublist(1).join(' ');
+        final parsed = splitIdAndText(line);
+        if (parsed.id != null) {
+          id = parsed.id;
+          text = parsed.text;
         } else {
           id = "";
           text = line;

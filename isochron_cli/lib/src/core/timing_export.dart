@@ -86,14 +86,32 @@ class TimingExport {
     );
   }
 
+  /// If [requireIds] is true and any fragment is missing an id, throws
+  /// [MissingPhraseIdException] instead of silently numbering it.
   static String generateTimingPayload(
     List<Fragment> fragments,
-    TimingExportMetadata metadata,
-  ) {
+    TimingExportMetadata metadata, {
+    bool requireIds = false,
+  }) {
     final buffer = StringBuffer();
     buffer.writeln('\\id ${metadata.bookCode}');
     buffer.writeln('\\c ${metadata.chapterId}');
     buffer.writeln('\\level phrase');
+
+    final missing = <int>[];
+    for (int i = 0; i < fragments.length; i++) {
+      final f = fragments[i];
+      final id = f.id?.trim();
+      if (id == null || id.isEmpty) missing.add(i);
+    }
+
+    if (requireIds && missing.isNotEmpty) {
+      throw MissingPhraseIdException(
+        'Missing phrase ID for ${missing.length} of ${fragments.length} '
+        'lines (e.g. line ${missing.first + 1}). Export aborted — enable '
+        '"Has IDs" or check the source file\'s ID delimiter.',
+      );
+    }
 
     for (int i = 0; i < fragments.length; i++) {
       final f = fragments[i];
@@ -194,3 +212,11 @@ class TimingExport {
     return -1;
   }
 }
+
+class MissingPhraseIdException implements Exception {
+  final String message;
+  MissingPhraseIdException(this.message);
+  @override
+  String toString() => message;
+}
+

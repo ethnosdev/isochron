@@ -6,24 +6,35 @@ import 'package:isochron_flutter/ui/models/project_model.dart';
 
 class ExportService {
   /// Builds the phrase-timing payload for a single track.
-  static Future<String?> buildPhraseTiming(Project project, Track track) async {
+  static Future<String?> buildPhraseTiming(
+    Project project,
+    Track track, {
+    bool? requireIds,
+  }) async {
     if (!canExportPhraseTiming(track)) return null;
 
     final entries = await _loadAlignmentEntries(project, track);
     if (entries.isEmpty) return null;
 
     final metadata = parsePhraseMetadataFromTextFilename(track.textPath);
-    return generatePhraseTiming(entries, metadata);
+    return generatePhraseTiming(
+      entries,
+      metadata,
+      requireIds: requireIds ??
+          (project.defaultHasIds || project.defaultGenerateIds),
+    );
   }
 
   /// Serializes a list of alignment rows into phrase timing text format
   static String generatePhraseTiming(
     List<Map<String, dynamic>> entries,
-    TimingExportMetadata metadata,
-  ) {
+    TimingExportMetadata metadata, {
+    bool requireIds = false,
+  }) {
     return TimingExport.generateTimingPayload(
       _entriesToFragments(entries),
       metadata,
+      requireIds: requireIds,
     );
   }
 

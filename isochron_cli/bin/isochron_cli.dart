@@ -5,6 +5,7 @@ import 'package:isochron_cli/src/core/isochron_processor.dart';
 import 'package:isochron_cli/src/core/drivers.dart';
 import 'package:isochron_cli/src/platform/mac_drivers.dart';
 import 'package:isochron_cli/src/core/boundary_strategy.dart';
+import 'package:isochron_cli/src/core/text_parser.dart';
 import 'package:isochron_cli/src/core/timing_export.dart';
 
 void main(List<String> arguments) async {
@@ -36,6 +37,16 @@ void main(List<String> arguments) async {
       help: 'Milliseconds subtracted from each onset-snapped phrase start '
           '(snap-mode onset only; default 0).',
     )
+    ..addFlag('has-ids',
+        help:
+            'Extract leading phrase ID from each line (tab or space separated). '
+            'Auto-detected if source text contains tabs.',
+        defaultsTo: false)
+    ..addFlag('require-ids',
+        help:
+            'Abort export if any phrase ID is missing. '
+            'Defaults to true when --has-ids is enabled or tab IDs are detected.',
+        defaultsTo: false)
     ..addFlag('verbose',
         abbr: 'v', help: 'Show detailed logs', defaultsTo: false)
     ..addFlag('help',
@@ -179,6 +190,16 @@ void main(List<String> arguments) async {
       final textFile = File(textPath);
       final rawText = await textFile.readAsString();
 
+      final autoDetectedTabs = detectTabDelimitedIds(rawText);
+      final bool hasIds = results.wasParsed('has-ids')
+          ? (results['has-ids'] as bool)
+          : (results.wasParsed('require-ids')
+              ? (results['require-ids'] as bool)
+              : autoDetectedTabs);
+      final bool requireIds = results.wasParsed('require-ids')
+          ? (results['require-ids'] as bool)
+          : hasIds;
+
       // --- RUN PROCESSOR ---
       final fragments = await IsochronProcessor.process(
         text: rawText,
@@ -194,6 +215,7 @@ void main(List<String> arguments) async {
             : null,
         snapMode: snapMode,
         snapOffsetMs: snapOffsetMs,
+        hasIds: hasIds,
       );
       // ---------------------
 
@@ -219,7 +241,11 @@ void main(List<String> arguments) async {
       } else {
         // Timing export reuses shared core so CLI + Flutter stay identical.
         final metadata = TimingExport.parseMetadataFromSourceFilename(textPath);
-        final payload = TimingExport.generateTimingPayload(fragments, metadata);
+        final payload = TimingExport.generateTimingPayload(
+          fragments,
+          metadata,
+          requireIds: requireIds,
+        );
         final textFile = File(effectiveOutputPath);
         await textFile.writeAsString(payload);
       }

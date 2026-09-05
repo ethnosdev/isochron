@@ -119,13 +119,13 @@ class AlignmentService {
         final buffer = StringBuffer();
         for (var line in lines) {
           if (line.trim().isEmpty) continue;
-          final parts = line.trim().split(' ');
-          if (parts.length > 1) {
-            extractedIds.add(parts.first);
-            buffer.writeln(parts.sublist(1).join(' '));
+          final parsed = splitIdAndText(line);
+          if (parsed.id != null) {
+            extractedIds.add(parsed.id!);
+            buffer.writeln(parsed.text);
           } else {
             extractedIds.add("");
-            buffer.writeln(line);
+            buffer.writeln(parsed.text);
           }
         }
         cleanTextForEngine = buffer.toString();

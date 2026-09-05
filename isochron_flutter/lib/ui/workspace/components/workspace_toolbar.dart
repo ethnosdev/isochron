@@ -87,12 +87,31 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
 
     if (outputFile == null) return;
 
-    final payload = await ExportService.buildPhraseTiming(
-      manager.project!,
-      track,
-    );
-    if (payload != null && payload.isNotEmpty) {
-      await File(outputFile).writeAsString(payload);
+    try {
+      final payload = await ExportService.buildPhraseTiming(
+        manager.project!,
+        track,
+      );
+      if (payload != null && payload.isNotEmpty) {
+        await File(outputFile).writeAsString(payload);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showCupertinoDialog(
+          context: context,
+          builder: (_) => CupertinoAlertDialog(
+            title: const Text("Export Error"),
+            content: Text(e.toString()),
+            actions: [
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: const Text("OK"),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        );
+      }
     }
   }
 

@@ -1,3 +1,5 @@
+import 'package:isochron_cli/isochron_cli.dart';
+
 class ParsedIdLine {
   final String id;
   final String content;
@@ -12,17 +14,21 @@ class ParsedIdLine {
 
 /// Extracts a leading ID from a transcript line when present.
 ///
-/// Supports any whitespace separator (spaces, tabs, mixed whitespace).
+/// Supports tab delimiter as well as whitespace separators.
 /// If no ID/content boundary is found, the original line is returned as content.
 ParsedIdLine extractIdFromLine(String line) {
-  final match = RegExp(r'^\s*(\S+)\s+(.+?)\s*$').firstMatch(line);
-  if (match == null) {
-    return ParsedIdLine(id: '', content: line, hasId: false);
+  final parsed = splitIdAndText(line);
+  if (parsed.id != null) {
+    return ParsedIdLine(
+      id: parsed.id!,
+      content: parsed.text,
+      hasId: true,
+    );
   }
-
   return ParsedIdLine(
-    id: match.group(1) ?? '',
-    content: match.group(2) ?? '',
-    hasId: true,
+    id: '',
+    content: parsed.text,
+    hasId: false,
   );
 }
+
