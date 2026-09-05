@@ -77,7 +77,7 @@ This ensures the app is signed with the correct Developer ID certificate and Har
 2. At the very top, ensure the target device is set to **Any Mac** or **My Mac**.
 3. Go to the top menu: **Product** -> **Archive**.
 4. When the Organizer window opens, click **Distribute App**.
-5. Select: **Custom** -> **Developer ID** -> **Export** -> **Automatically manage signing**.
+5. Select: **Custom** -> **Direct Distribution** -> **Export** -> **Automatically manage signing**.
 6. Save the exported folder (e.g., `Isochron_Release`) to your **Desktop**.
 
 ### 3. Generate the DMG
