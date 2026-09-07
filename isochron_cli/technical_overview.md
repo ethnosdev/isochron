@@ -253,12 +253,13 @@ The algorithm fills this grid from top-left to bottom-right, then **backtracks**
 
 ### Memory Optimization: Sliding Window
 
-A full N×M matrix for long audio would require gigabytes of RAM. The code uses a **band constraint** (radius = 500 frames ≈ 15 seconds): only cells within 500 frames of the diagonal are computed. This cuts memory from O(N×M) to O(N×radius).
+A full N×M matrix for long audio would require gigabytes of RAM. The code uses an **adaptive band constraint** (5% of sequence length with a minimum 25-second buffer): only cells within the radius of the diagonal slope are computed. This cuts memory from O(N×M) to O(N×radius) while preventing clipping on long recordings.
 
 ```dart
 // From dtw_aligner.dart
-final int r = max(radius, lengthDiff + 10);   // minimum radius to span length difference
-final int jCenter = (i * M / N).round();       // expected diagonal position for row i
+final int calculatedRadius = max(2500, (maxDimension * 0.05).round()); // adaptive radius (min 25s)
+final int r = max(1, min(calculatedRadius, maxDimension));
+final int jCenter = (i * M / N).round();                                // expected diagonal position for row i
 final int jStart = max(1, jCenter - r);
 final int jEnd   = min(M - 1, jCenter + r);
 ```

@@ -22,30 +22,19 @@ class MacAudioDriver implements AudioDriver {
 class MacTtsDriver implements TtsDriver {
   @override
   Future<void> synthesize(String text, String outputPath) async {
-    final tempAiff = outputPath.replaceAll('.wav', '.aiff');
-
-    // 1. Synthesize to high-quality AIFF using macOS `say`
+    // Directly synthesize to 16kHz mono WAV using macOS `say`
     final sayResult = await Process.run('/usr/bin/say', [
       '-v',
       'Samantha',
+      '--file-format=WAVE',
+      '--data-format=LEI16@16000',
       '-o',
-      tempAiff,
+      outputPath,
       text,
     ]);
 
     if (sayResult.exitCode != 0) {
       throw Exception("macOS 'say' failed: ${sayResult.stderr}");
     }
-
-    // 2. Normalize to strict 16kHz WAV using afconvert
-    final afResult = await Process.run('/usr/bin/afconvert',
-        ['-f', 'WAVE', '-d', 'LEI16@16000', '-c', '1', tempAiff, outputPath]);
-
-    if (afResult.exitCode != 0) {
-      throw Exception("macOS TTS afconvert failed: ${afResult.stderr}");
-    }
-
-    // Cleanup the temp AIFF file
-    File(tempAiff).deleteSync();
   }
 }

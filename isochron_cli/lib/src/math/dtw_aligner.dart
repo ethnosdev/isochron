@@ -21,15 +21,25 @@ class DtwAligner {
   static List<AlignmentPoint> align(
     List<List<double>> realSeq,
     List<List<double>> anchorSeq, {
-    int radius = 500, // Default fixed radius: 500 frames ~= 15 seconds
+    int? radius, // Optional manual override. If omitted, adaptively sized (5% of length, min 25s)
     ProgressCallback? onProgress,
   }) {
     final int N = realSeq.length;
     final int M = anchorSeq.length;
 
-    // 1. Validate Radius
-    final int lengthDiff = (N - M).abs();
-    final int r = max(radius, lengthDiff + 10);
+    if (N == 0 || M == 0) return [];
+    if (N == 1 && M == 1) return [AlignmentPoint(0, 0)];
+
+    // 1. Determine Radius
+    // In slope-constrained DTW, the center line jCenter = (i * M / N).round()
+    // already connects (0, 0) to (N - 1, M - 1). The radius only needs to
+    // accommodate local pacing drift around the average rate.
+    // Adaptive radius: 5% of sequence length with a minimum 25-second (2500 frames) buffer.
+    final int maxDimension = max(N, M);
+    final int calculatedRadius = (radius != null && radius > 0)
+        ? radius
+        : max(2500, (maxDimension * 0.05).round());
+    final int r = max(1, min(calculatedRadius, maxDimension));
 
     // The "Band Width" determines our memory block size.
     // We map the diagonal band into a flat rectangle of width (2*r + 1).
@@ -50,6 +60,11 @@ class DtwAligner {
 
     final int reportStep = max(1, (N / 100).ceil());
 
+    int prevPrevStart = 0;
+    int prevPrevEnd = 0;
+    int prevStart = 0;
+    int prevEnd = 0;
+
     // 3. Forward Pass (Calculate Costs)
     for (int i = 1; i < N; i++) {
       // Progress Report
@@ -62,9 +77,11 @@ class DtwAligner {
       final int jStart = max(1, jCenter - r);
       final int jEnd = min(M - 1, jCenter + r);
 
-      // Reset current row to infinity for bounds we don't calculate
-      // (Optimization: only clear the part we might touch + margins, but filling all is safer/simpler)
-      currCost.fillRange(0, M, double.infinity);
+      // Reset only the range modified during this buffer's previous turn
+      if (prevPrevEnd >= prevPrevStart) {
+        currCost.fillRange(
+            prevPrevStart, min(M, prevPrevEnd + 1), double.infinity);
+      }
 
       for (int j = jStart; j <= jEnd; j++) {
         final double dist =
@@ -104,6 +121,11 @@ class DtwAligner {
           backtrack[i * width + storageCol] = direction;
         }
       }
+
+      prevPrevStart = prevStart;
+      prevPrevEnd = prevEnd;
+      prevStart = jStart;
+      prevEnd = jEnd;
 
       // Swap buffers (curr becomes prev for next iteration)
       final temp = prevCost;

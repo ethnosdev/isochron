@@ -21,7 +21,7 @@ class AnchorGenerator {
     }
 
     // Run synthesis in batches to respect concurrency limits
-    const concurrency = 4;
+    final concurrency = Platform.numberOfProcessors.clamp(4, 8);
     final results = <({File file, Fragment frag, double duration})>[];
     int completedTasks = 0;
 
