@@ -1,6 +1,6 @@
 name: isochron_flutter
 description: "A synthesis-based forced aligner for desktop"
-version: 1.0.1+2
+version: 1.0.2+3
 publish_to: none
 
 environment:
