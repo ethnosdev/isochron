@@ -17,6 +17,7 @@ The core engine is 100% Dart, based on open-domain DSP theory, and completely fr
 * **Global Transliteration:** Provide a JSON map of non-Latin to Latin characters to instantly apply transliteration rules across your entire project.
 * **Headless Batch Processor:** Queue up dozens of alignments in a Collection, hit "Run Alignment on All", and export everything into a unified CSV database when finished.
 * **Phrase Timing Export:** Export phrase timing text files per track directly from the editor toolbar when the pair is finalized.
+* **Serverless Team Collaboration:** Collaborate concurrently over Google Drive or Dropbox with automatic chapter claiming, read-only guards, live collaborator presence badges, and background sync. [Learn more](docs/team_collaboration.md).
 
 ---
 
@@ -38,6 +39,15 @@ Isochron uses a streamlined **Project > Collection > Track** hierarchy. You don'
 2. **Setup Collections:** Create a new Collection (e.g., "Gospel of John") using the folder icon in the sidebar.
 3. **Import & Auto-Pair:** Select the Collection and click **Import Files** (or "Select Files..."). Highlight your raw `.mp3`/`.wav` and `.txt`/`.phrase` files. Isochron will naturally sort them and automatically create linked **Tracks**.
 4. **Align:** In the Collection batch view, click **Run Alignment on All** to process them automatically while watching the live progress bar, OR double-click a single Track to open the manual **Studio Editor**.
+
+### 👥 Team Collaboration (Google Drive / Cloud Storage)
+
+Isochron natively supports multi-user collaboration on shared cloud drives (Google Drive, Dropbox, OneDrive, iCloud Drive):
+* **Zero Servers or Git Required:** Uses chapter-isolated sidecar files and machine-independent project structures.
+* **Automatic Soft-Locking:** Tracks are automatically claimed when opened in the editor, preventing conflicting edits with read-only protection and take-over overrides.
+* **Live Presence:** Teammates see collaborator initials badges (e.g. `[AS]`) and track status updates in real time via background directory watching.
+
+👉 See the complete [Team Collaboration Guide](docs/team_collaboration.md) for step-by-step setup and workflows.
 
 ### Export Notes
 

@@ -28,6 +28,7 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
 
   late TextEditingController _prefixController;
   late TextEditingController _offsetController;
+  late TextEditingController _collaboratorNameController;
 
   @override
   void initState() {
@@ -40,12 +41,16 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
     _offsetController = TextEditingController(
       text: widget.project.snapOffset?.toString() ?? '',
     );
+    _collaboratorNameController = TextEditingController(
+      text: UserSettingsService().collaboratorName,
+    );
   }
 
   @override
   void dispose() {
     _prefixController.dispose();
     _offsetController.dispose();
+    _collaboratorNameController.dispose();
     super.dispose();
   }
 
@@ -143,6 +148,30 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                         ),
                       );
                     },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Text(
+                    "Collaborator Name:",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: theme.typography.body.color,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  SizedBox(
+                    width: 220,
+                    child: MacosTextField(
+                      controller: _collaboratorNameController,
+                      placeholder: 'e.g. Alice Smith',
+                      decoration: textFieldDecoration,
+                      onChanged: (val) {
+                        UserSettingsService().setCollaboratorName(val);
+                      },
+                    ),
                   ),
                 ],
               ),

@@ -78,7 +78,15 @@ class Track {
   };
 
   factory Track.fromJson(Map<String, dynamic> json) {
-    int statusIdx = json['status'] is int ? json['status'] : 0;
+    int statusIdx = 0;
+    if (json['status'] is int) {
+      statusIdx = json['status'] as int;
+    } else if (json['status'] is String) {
+      final match = AlignmentStatus.values.where((s) => s.name == json['status']);
+      if (match.isNotEmpty) {
+        statusIdx = match.first.index;
+      }
+    }
     if (statusIdx < 0 || statusIdx >= AlignmentStatus.values.length) {
       statusIdx = 0;
     }
@@ -176,11 +184,12 @@ class Project {
     this.hasPromptedForMediaStorage = false,
   }) : collections = collections ?? [];
 
-  /// Returns the master project state mapping (Collections are stripped of track details)
+  /// Returns the master project state mapping (Collections are stripped of track details).
+  /// Note: directoryPath is intentionally omitted so the project file is portable across
+  /// different machines and shared cloud storage mounts.
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
-    'directoryPath': directoryPath,
     'collections': collections.map((c) => c.toMasterJson()).toList(),
     'dictPath': dictPath,
     'defaultHasIds': defaultHasIds,
@@ -406,6 +415,43 @@ class Project {
           debugPrint('[MIGRATION] Folder migration failed for ${col.name}: $e');
         }
       }
+    }
+  }
+
+  /// Persists only the root project.json file (used when project-wide settings change).
+  Future<void> saveSettingsOnly() async {
+    final file = File(p.join(directoryPath, 'project.json'));
+    const encoder = JsonEncoder.withIndent('  ');
+    await file.writeAsString(encoder.convert(toJson()));
+  }
+
+  /// Persists only a single collection's metadata (used when a track in that collection changes).
+  Future<void> saveCollectionOnly(Collection collection) async {
+    await collection.saveTracks(directoryPath);
+  }
+
+  /// Re-reads a single collection's collection.json from disk to sync remote changes.
+  Future<void> reloadCollection(Collection col) async {
+    final file = File(
+      p.join(directoryPath, 'collections', col.folderName, 'collection.json'),
+    );
+    if (!file.existsSync()) return;
+
+    try {
+      final content = await file.readAsString();
+      final Map<String, dynamic> colJson = jsonDecode(content);
+      col.tracks =
+          (colJson['tracks'] as List?)
+              ?.whereType<Map<String, dynamic>>()
+              .map((i) {
+                final t = Track.fromJson(i);
+                t.collectionId = col.id;
+                return t;
+              })
+              .toList() ??
+          col.tracks;
+    } catch (e) {
+      debugPrint('[SYNC] Failed to reload collection ${col.name}: $e');
     }
   }
 

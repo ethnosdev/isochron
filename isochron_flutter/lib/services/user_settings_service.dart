@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -17,8 +18,11 @@ class UserSettingsService {
   static const String _keyLastDictDir = 'last_dict_dir';
   static const String _keyThemeMode = 'theme_mode';
   static const String _keyLastZoom = 'last_zoom_level';
+  static const String _keyCollaboratorName = 'collaborator_name';
 
-  late final ValueNotifier<AppThemeMode> themeNotifier;
+  ValueNotifier<AppThemeMode>? _themeNotifier;
+  ValueNotifier<AppThemeMode> get themeNotifier =>
+      _themeNotifier ??= ValueNotifier(AppThemeMode.system);
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
@@ -26,7 +30,11 @@ class UserSettingsService {
     // Load saved theme or default to system
     final savedThemeIndex =
         _prefs.getInt(_keyThemeMode) ?? AppThemeMode.system.index;
-    themeNotifier = ValueNotifier(AppThemeMode.values[savedThemeIndex]);
+    if (_themeNotifier == null) {
+      _themeNotifier = ValueNotifier(AppThemeMode.values[savedThemeIndex]);
+    } else {
+      _themeNotifier!.value = AppThemeMode.values[savedThemeIndex];
+    }
   }
 
   // --- Theme ---
@@ -58,5 +66,17 @@ class UserSettingsService {
   double get lastZoom => _prefs.getDouble(_keyLastZoom) ?? 10.0;
   Future<void> setLastZoom(double value) async {
     await _prefs.setDouble(_keyLastZoom, value);
+  }
+
+  // --- Collaborator Profile ---
+
+  String get collaboratorName {
+    final saved = _prefs.getString(_keyCollaboratorName);
+    if (saved != null && saved.trim().isNotEmpty) return saved.trim();
+    return Platform.environment['USER'] ?? 'Collaborator';
+  }
+
+  Future<void> setCollaboratorName(String name) async {
+    await _prefs.setString(_keyCollaboratorName, name.trim());
   }
 }

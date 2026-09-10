@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -38,12 +39,28 @@ class WorkspaceManager extends ChangeNotifier {
   String batchStatus = "";
   double batchProgress = 0.0;
 
+  // Background Sync Watcher
+  StreamSubscription<FileSystemEvent>? _watcherSubscription;
+  Timer? _watcherDebounceTimer;
+  final Set<String> _pendingChangedPaths = {};
+
+  @visibleForTesting
+  Duration watcherDebounceDuration = const Duration(milliseconds: 300);
+
+  @visibleForTesting
+  bool get isWatcherActive => _watcherSubscription != null;
+
   WorkspaceManager() {
     homeManager = AppManager();
     homeManager.onSaveCallback = () {
-      if (selectedNode?.track != null) {
-        selectedNode!.track!.status = AlignmentStatus.reviewed;
-        project?.save();
+      if (selectedNode?.track != null && project != null) {
+        final track = selectedNode!.track!;
+        track.status = AlignmentStatus.reviewed;
+        final col = project!.collections.firstWhere(
+          (c) => c.id == track.collectionId,
+          orElse: () => project!.collections.first,
+        );
+        col.saveTracks(project!.directoryPath);
         notifyListeners();
       }
     };
@@ -54,7 +71,7 @@ class WorkspaceManager extends ChangeNotifier {
           for (var track in col.tracks) {
             if (track.id == trackId) {
               track.status = AlignmentStatus.done;
-              project!.save();
+              col.saveTracks(project!.directoryPath);
               notifyListeners();
               return;
             }
@@ -73,6 +90,7 @@ class WorkspaceManager extends ChangeNotifier {
 
   @override
   void dispose() {
+    _stopDirectoryWatcher();
     homeManager.dispose();
     super.dispose();
   }
@@ -106,6 +124,7 @@ class WorkspaceManager extends ChangeNotifier {
       type: NodeType.collection,
       collection: defaultCollection,
     );
+    _startDirectoryWatcher();
     notifyListeners();
   }
 
@@ -122,10 +141,13 @@ class WorkspaceManager extends ChangeNotifier {
         collection: project!.collections.first,
       );
     }
+    _startDirectoryWatcher();
     notifyListeners();
   }
 
   void closeProject() {
+    _stopDirectoryWatcher();
+    homeManager.releaseCurrentClaim();
     project = null;
     selectedNode = null;
     expandedNodes.clear();
@@ -308,7 +330,7 @@ class WorkspaceManager extends ChangeNotifier {
         collection: collection,
       );
     }
-    await project!.save();
+    await collection.saveTracks(project!.directoryPath);
     notifyListeners();
   }
 
@@ -377,7 +399,7 @@ class WorkspaceManager extends ChangeNotifier {
       } catch (e) {
         debugPrint("Failed to rename physical files: $e");
       }
-      await project!.save();
+      await col.saveTracks(project!.directoryPath);
     }
     editingNodeId = null;
     notifyListeners();
@@ -396,7 +418,7 @@ class WorkspaceManager extends ChangeNotifier {
     if (await File(pinsPath).exists()) await File(pinsPath).delete();
 
     track.status = AlignmentStatus.pending;
-    await project!.save();
+    await collection.saveTracks(project!.directoryPath);
     notifyListeners();
   }
 
@@ -554,7 +576,7 @@ class WorkspaceManager extends ChangeNotifier {
         }
       }
 
-      await project!.save();
+      await collection.saveTracks(project!.directoryPath);
       notifyListeners();
     }
 
@@ -618,7 +640,7 @@ class WorkspaceManager extends ChangeNotifier {
     }
 
     if (healedCount > 0) {
-      await project!.save();
+      await collection.saveTracks(project!.directoryPath);
       notifyListeners();
     }
     return healedCount;
@@ -671,5 +693,133 @@ class WorkspaceManager extends ChangeNotifier {
 
   void refreshUi() {
     notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
+  // DIRECTORY WATCHER & LIVE SYNC
+  // ---------------------------------------------------------------------------
+
+  void _startDirectoryWatcher() {
+    _stopDirectoryWatcher();
+    if (project == null || project!.directoryPath.isEmpty) return;
+
+    final projectDir = Directory(project!.directoryPath);
+    if (!projectDir.existsSync()) return;
+
+    try {
+      _watcherSubscription = projectDir.watch(recursive: true).listen(
+        _onFileSystemEvent,
+        onError: (e) {
+          debugPrint('[SYNC] Directory watcher error: $e');
+        },
+        cancelOnError: false,
+      );
+    } catch (e) {
+      debugPrint('[SYNC] Failed to start directory watcher: $e');
+    }
+  }
+
+  void _stopDirectoryWatcher() {
+    _watcherDebounceTimer?.cancel();
+    _watcherDebounceTimer = null;
+    _watcherSubscription?.cancel();
+    _watcherSubscription = null;
+    _pendingChangedPaths.clear();
+  }
+
+  void _onFileSystemEvent(FileSystemEvent event) {
+    if (!event.path.endsWith('.json')) return;
+    _pendingChangedPaths.add(event.path);
+    _watcherDebounceTimer?.cancel();
+    _watcherDebounceTimer = Timer(watcherDebounceDuration, () {
+      _handleRemoteSyncBatch();
+    });
+  }
+
+  Future<void> _handleRemoteSyncBatch([Set<String>? testPaths]) async {
+    if (project == null) return;
+    final pathsToProcess = testPaths ?? Set<String>.from(_pendingChangedPaths);
+    _pendingChangedPaths.clear();
+
+    if (pathsToProcess.isEmpty) return;
+
+    bool needsNotify = false;
+
+    for (final path in pathsToProcess) {
+      final normalizedPath = p.canonicalize(path);
+
+      // 1. Collection metadata updated remotely
+      if (normalizedPath.endsWith('collection.json')) {
+        for (final col in project!.collections) {
+          final expectedColPath = p.canonicalize(
+            p.join(
+              project!.directoryPath,
+              'collections',
+              col.folderName,
+              'collection.json',
+            ),
+          );
+          if (normalizedPath == expectedColPath) {
+            await project!.reloadCollection(col);
+            needsNotify = true;
+            break;
+          }
+        }
+      }
+      // 2. Track claim updated/released/created remotely
+      else if (normalizedPath.endsWith('.claim.json')) {
+        needsNotify = true;
+        await homeManager.checkCurrentClaim();
+      }
+      // 3. Project settings / collections updated remotely
+      else if (normalizedPath ==
+          p.canonicalize(p.join(project!.directoryPath, 'project.json'))) {
+        try {
+          final file = File(normalizedPath);
+          if (file.existsSync()) {
+            final content = await file.readAsString();
+            final json = jsonDecode(content) as Map<String, dynamic>;
+            final remoteProject = Project.fromJson(json);
+            final existingColIds =
+                project!.collections.map((c) => c.id).toSet();
+            for (final remoteCol in remoteProject.collections) {
+              if (!existingColIds.contains(remoteCol.id)) {
+                project!.collections.add(remoteCol);
+                needsNotify = true;
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('[SYNC] Failed to sync remote project.json: $e');
+        }
+      }
+      // 4. Track alignment output updated remotely
+      else if (normalizedPath.endsWith('.json')) {
+        final parentDir = p.basename(p.dirname(normalizedPath));
+        if (parentDir == 'alignments') {
+          final filename = p.basename(normalizedPath);
+          for (final col in project!.collections) {
+            for (final track in col.tracks) {
+              if (track.outputFilename == filename) {
+                if (File(normalizedPath).existsSync() &&
+                    track.status == AlignmentStatus.pending) {
+                  track.status = AlignmentStatus.done;
+                  needsNotify = true;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (needsNotify || pathsToProcess.isNotEmpty) {
+      notifyListeners();
+    }
+  }
+
+  @visibleForTesting
+  Future<void> handleRemoteSyncForTest(String path) async {
+    await _handleRemoteSyncBatch({path});
   }
 }

@@ -14,14 +14,18 @@ import 'package:path/path.dart' as p;
 import 'models/app_state.dart';
 import '../services/alignment_service.dart';
 import '../services/audio_service.dart';
+import '../services/claim_service.dart';
 import '../services/pins_service.dart';
 
 class AppManager extends ValueNotifier<AppState> {
   final AudioService _audioService = AudioService();
   final AlignmentService _alignmentService = AlignmentService();
   final PinsService _pinsService = PinsService();
+  final ClaimService _claimService = ClaimService();
   final _settings = UserSettingsService();
   VoidCallback? onSaveCallback;
+  String? _currentClaimedPath;
+  String? _currentLoadedTrackPath;
 
   // Callback to notify that a track has completed alignment in the background
   void Function(String trackId, List<Fragment> fragments)?
@@ -49,6 +53,7 @@ class AppManager extends ValueNotifier<AppState> {
 
   @override
   void dispose() {
+    releaseCurrentClaim();
     _audioService.dispose();
     super.dispose();
   }
@@ -87,6 +92,32 @@ class AppManager extends ValueNotifier<AppState> {
       project.directoryPath,
       folderName,
     );
+    _currentLoadedTrackPath = absJsonPath;
+
+    // Release any previous claim if switching tracks
+    if (_currentClaimedPath != null && _currentClaimedPath != absJsonPath) {
+      await _claimService.releaseClaim(_currentClaimedPath!);
+      _currentClaimedPath = null;
+    }
+
+    // Check soft-lock claim status
+    final existingClaim = await _claimService.getClaim(absJsonPath);
+    final currentUser = _settings.collaboratorName;
+    bool isReadOnly = false;
+    ClaimInfo? activeClaim;
+
+    if (existingClaim != null &&
+        !_claimService.isClaimedByMe(existingClaim, currentUser)) {
+      isReadOnly = true;
+      activeClaim = existingClaim;
+      debugPrint(
+        '[CLAIM] Track ${track.name} is claimed by ${existingClaim.user}. Opening in read-only.',
+      );
+    } else {
+      await _claimService.acquireClaim(absJsonPath, user: currentUser);
+      _currentClaimedPath = absJsonPath;
+    }
+
     final playbackPath = await _ensureWavForPlayback(resolvedAudio);
     final duration = await _audioService.load(playbackPath);
 
@@ -143,10 +174,15 @@ class AppManager extends ValueNotifier<AppState> {
       fragments: loadedFragments,
       hasIds: effectiveHasIds,
       audioDuration: duration,
-      statusMessage: "Loaded ${track.name}",
+      statusMessage: isReadOnly
+          ? "Viewing ${track.name} (Read-Only: in progress by ${activeClaim?.user})"
+          : "Loaded ${track.name}",
       hasUnsavedChanges: false,
       clearWaveform: true,
       clearFocus: true,
+      isReadOnly: isReadOnly,
+      activeClaim: activeClaim,
+      clearClaim: activeClaim == null,
     );
     playbackPosition.value = Duration.zero;
 
@@ -157,7 +193,76 @@ class AppManager extends ValueNotifier<AppState> {
     }
   }
 
+  /// Takes over an existing claim from another collaborator.
+  Future<void> takeOverClaim(Track track, Project project) async {
+    final collection = project.collections.firstWhere(
+      (c) => c.id == track.collectionId,
+      orElse: () => Collection(id: track.collectionId, name: 'Default'),
+    );
+    final absJsonPath = track.getAbsoluteOutputPath(
+      project.directoryPath,
+      collection.folderName,
+    );
+    final currentUser = _settings.collaboratorName;
+    await _claimService.acquireClaim(absJsonPath, user: currentUser);
+    _currentClaimedPath = absJsonPath;
+    value = value.copyWith(
+      isReadOnly: false,
+      clearClaim: true,
+      statusMessage: "Claim acquired by $currentUser",
+    );
+  }
+
+  /// Releases any active claim held by this manager.
+  Future<void> releaseCurrentClaim() async {
+    if (_currentClaimedPath != null) {
+      await _claimService.releaseClaim(_currentClaimedPath!);
+      _currentClaimedPath = null;
+    }
+    _currentLoadedTrackPath = null;
+    value = value.copyWith(isReadOnly: false, clearClaim: true);
+  }
+
+  /// Checks whether the claim on the current track has been released or modified remotely.
+  Future<void> checkCurrentClaim() async {
+    if (_currentLoadedTrackPath == null) return;
+    final claim = await _claimService.getClaim(_currentLoadedTrackPath!);
+    final currentUser = _settings.collaboratorName;
+
+    if (claim == null) {
+      if (value.isReadOnly) {
+        value = value.copyWith(
+          isReadOnly: false,
+          clearClaim: true,
+          statusMessage: "Claim released by remote collaborator",
+        );
+      }
+    } else if (!_claimService.isClaimedByMe(claim, currentUser)) {
+      if (!value.isReadOnly || value.activeClaim?.user != claim.user) {
+        value = value.copyWith(
+          isReadOnly: true,
+          activeClaim: claim,
+          statusMessage: "Viewing (Read-Only: claimed by ${claim.user})",
+        );
+      }
+    } else {
+      if (value.isReadOnly) {
+        value = value.copyWith(
+          isReadOnly: false,
+          clearClaim: true,
+        );
+      }
+    }
+  }
+
   Future<void> saveProject() async {
+    if (value.isReadOnly) {
+      value = value.copyWith(
+        statusMessage:
+            "Cannot save: Track is in Read-Only mode (in progress by ${value.activeClaim?.user ?? 'another collaborator'}).",
+      );
+      return;
+    }
     if (value.autoSavePath == null) {
       return exportJson();
     }
@@ -444,12 +549,14 @@ class AppManager extends ValueNotifier<AppState> {
       : PinsService.pinsPath(value.autoSavePath!);
 
   Future<void> savePinsFile() async {
+    if (value.isReadOnly) return;
     final path = _pinsPath;
     if (path == null) return;
     await _pinsService.save(value.autoSavePath!, value.fragments);
   }
 
   void toggleFragmentPin(int index) async {
+    if (value.isReadOnly) return;
     final frags = List<Fragment>.from(value.fragments);
     if (index < 0 || index >= frags.length) return;
 
@@ -469,6 +576,7 @@ class AppManager extends ValueNotifier<AppState> {
   }
 
   void lockFragmentsUntil(int index) async {
+    if (value.isReadOnly) return;
     final frags = List<Fragment>.from(value.fragments);
     if (index < 0 || index >= frags.length) return;
 
@@ -566,6 +674,7 @@ class AppManager extends ValueNotifier<AppState> {
   }
 
   void updateFragment(int index, double newStart, double newEnd) {
+    if (value.isReadOnly) return;
     final frags = List<Fragment>.from(value.fragments);
     final duration = value.audioDuration.inMilliseconds / 1000.0;
 
@@ -689,6 +798,7 @@ class AppManager extends ValueNotifier<AppState> {
   }
 
   void clearFragmentTiming(int index) {
+    if (value.isReadOnly) return;
     final frags = List<Fragment>.from(value.fragments);
     final duration = value.audioDuration.inMilliseconds / 1000.0;
 
@@ -719,6 +829,7 @@ class AppManager extends ValueNotifier<AppState> {
   }
 
   void captureFragmentTiming(BuildContext context, [int? specificIndex]) {
+    if (value.isReadOnly) return;
     final index = specificIndex ?? value.selectedFragmentIndex;
     if (index == null || index < 0 || index >= value.fragments.length) return;
 

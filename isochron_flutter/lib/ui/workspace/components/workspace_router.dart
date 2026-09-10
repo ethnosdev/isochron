@@ -140,7 +140,15 @@ class WorkspaceRouter extends StatelessWidget {
         );
 
       case NodeType.track:
-        return StudioEditor(homeManager: manager.homeManager);
+        return StudioEditor(
+          homeManager: manager.homeManager,
+          onTakeOverClaim: () {
+            final track = manager.selectedNode?.track;
+            if (track != null && manager.project != null) {
+              manager.homeManager.takeOverClaim(track, manager.project!);
+            }
+          },
+        );
 
       case NodeType.text:
         return TextEditorView(
@@ -170,7 +178,7 @@ class WorkspaceRouter extends StatelessWidget {
         return ProjectSettingsView(
           project: manager.project!,
           onSaved: () {
-            manager.project!.save();
+            manager.project!.saveSettingsOnly();
             manager.refreshUi();
           },
         );

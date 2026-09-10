@@ -9,8 +9,13 @@ import 'components/studio_fragment_list.dart';
 
 class StudioEditor extends StatefulWidget {
   final AppManager homeManager;
+  final VoidCallback? onTakeOverClaim;
 
-  const StudioEditor({super.key, required this.homeManager});
+  const StudioEditor({
+    super.key,
+    required this.homeManager,
+    this.onTakeOverClaim,
+  });
 
   @override
   State<StudioEditor> createState() => _StudioEditorState();
@@ -151,6 +156,49 @@ class _StudioEditorState extends State<StudioEditor> {
             // Editor State
             return Column(
               children: [
+                // --- Read-Only Claim Warning Banner ---
+                if (state.isReadOnly && state.activeClaim != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: CupertinoColors.systemYellow.withValues(alpha: 0.15),
+                      border: Border(
+                        bottom: BorderSide(
+                          color: CupertinoColors.systemYellow.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const MacosIcon(
+                          CupertinoIcons.lock_fill,
+                          color: CupertinoColors.systemYellow,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            "In progress by ${state.activeClaim!.user} (Editor in Read-Only mode)",
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        if (widget.onTakeOverClaim != null)
+                          PushButton(
+                            controlSize: ControlSize.small,
+                            secondary: true,
+                            onPressed: widget.onTakeOverClaim,
+                            child: const Text("Take Over Claim"),
+                          ),
+                      ],
+                    ),
+                  ),
+
                 // --- Processing Bar ---
                 if (state.isProcessing)
                   Container(

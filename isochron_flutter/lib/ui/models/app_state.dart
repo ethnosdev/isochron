@@ -1,4 +1,5 @@
 import 'package:isochron_cli/isochron_cli.dart';
+import 'package:isochron_flutter/services/claim_service.dart';
 import 'package:just_waveform/just_waveform.dart';
 
 class AppState {
@@ -19,6 +20,8 @@ class AppState {
   final bool hasUnsavedChanges;
   final Map<String, String>? transliterationRules;
   final int? selectedFragmentIndex;
+  final bool isReadOnly;
+  final ClaimInfo? activeClaim;
 
   const AppState({
     this.isProcessing = false,
@@ -38,6 +41,8 @@ class AppState {
     this.hasUnsavedChanges = false,
     this.transliterationRules,
     this.selectedFragmentIndex,
+    this.isReadOnly = false,
+    this.activeClaim,
   });
 
   AppState copyWith({
@@ -61,6 +66,9 @@ class AppState {
     Map<String, String>? transliterationRules,
     int? selectedFragmentIndex,
     bool clearSelection = false,
+    bool? isReadOnly,
+    ClaimInfo? activeClaim,
+    bool clearClaim = false,
   }) {
     return AppState(
       isProcessing: isProcessing ?? this.isProcessing,
@@ -84,6 +92,8 @@ class AppState {
       selectedFragmentIndex: clearSelection
           ? null
           : (selectedFragmentIndex ?? this.selectedFragmentIndex),
+      isReadOnly: isReadOnly ?? this.isReadOnly,
+      activeClaim: clearClaim ? null : (activeClaim ?? this.activeClaim),
     );
   }
 }
