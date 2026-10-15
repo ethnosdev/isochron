@@ -88,3 +88,4 @@ isochron_debug.txt
 *.srt_output
 
 supplemental/
+fixtures/
