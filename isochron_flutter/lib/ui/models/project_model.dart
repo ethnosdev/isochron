@@ -174,7 +174,7 @@ class Project {
     required this.directoryPath,
     List<Collection>? collections,
     this.languageCode,
-    this.boundaryLeadInMs = 170,
+    this.boundaryLeadInMs = 190,
     this.defaultHasIds = false,
     this.defaultGenerateIds = false,
     this.defaultIdPrefix,
@@ -301,7 +301,7 @@ class Project {
       languageCode: json['languageCode']?.toString(),
       boundaryLeadInMs: json['boundaryLeadInMs'] is int
           ? json['boundaryLeadInMs'] as int
-          : 170,
+          : 190,
       defaultHasIds: json['defaultHasIds'] ?? json['hasIds'] ?? false,
       defaultGenerateIds:
           json['defaultGenerateIds'] ?? json['generateIds'] ?? false,

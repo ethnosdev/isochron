@@ -16,6 +16,19 @@ class EmissionsOutput {
 
   double getLogProb(int frame, int classIndex) =>
       data[frame * numClasses + classIndex];
+
+  /// Extracts a contiguous sub-slice of emissions frames [startFrame, endFrame).
+  EmissionsOutput subEmissions(int startFrame, int endFrame) {
+    final clampedStart = startFrame.clamp(0, totalFrames);
+    final clampedEnd = endFrame.clamp(clampedStart, totalFrames);
+    final frameCount = clampedEnd - clampedStart;
+    final subData = Float32List.sublistView(
+      data,
+      clampedStart * numClasses,
+      clampedEnd * numClasses,
+    );
+    return EmissionsOutput(data: subData, totalFrames: frameCount);
+  }
 }
 
 class OnnxEmissionsEngine {

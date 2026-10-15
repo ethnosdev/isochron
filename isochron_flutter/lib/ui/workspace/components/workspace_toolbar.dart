@@ -154,36 +154,44 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
                   f.status == FragmentStatus.reviewed,
             );
 
+            bool keepEdits = false;
             if (hasUserEdits && context.mounted) {
-              final proceed = await showCupertinoDialog<bool>(
+              final choice = await showCupertinoDialog<int>(
                 context: context,
                 builder: (dialogCtx) => CupertinoAlertDialog(
                   title: const Text("Re-align Track?"),
                   content: const Text(
                     "This track contains edited or reviewed verse boundaries.\n\n"
-                    "Re-aligning will overwrite these boundaries with new automatic predictions. "
+                    "Choose 'Keep My Edits' to lock your reviewed boundaries and only re-align automatic verses, "
+                    "or 'Overwrite All' to recalculate all boundaries.\n\n"
                     "A backup (.bak) of the current alignment will be saved.",
                   ),
                   actions: [
                     CupertinoDialogAction(
-                      isDestructiveAction: true,
-                      onPressed: () => Navigator.pop(dialogCtx, true),
-                      child: const Text("Overwrite"),
+                      isDefaultAction: true,
+                      onPressed: () => Navigator.pop(dialogCtx, 1),
+                      child: const Text("Keep My Edits"),
                     ),
                     CupertinoDialogAction(
-                      isDefaultAction: true,
-                      onPressed: () => Navigator.pop(dialogCtx, false),
+                      isDestructiveAction: true,
+                      onPressed: () => Navigator.pop(dialogCtx, 2),
+                      child: const Text("Overwrite All"),
+                    ),
+                    CupertinoDialogAction(
+                      onPressed: () => Navigator.pop(dialogCtx, 0),
                       child: const Text("Cancel"),
                     ),
                   ],
                 ),
               );
-              if (proceed != true) return;
+              if (choice == null || choice == 0) return;
+              keepEdits = (choice == 1);
             }
 
             try {
               await manager.homeManager.runAlignment(
                 trackId: track.id,
+                keepEdits: keepEdits,
               );
             } catch (e) {
               if (context.mounted) {

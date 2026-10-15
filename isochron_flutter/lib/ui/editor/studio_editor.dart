@@ -75,6 +75,10 @@ class _StudioEditorState extends State<StudioEditor> {
         const SingleActivator(LogicalKeyboardKey.keyR): () =>
             widget.homeManager.markReviewedAndAdvance(),
 
+        // Jump to next verse with diagnostic flags (F)
+        const SingleActivator(LogicalKeyboardKey.keyF): () =>
+            widget.homeManager.jumpToNextFlaggedVerse(),
+
         // Capture Timing (Enter)
         const SingleActivator(LogicalKeyboardKey.enter): () =>
             widget.homeManager.captureFragmentTiming(context),

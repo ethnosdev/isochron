@@ -15,11 +15,12 @@ class IsochronProcessor {
     ProgressCallback? onProgress,
     bool hasIds = false,
     String? languageCode,
-    double leadInSeconds = 0.17,
-    double starScore = 0.0,
+    double leadInSeconds = 0.19,
+    double starScore = -2.0,
     StarPlacement starPlacement = StarPlacement.segment,
     String? modelPath,
     ModelVariant modelVariant = ModelVariant.int8,
+    bool snapToPauses = true,
   }) async {
     final fragments = TextParser.parse(text, hasIds: hasIds);
     if (fragments.isEmpty) throw Exception("No text found in file.");
@@ -35,6 +36,7 @@ class IsochronProcessor {
         starPlacement: starPlacement,
         modelPath: modelPath,
         modelVariant: modelVariant,
+        snapToPauses: snapToPauses,
       ),
       onProgress: (stage, progress) => onProgress?.call(stage, progress),
     );

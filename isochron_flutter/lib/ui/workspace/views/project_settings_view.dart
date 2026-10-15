@@ -339,7 +339,7 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
               ),
               const SizedBox(height: 4),
               Text(
-                "Milliseconds subtracted from speech onset to catch breath sounds and initial consonants (default: 170 ms).",
+                "Milliseconds subtracted from speech onset to catch breath sounds and initial consonants (default: 190 ms).",
                 style: TextStyle(
                   fontSize: 12,
                   color: theme.typography.body.color?.withValues(alpha: 0.7),

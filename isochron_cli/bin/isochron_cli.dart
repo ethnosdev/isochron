@@ -32,11 +32,11 @@ void main(List<String> arguments) async {
         help: 'Output format. If omitted, inferred from --output extension.')
     ..addOption('lang', help: 'ISO 639-3 language code for uroman (e.g. ell, eng, heb)')
     ..addOption('lead-in',
-        defaultsTo: '0.17',
-        help: 'Seconds subtracted from speech onset for verse start (default 0.17)')
+        defaultsTo: '0.19',
+        help: 'Seconds subtracted from speech onset for verse start (default 0.19)')
     ..addOption('star-score',
-        defaultsTo: '0.0',
-        help: 'Wildcard star token log-probability (default 0.0)')
+        defaultsTo: '-2.0',
+        help: 'Wildcard star token log-probability (default -2.0)')
     ..addOption('star-placement',
         allowed: ['segment', 'edges'],
         defaultsTo: 'segment',
@@ -46,6 +46,9 @@ void main(List<String> arguments) async {
         allowed: ['int8', 'fp16', 'fp32'],
         defaultsTo: 'int8',
         help: 'Model variant to load from local cache: int8, fp16, fp32')
+    ..addFlag('snap-pauses',
+        help: 'Snap boundaries to qualifying acoustic pauses',
+        defaultsTo: true)
     ..addFlag('has-ids',
         help:
             'Extract leading phrase ID from each line (tab or space separated). '
@@ -77,8 +80,8 @@ void main(List<String> arguments) async {
     final textPath = results['text'];
     final audioPath = results['audio'];
     final languageCode = results['lang'] as String?;
-    final leadInSeconds = double.tryParse(results['lead-in'] ?? '0.17') ?? 0.17;
-    final starScore = double.tryParse(results['star-score'] ?? '0.0') ?? 0.0;
+    final leadInSeconds = double.tryParse(results['lead-in'] ?? '0.19') ?? 0.19;
+    final starScore = double.tryParse(results['star-score'] ?? '-2.0') ?? -2.0;
     final starPlacement = results['star-placement'] == 'edges'
         ? StarPlacement.edges
         : StarPlacement.segment;
@@ -88,6 +91,7 @@ void main(List<String> arguments) async {
       (v) => v.name == variantStr,
       orElse: () => ModelVariant.int8,
     );
+    final snapPauses = results['snap-pauses'] as bool;
 
     final outputPath = results['output'] as String?;
     final requestedFormat = results['format'] as String?;
@@ -130,6 +134,7 @@ void main(List<String> arguments) async {
         starPlacement: starPlacement,
         modelPath: modelPath,
         modelVariant: modelVariant,
+        snapToPauses: snapPauses,
         onProgress: (status, pct) {
           if (verbose) {
             stdout.write('\r[${(pct * 100).toStringAsFixed(0)}%] $status');
@@ -162,10 +167,11 @@ Future<void> _handleEval(List<String> args) async {
   final parser = ArgParser()
     ..addOption('fixtures', abbr: 'f', defaultsTo: 'fixtures', help: 'Path to fixtures directory')
     ..addOption('csv', help: 'Optional output CSV file path')
-    ..addOption('lead-in', defaultsTo: '0.17', help: 'Lead-in in seconds (default 0.17)')
-    ..addOption('star-score', defaultsTo: '0.0', help: 'Wildcard star token log-probability (default 0.0)')
+    ..addOption('lead-in', defaultsTo: '0.19', help: 'Lead-in in seconds (default 0.19)')
+    ..addOption('star-score', defaultsTo: '-2.0', help: 'Wildcard star token log-probability (default -2.0)')
     ..addOption('star-placement', allowed: ['segment', 'edges'], defaultsTo: 'segment')
     ..addOption('model-variant', allowed: ['int8', 'fp16', 'fp32'], defaultsTo: 'int8')
+    ..addFlag('snap-pauses', help: 'Snap boundaries to qualifying acoustic pauses', defaultsTo: true)
     ..addFlag('help', abbr: 'h', negatable: false);
 
   final results = parser.parse(args);
@@ -182,8 +188,8 @@ Future<void> _handleEval(List<String> args) async {
     exit(1);
   }
 
-  final leadIn = double.tryParse(results['lead-in'] ?? '0.17') ?? 0.17;
-  final starScore = double.tryParse(results['star-score'] ?? '0.0') ?? 0.0;
+  final leadIn = double.tryParse(results['lead-in'] ?? '0.19') ?? 0.19;
+  final starScore = double.tryParse(results['star-score'] ?? '-2.0') ?? -2.0;
   final starPlacement = results['star-placement'] == 'edges'
       ? StarPlacement.edges
       : StarPlacement.segment;
@@ -192,6 +198,7 @@ Future<void> _handleEval(List<String> args) async {
     (v) => v.name == variantStr,
     orElse: () => ModelVariant.int8,
   );
+  final snapPauses = results['snap-pauses'] as bool;
 
   final evaluator = Evaluator();
   stdout.writeln('Running evaluation on fixtures in: ${fixturesDir.path}');
@@ -203,6 +210,7 @@ Future<void> _handleEval(List<String> args) async {
       starScore: starScore,
       starPlacement: starPlacement,
       modelVariant: variant,
+      snapToPauses: snapPauses,
     ),
     onProgress: (fixture, pct) {
       stdout.write('\r[${(pct * 100).toStringAsFixed(0)}%] Evaluating: $fixture...   ');

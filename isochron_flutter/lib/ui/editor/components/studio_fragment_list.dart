@@ -123,6 +123,80 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
     );
   }
 
+  Widget _buildConfidenceBadge(BuildContext context, double? conf) {
+    if (conf == null) return const SizedBox.shrink();
+    Color fg;
+    if (conf >= 0.85) {
+      fg = CupertinoColors.systemGreen;
+    } else if (conf >= 0.60) {
+      fg = CupertinoColors.systemOrange;
+    } else {
+      fg = CupertinoColors.systemRed;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+      decoration: BoxDecoration(
+        color: fg.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        "${(conf * 100).toStringAsFixed(0)}%",
+        style: TextStyle(
+          fontSize: 9.5,
+          color: fg,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFlagBadge(BuildContext context, String flag) {
+    Color color;
+    String label;
+    switch (flag) {
+      case 'omitted':
+        color = CupertinoColors.systemRed;
+        label = "Omitted";
+        break;
+      case 'not_at_pause':
+        color = CupertinoColors.systemOrange;
+        label = "No Pause";
+        break;
+      case 'poor_text_match':
+        color = CupertinoColors.systemOrange;
+        label = "Poor Match";
+        break;
+      case 'long_verse':
+        color = CupertinoColors.systemPurple;
+        label = "Long";
+        break;
+      case 'short_verse':
+        color = CupertinoColors.systemPurple;
+        label = "Short";
+        break;
+      default:
+        color = CupertinoColors.systemGrey;
+        label = flag;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(right: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 9,
+          color: color,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.fragments.isEmpty) {
@@ -243,6 +317,13 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                               _buildStatusBadge(context, f.status),
                               if (f.status != FragmentStatus.legacy)
                                 const SizedBox(width: 6),
+                              if (f.confidence != null) ...[
+                                _buildConfidenceBadge(context, f.confidence),
+                                const SizedBox(width: 6),
+                              ],
+                              for (final flag in f.flags) ...[
+                                _buildFlagBadge(context, flag),
+                              ],
                               if (f.warnings.isNotEmpty) ...[
                                 MacosTooltip(
                                   message: f.warnings.join('\n'),
@@ -296,6 +377,33 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                                 size: 16,
                               ),
                               onPressed: () => widget.onClear(i),
+                            ),
+                          ] else if (f.flags.contains('omitted')) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: CupertinoColors.systemRed
+                                    .withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                "Omitted",
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: CupertinoColors.systemRed,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            PushButton(
+                              controlSize: ControlSize.small,
+                              secondary: true,
+                              onPressed: () => widget.onCapture(i),
+                              child: const Text("Capture"),
                             ),
                           ] else ...[
                             PushButton(

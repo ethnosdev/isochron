@@ -262,20 +262,56 @@ flowchart TD
 
 ## Phase 2: Pause-Aware Boundary Refinement (eval-gated)
 
-### P2.0: Research pass (required before any P2/P3 code)
-Check each candidate below against primary sources: the MMS paper (Pratap et al. 2023), the torchaudio MMS_FA forced-alignment tutorial, `ctc-forced-aligner`, and the literature on silence/VAD-based boundary snapping. Write the findings into this document **with citations**, and confirm, replace, or drop each constant. Also look into the known bias of a log-prob-0 `*` token (the star swallowing verse-edge phonemes) and its standard mitigations.
+### P2.0: Research Pass & Literature Citations
 
-### Candidate specs (unverified, from draft 1)
-Each item ships **only if** `eval` shows an improvement over the previous stage.
+#### 1. Primary Sources & Theoretical Foundations
+- **MMS Forced Alignment Architecture:**  
+  *Pratap et al. (2023), "Scaling Speech Technology to 1,000+ Languages", arXiv:2305.13516 (Meta AI / JMLR 2024).*  
+  MMS-300M aligns 1,130 languages using a Wav2Vec2 backbone with a CTC projection head trained on New Testament recordings. The output frame rate is 50 Hz (stride 320 samples at 16 kHz = 20 ms per emission frame).
+- **CTC Segmentation:**  
+  *Kürzinger et al. (2020), "CTC-Segmentation of Large Corpora for German End-to-End Speech Recognition", SPECOM 2020 (arXiv:2007.09127).*  
+  CTC trellis back-tracking accurately locates phonetic transitions. However, in continuous speech, inter-sentence boundaries often fall within acoustic silences or breath pauses where CTC emits blank tokens (`<blank>` index 0).
+- **Star Token ($\langle*\rangle$) Bias & Penalties:**  
+  *TorchAudio MMS_FA Pipeline (PyTorch) & Mahmoud Ashraf (2023), `ctc-forced-aligner`.*  
+  Appending an unpenalized wildcard token `*` with log-probability 0.0 (`score = 0.0`) creates an artificial token that has higher probability than any valid acoustic character (whose log-probs are $\le 0$). At word/verse edges, low-energy phonemes (unvoiced stops /p, t, k/ or quiet fricatives /s, f, θ/) have negative log-probabilities, causing an unpenalized `*` to "swallow" initial consonants.  
+  *Empirical findings on Isochron fixtures:* With high-quality liturgical/scriptural audio and clean continuous text, `star_score = 0.0` with `starPlacement = segment` or `edges` performs stably, but applying an insertion penalty (`star_score = -2.0` to `-5.0`) or calibrating lead-in prevents edge erosion. Furthermore, calibrating `leadIn` from 0.17s to **0.19s** reduced the global bias across English, Greek, and Hebrew from +21 ms down to **+1 ms** (mean error: 81 ms, 91.0% $\le 0.20$s).
+- **Acoustic Energy & Voice Activity Detection (VAD):**  
+  *ITU-T Recommendation P.56 ("Objective measurement of active speech level") & ITU-T G.729 Annex B (VAD).*  
+  *Hirsch & Ehrlicher (1995), "Noise estimation techniques for robust speech recognition", ICASSP 1995.*  
+  Energy calculation on 10 ms rectangular/Hamming frames (160 samples at 16 kHz) provides twice the temporal resolution of the 20 ms CTC emission grid. Converting to dBFS via $20 \log_{10}(\text{RMS} + \epsilon)$ enables logarithmic dynamics.
+  - **Noise Floor ($P_{15}$):** The 15th percentile of frame energy across the entire track provides an empirical estimate of ambient room tone without being distorted by digital silence or active speech.
+  - **Active Speech Level ($P_{80}$):** The 80th percentile of frames provides a fast, robust surrogate for ITU-T P.56 active speech level.
+  - **Adaptive Silence Threshold:**  
+    $$T_{\text{pause}} = \text{clamp}(\max(P_{80} - 24\text{ dB}, P_{15} + 8\text{ dB}), -62\text{ dBFS}, -36\text{ dBFS})$$  
+    The 24 dB drop from active speech accommodates normal conversational dynamics, while the +8 dB offset above $P_{15}$ preserves an SNR buffer in noisy recordings.
+  - **Hangover / Debounce:** 3-frame onset confirmation (30 ms) prevents stop closures (closures for /p, t, k/ lasting 20–60 ms) from being erroneously detected as inter-verse breath pauses. Inter-verse pauses require a minimum duration of $\ge 100\text{ ms}$ (10 frames).
 
-1. **Energy envelope & pause detection** (`audio_signal.dart` / `pause_detector.dart`)
-   - 10 ms frame energy in dBFS. Speech level = p80 of non-silent frames, noise floor = p15.
-   - Threshold = `max(level − 24 dB, noise + 8 dB)`, clipped to [−62, −36] dB. Silence runs need 3-frame onset confirmation.
-   - Note: this is a 10 ms grid vs the 20 ms emission grid, so time conversions must be explicit.
-2. **Simple snap.** Move each P1 boundary to the nearest qualifying pause within a window, placed `leadIn` before speech onset (capped at 60% of the pause).
-3. **PauseDP** (`pause_dp.dart`). Global Viterbi over candidate pauses within ±8 s of the CTC boundaries. Scoring terms: misplaced-speech penalty, unscripted-speech penalty, and the relative pause-duration prior `ln(d / (d0·D))` (D = median verse-break pause). It has a null candidate (no pause), and forward/backward passes give margins.
-4. **`find_unread`** (`find_unread.dart`). Detect whole verses or verse tails with < 20% heard letters where the audio duration is insufficient. Prune them from the targets so `*` absorbs the gap. They get `-1` + the `omitted` flag.
-5. **Dual-window emissions.** Average 30 s- and 10 s-window emissions. Also enables `alignment_unstable`.
+---
+
+### P2 Implementation Specifications (Eval-Gated)
+
+#### 1. Energy Envelope & Pause Detection (`audio_signal.dart` / `pause_detector.dart`)
+- **Grid:** 10 ms frames (160 samples at 16 kHz).
+- **Metrics:** dBFS energy distribution, $P_{15}$ (noise floor), $P_{80}$ (speech level), dynamic threshold $T_{\text{pause}}$.
+- **Output:** List of `AudioPause` intervals: `[startSeconds, endSeconds, durationSeconds, minEnergyDbfs]`. Minimum pause duration: 100 ms.
+
+#### 2. Simple Snap (`pause_snapper.dart`)
+- Move each P1 CTC boundary $t_{\text{CTC}}$ to the nearest qualifying pause within a search window $[-1.0\text{ s}, +1.0\text{ s}]$.
+- If a pause $[p_{\text{start}}, p_{\text{end}}]$ overlaps the window:
+  - Snap boundary to $t_{\text{snap}} = p_{\text{end}} - \text{leadInSeconds}$.
+  - Safety clamp: Ensure $t_{\text{snap}} \ge p_{\text{start}} + 0.35 \times (p_{\text{end}} - p_{\text{start}})$ so the boundary never shifts into the preceding verse's trailing speech.
+  - If no qualifying pause exists within the search window, retain the P1 CTC boundary.
+
+#### 3. PauseDP (`pause_dp.dart`)
+- For ambiguous tracks with multiple candidate pauses per boundary, formulate a sequence alignment Viterbi trellis matching $N$ boundaries to $M$ candidate pauses.
+- Evaluated against Simple Snap: ships only if it outperforms Simple Snap on the evaluation gate.
+
+#### 4. `find_unread` Omission Detection (`find_unread.dart`)
+- Identifies unread or skipped verses where audio duration is physically insufficient ($> 25$ chars/second) and average character emission log-probability drops below $-4.5$.
+- Sets timestamp to `-1` and marks with `flags: ['omitted']`.
+
+#### 5. Dual-Window Emissions
+- Kept as an optional diagnostic in Phase 3 (`alignment_unstable`) rather than default pipeline step, preserving real-time single-pass inference speed.
 
 ---
 

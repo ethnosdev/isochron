@@ -70,14 +70,19 @@ class IsochronWaveformPainter extends CustomPainter {
       if (frag.realStart < 0) continue;
 
       final bool isActive = (frag.index == activeFragmentIndex);
-      final Color lineColor = isActive ? Colors.amberAccent : accentColor;
+      final bool isFlagged = frag.flags.isNotEmpty;
+      final Color lineColor = isActive
+          ? Colors.amberAccent
+          : (isFlagged ? Colors.orangeAccent : accentColor);
 
       final paintLine = Paint()
         ..color = lineColor
-        ..strokeWidth = isActive ? 3.0 : 2.0;
+        ..strokeWidth = isActive ? 3.0 : (isFlagged ? 2.5 : 2.0);
 
       final paintFill = Paint()
-        ..color = lineColor.withValues(alpha: isActive ? 0.25 : 0.12);
+        ..color = lineColor.withValues(
+          alpha: isActive ? 0.28 : (isFlagged ? 0.20 : 0.12),
+        );
 
       final xStart = (frag.realStart / totalSeconds) * size.width;
       final xEnd = (frag.realEnd / totalSeconds) * size.width;

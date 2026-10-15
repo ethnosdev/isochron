@@ -86,11 +86,14 @@ class AlignmentService {
     required String textPath,
     required String audioPath,
     String? languageCode,
-    double leadInSeconds = 0.17,
-    double starScore = 0.0,
+    double leadInSeconds = 0.19,
+    double starScore = -2.0,
     StarPlacement starPlacement = StarPlacement.segment,
     String? modelPath,
     ModelVariant modelVariant = ModelVariant.int8,
+    bool snapToPauses = true,
+    bool keepEdits = false,
+    List<Fragment>? existingFragments,
     bool hasIds = false,
     bool generateIds = false,
     String? generatedIdPrefix,
@@ -117,6 +120,9 @@ class AlignmentService {
       'starPlacement': starPlacement.name,
       'modelPath': modelPath,
       'modelVariant': modelVariant.name,
+      'snapToPauses': snapToPauses,
+      'keepEdits': keepEdits,
+      'existingFragments': existingFragments?.map((f) => f.toJson()).toList(),
       'hasIds': hasIds,
       'generateIds': generateIds,
       'generatedIdPrefix': generatedIdPrefix,
@@ -133,7 +139,7 @@ class AlignmentService {
     String? dictPath,
     String? pinsPath,
     String? languageCode,
-    double leadInSeconds = 0.17,
+    double leadInSeconds = 0.19,
     bool hasIds = false,
     bool generateIds = false,
     String? generatedIdPrefix,
@@ -184,9 +190,9 @@ class AlignmentService {
           final audioPath = message['audioPath'] as String;
           final languageCode = message['languageCode'] as String?;
           final leadInSeconds =
-              (message['leadInSeconds'] as num?)?.toDouble() ?? 0.17;
+              (message['leadInSeconds'] as num?)?.toDouble() ?? 0.19;
           final starScore =
-              (message['starScore'] as num?)?.toDouble() ?? 0.0;
+              (message['starScore'] as num?)?.toDouble() ?? -2.0;
           final starPlacementStr =
               message['starPlacement'] as String? ?? 'segment';
           final starPlacement = starPlacementStr == 'edges'
@@ -198,15 +204,25 @@ class AlignmentService {
             (v) => v.name == variantStr,
             orElse: () => ModelVariant.int8,
           );
+          final snapToPauses = message['snapToPauses'] as bool? ?? true;
+          final keepEdits = message['keepEdits'] as bool? ?? false;
+          final existingList = message['existingFragments'] as List<dynamic>?;
 
           final hasIds = message['hasIds'] as bool? ?? false;
           final generateIds = message['generateIds'] as bool? ?? false;
           final generatedIdPrefix = message['generatedIdPrefix'] as String?;
           final recordingNumber = message['recordingNumber'] as int? ?? 1;
 
-          final textFile = File(textPath);
-          final rawText = await textFile.readAsString();
-          final fragments = TextParser.parse(rawText, hasIds: hasIds);
+          List<Fragment> fragments;
+          if (keepEdits && existingList != null && existingList.isNotEmpty) {
+            fragments = existingList
+                .map((item) => Fragment.fromJson(item as Map<String, dynamic>))
+                .toList();
+          } else {
+            final textFile = File(textPath);
+            final rawText = await textFile.readAsString();
+            fragments = TextParser.parse(rawText, hasIds: hasIds);
+          }
 
           if (fragments.isEmpty) {
             throw Exception('No text fragments parsed from $textPath');
@@ -222,6 +238,8 @@ class AlignmentService {
               starPlacement: starPlacement,
               modelPath: modelPath,
               modelVariant: modelVariant,
+              snapToPauses: snapToPauses,
+              keepEdits: keepEdits,
             ),
             onProgress: (status, progress) {
               responsePort?.send({

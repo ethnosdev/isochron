@@ -169,7 +169,8 @@ class AppManager extends ValueNotifier<AppState> {
   Future<void> runAlignment({
     required String trackId,
     String? languageCode,
-    double leadInSeconds = 0.17,
+    double leadInSeconds = 0.19,
+    bool keepEdits = false,
   }) async {
     if (value.audioPath == null || value.textPath == null) return;
 
@@ -200,6 +201,8 @@ class AppManager extends ValueNotifier<AppState> {
         languageCode: languageCode,
         leadInSeconds: leadInSeconds,
         hasIds: initiatingHasIds,
+        keepEdits: keepEdits,
+        existingFragments: keepEdits ? value.fragments : null,
         onProgress: (status, prog) {
           if (value.autoSavePath == initiatingSavePath) {
             value = value.copyWith(statusMessage: status, progress: prog);
@@ -474,6 +477,25 @@ class AppManager extends ValueNotifier<AppState> {
       hasUnsavedChanges: true,
       selectedFragmentIndex: nextIndex,
     );
+  }
+
+  /// Jumps to the next verse with diagnostic anomaly flags, wrapping around the track.
+  void jumpToNextFlaggedVerse() {
+    if (value.fragments.isEmpty) return;
+    final currentIdx = value.selectedFragmentIndex ?? -1;
+    final total = value.fragments.length;
+
+    for (int offset = 1; offset <= total; offset++) {
+      final idx = (currentIdx + offset) % total;
+      final frag = value.fragments[idx];
+      if (frag.flags.isNotEmpty) {
+        selectFragment(idx);
+        if (frag.realStart >= 0) {
+          seekTo(Duration(milliseconds: (frag.realStart * 1000).toInt()));
+        }
+        return;
+      }
+    }
   }
 
   Future<String> _ensureWavForPlayback(String originalPath) async {

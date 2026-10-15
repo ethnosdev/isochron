@@ -361,19 +361,3 @@ class Evaluator {
     await sink.close();
   }
 }
-
-extension on MmsPipelineOptions {
-  MmsPipelineOptions copyWith({String? languageCode}) {
-    return MmsPipelineOptions(
-      languageCode: languageCode ?? this.languageCode,
-      leadInSeconds: leadInSeconds,
-      starScore: starScore,
-      starPlacement: starPlacement,
-      windowSeconds: windowSeconds,
-      contextSeconds: contextSeconds,
-      modelPath: modelPath,
-      modelVariant: modelVariant,
-      intraOpThreads: intraOpThreads,
-    );
-  }
-}

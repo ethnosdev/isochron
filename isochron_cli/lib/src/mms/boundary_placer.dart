@@ -11,6 +11,8 @@ class PlacedVerseTiming {
   final double speechEnd;
   final double meanLogProb;
   final List<String> warnings;
+  final List<String> flags;
+  final double? confidence;
 
   const PlacedVerseTiming({
     required this.index,
@@ -20,6 +22,8 @@ class PlacedVerseTiming {
     required this.speechEnd,
     required this.meanLogProb,
     required this.warnings,
+    this.flags = const [],
+    this.confidence,
   });
 }
 
