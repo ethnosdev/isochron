@@ -1,203 +1,263 @@
-import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 import 'package:isochron_cli/isochron_cli.dart';
 
 class AlignmentService {
-  Isolate? _activeIsolate;
-  ReceivePort? _activeReceivePort;
+  static AlignmentService? _instance;
+  factory AlignmentService() => _instance ??= AlignmentService._();
+  AlignmentService._();
 
-  /// Instantly kills the running background process
-  void cancelCurrentRun() {
-    if (_activeIsolate != null) {
-      _activeIsolate!.kill(priority: Isolate.immediate);
-      _activeIsolate = null;
-    }
-    if (_activeReceivePort != null) {
-      _activeReceivePort!.close();
-      _activeReceivePort = null;
+  Isolate? _workerIsolate;
+  SendPort? _workerSendPort;
+  ReceivePort? _workerResponsePort;
+  Completer<List<Fragment>>? _activeCompleter;
+  void Function(String status, double progress)? _activeOnProgress;
+
+  Future<void> _ensureWorkerStarted() async {
+    if (_workerIsolate != null && _workerSendPort != null) return;
+
+    final initPort = ReceivePort();
+    _workerIsolate = await Isolate.spawn(_isolateWorkerMain, initPort.sendPort);
+    _workerSendPort = await initPort.first as SendPort;
+    initPort.close();
+
+    _workerResponsePort = ReceivePort();
+    _workerResponsePort!.listen(_handleWorkerMessage);
+    _workerSendPort!.send({
+      'command': 'init',
+      'responsePort': _workerResponsePort!.sendPort,
+    });
+  }
+
+  void _handleWorkerMessage(dynamic message) {
+    if (message is! Map<String, dynamic>) return;
+    final type = message['type'] as String?;
+    if (type == 'progress') {
+      _activeOnProgress?.call(
+        message['status'] as String? ?? '',
+        (message['value'] as num?)?.toDouble() ?? 0.0,
+      );
+    } else if (type == 'result') {
+      final jsonList = message['data'] as List<dynamic>;
+      final fragments = jsonList
+          .map((item) => Fragment.fromJson(item as Map<String, dynamic>))
+          .toList();
+      _activeCompleter?.complete(fragments);
+      _activeCompleter = null;
+      _activeOnProgress = null;
+    } else if (type == 'error') {
+      _activeCompleter?.completeError(Exception(message['error']));
+      _activeCompleter = null;
+      _activeOnProgress = null;
     }
   }
 
+  /// Cancels the running alignment cooperatively, with a hard timeout fallback.
+  void cancelCurrentRun() {
+    if (_workerSendPort != null) {
+      _workerSendPort!.send({'command': 'cancel'});
+    }
+    Future.delayed(const Duration(seconds: 2), () {
+      if (_activeCompleter != null && !_activeCompleter!.isCompleted) {
+        _killWorker();
+        _activeCompleter?.completeError(Exception('Alignment cancelled'));
+        _activeCompleter = null;
+        _activeOnProgress = null;
+      }
+    });
+  }
+
+  void _killWorker() {
+    _workerIsolate?.kill(priority: Isolate.immediate);
+    _workerIsolate = null;
+    _workerSendPort = null;
+    _workerResponsePort?.close();
+    _workerResponsePort = null;
+  }
+
+  void shutdown() {
+    _workerSendPort?.send({'command': 'shutdown'});
+    _killWorker();
+  }
+
+  /// Primary alignment entry point using the MMS neural engine.
+  Future<List<Fragment>> align({
+    required String textPath,
+    required String audioPath,
+    String? languageCode,
+    double leadInSeconds = 0.17,
+    double starScore = 0.0,
+    StarPlacement starPlacement = StarPlacement.segment,
+    String? modelPath,
+    ModelVariant modelVariant = ModelVariant.int8,
+    bool hasIds = false,
+    bool generateIds = false,
+    String? generatedIdPrefix,
+    int recordingNumber = 1,
+    required void Function(String status, double progress) onProgress,
+  }) async {
+    await _ensureWorkerStarted();
+
+    if (_activeCompleter != null && !_activeCompleter!.isCompleted) {
+      throw StateError('An alignment task is already in progress.');
+    }
+
+    _activeCompleter = Completer<List<Fragment>>();
+    _activeOnProgress = onProgress;
+
+    _workerSendPort!.send({
+      'command': 'align',
+      'responsePort': _workerResponsePort!.sendPort,
+      'textPath': textPath,
+      'audioPath': audioPath,
+      'languageCode': languageCode,
+      'leadInSeconds': leadInSeconds,
+      'starScore': starScore,
+      'starPlacement': starPlacement.name,
+      'modelPath': modelPath,
+      'modelVariant': modelVariant.name,
+      'hasIds': hasIds,
+      'generateIds': generateIds,
+      'generatedIdPrefix': generatedIdPrefix,
+      'recordingNumber': recordingNumber,
+    });
+
+    return _activeCompleter!.future;
+  }
+
+  /// Backward-compatible alias for existing call sites.
   Future<List<Fragment>> runIsochron({
     required String textPath,
     required String audioPath,
     String? dictPath,
     String? pinsPath,
+    String? languageCode,
+    double leadInSeconds = 0.17,
     bool hasIds = false,
     bool generateIds = false,
     String? generatedIdPrefix,
     int recordingNumber = 1,
-    required Function(String status, double progress) onProgress,
+    required void Function(String status, double progress) onProgress,
     String snapMode = 'onset',
     int snapOffsetMs = 0,
-  }) async {
-    _activeReceivePort = ReceivePort();
-    String? rulesJson;
-
-    if (dictPath != null) {
-      rulesJson = await File(dictPath).readAsString();
-    }
-
-    String? pinsJson;
-    if (pinsPath != null && await File(pinsPath).exists()) {
-      pinsJson = await File(pinsPath).readAsString();
-    }
-
-    try {
-      _activeIsolate = await Isolate.spawn(_isolateEntry, {
-        'sendPort': _activeReceivePort!.sendPort,
-        'textPath': textPath,
-        'audioPath': audioPath,
-        'rulesJson': rulesJson,
-        'pinsJson': pinsJson,
-        'hasIds': hasIds,
-        'generateIds': generateIds,
-        'generatedIdPrefix': generatedIdPrefix,
-        'recordingNumber': recordingNumber,
-        'snapMode': snapMode,
-        'snapOffsetMs': snapOffsetMs,
-      });
-
-      await for (final message in _activeReceivePort!) {
-        if (message['type'] == 'progress') {
-          onProgress(message['status'], message['value']);
-        } else if (message['type'] == 'result') {
-          _activeReceivePort?.close();
-          return message['data'] as List<Fragment>;
-        } else if (message['type'] == 'error') {
-          throw message['error'];
-        }
-      }
-    } catch (e) {
-      _activeReceivePort?.close();
-      rethrow;
-    } finally {
-      _activeIsolate = null;
-      _activeReceivePort = null;
-    }
-    return []; // Returns empty if isolate is killed forcefully
+  }) {
+    return align(
+      textPath: textPath,
+      audioPath: audioPath,
+      languageCode: languageCode,
+      leadInSeconds: leadInSeconds,
+      hasIds: hasIds,
+      generateIds: generateIds,
+      generatedIdPrefix: generatedIdPrefix,
+      recordingNumber: recordingNumber,
+      onProgress: onProgress,
+    );
   }
 
-  static Future<void> _isolateEntry(Map<String, dynamic> args) async {
-    final SendPort sendPort = args['sendPort'];
-    final workDir = Directory.systemTemp.createTempSync('iso_bg_');
+  static Future<void> _isolateWorkerMain(SendPort mainSendPort) async {
+    final commandPort = ReceivePort();
+    mainSendPort.send(commandPort.sendPort);
 
-    try {
-      // 1. Setup OS Drivers INSIDE the Isolate
-      late AudioDriver audioDriver;
-      late TtsDriver ttsDriver;
+    SendPort? responsePort;
+    bool cancelRequested = false;
+    MmsPipeline? pipeline;
 
-      if (Platform.isMacOS) {
-        audioDriver = MacAudioDriver();
-        ttsDriver = MacTtsDriver();
-      } else {
-        // Fallback for future platform implementations
-        throw Exception(
-          "Unsupported OS. Only macOS is currently supported by Isochron native drivers.",
-        );
-      }
+    await for (final message in commandPort) {
+      if (message is! Map<String, dynamic>) continue;
+      final command = message['command'] as String?;
 
-      Map<String, String>? rules;
-      if (args['rulesJson'] != null) {
-        final rawMap = jsonDecode(args['rulesJson']) as Map<String, dynamic>;
-        rules = rawMap.map((key, value) => MapEntry(key, value.toString()));
-      }
+      if (command == 'init') {
+        responsePort = message['responsePort'] as SendPort?;
+      } else if (command == 'cancel') {
+        cancelRequested = true;
+      } else if (command == 'shutdown') {
+        break;
+      } else if (command == 'align') {
+        responsePort = message['responsePort'] as SendPort? ?? responsePort;
+        cancelRequested = false;
 
-      final hasIds = args['hasIds'] as bool? ?? false;
-      final generateIds = args['generateIds'] as bool? ?? false;
-      final generatedIdPrefix = args['generatedIdPrefix'] as String?;
-      final recordingNumber = args['recordingNumber'] as int? ?? 1;
+        try {
+          pipeline ??= MmsPipeline();
 
-      final File textFile = File(args['textPath']);
-      final lines = await textFile.readAsLines();
+          final textPath = message['textPath'] as String;
+          final audioPath = message['audioPath'] as String;
+          final languageCode = message['languageCode'] as String?;
+          final leadInSeconds =
+              (message['leadInSeconds'] as num?)?.toDouble() ?? 0.17;
+          final starScore =
+              (message['starScore'] as num?)?.toDouble() ?? 0.0;
+          final starPlacementStr =
+              message['starPlacement'] as String? ?? 'segment';
+          final starPlacement = starPlacementStr == 'edges'
+              ? StarPlacement.edges
+              : StarPlacement.segment;
+          final modelPath = message['modelPath'] as String?;
+          final variantStr = message['modelVariant'] as String? ?? 'int8';
+          final modelVariant = ModelVariant.values.firstWhere(
+            (v) => v.name == variantStr,
+            orElse: () => ModelVariant.int8,
+          );
 
-      String cleanTextForEngine = "";
-      List<String> extractedIds = [];
+          final hasIds = message['hasIds'] as bool? ?? false;
+          final generateIds = message['generateIds'] as bool? ?? false;
+          final generatedIdPrefix = message['generatedIdPrefix'] as String?;
+          final recordingNumber = message['recordingNumber'] as int? ?? 1;
 
-      if (hasIds) {
-        final buffer = StringBuffer();
-        for (var line in lines) {
-          if (line.trim().isEmpty) continue;
-          final parsed = splitIdAndText(line);
-          if (parsed.id != null) {
-            extractedIds.add(parsed.id!);
-            buffer.writeln(parsed.text);
-          } else {
-            extractedIds.add("");
-            buffer.writeln(parsed.text);
+          final textFile = File(textPath);
+          final rawText = await textFile.readAsString();
+          final fragments = TextParser.parse(rawText, hasIds: hasIds);
+
+          if (fragments.isEmpty) {
+            throw Exception('No text fragments parsed from $textPath');
           }
-        }
-        cleanTextForEngine = buffer.toString();
-      } else {
-        cleanTextForEngine = await textFile.readAsString();
-      }
 
-      // Prepare Pinned Timings
-      Map<int, ({double start, double end})>? pinnedTimings;
-      if (args['pinsJson'] != null) {
-        final raw = jsonDecode(args['pinsJson']) as Map<String, dynamic>;
-        pinnedTimings = {
-          for (final entry in raw.entries)
-            if (int.tryParse(entry.key) != null)
-              int.parse(entry.key): (
-                start: (entry.value['start'] as num).toDouble(),
-                end: (entry.value['end'] as num).toDouble(),
-              ),
-        };
-      }
+          final result = await pipeline.process(
+            fragments: fragments,
+            audioPath: audioPath,
+            options: MmsPipelineOptions(
+              languageCode: languageCode,
+              leadInSeconds: leadInSeconds,
+              starScore: starScore,
+              starPlacement: starPlacement,
+              modelPath: modelPath,
+              modelVariant: modelVariant,
+            ),
+            onProgress: (status, progress) {
+              responsePort?.send({
+                'type': 'progress',
+                'status': status,
+                'value': progress,
+              });
+            },
+            isCancelled: () => cancelRequested,
+          );
 
-      final String snapModeRaw = (args['snapMode'] as String?) ?? 'onset';
-      final SnapMode snapMode = snapModeRaw == 'gap'
-          ? SnapMode.gapCenter
-          : SnapMode.onset;
-      final int snapOffsetMs = (args['snapOffsetMs'] as int?) ?? 0;
+          var outputFragments = result.fragments;
 
-      // 2. Run Alignment on CLEAN text with Native Drivers
-      final List<Fragment> rawFragments = await IsochronProcessor.process(
-        text: cleanTextForEngine,
-        audioPath: args['audioPath'],
-        workDir: workDir,
-        audioDriver: audioDriver, // Injected macOS driver
-        ttsDriver: ttsDriver, // Injected macOS driver
-        transliterationRules: rules,
-        pinnedTimings: pinnedTimings,
-        snapMode: snapMode,
-        snapOffsetMs: snapOffsetMs,
-        onProgress: (s, p) =>
-            sendPort.send({'type': 'progress', 'status': s, 'value': p}),
-      );
-
-      // 3. Merge IDs back (if applicable)
-      List<Fragment> finalFragments = rawFragments;
-
-      if (hasIds && extractedIds.isNotEmpty) {
-        finalFragments = [];
-        for (int i = 0; i < rawFragments.length; i++) {
-          String? id;
-          if (i < extractedIds.length) {
-            id = extractedIds[i];
+          if (generateIds && generatedIdPrefix != null && !hasIds) {
+            final recStr = recordingNumber.toString().padLeft(3, '0');
+            final idList = <Fragment>[];
+            for (var i = 0; i < outputFragments.length; i++) {
+              final verseStr = (i + 1).toString().padLeft(3, '0');
+              idList.add(outputFragments[i].copyWith(
+                id: '$generatedIdPrefix$recStr$verseStr',
+              ));
+            }
+            outputFragments = idList;
           }
-          finalFragments.add(rawFragments[i].copyWith(id: id));
-        }
-      } else if (generateIds && generatedIdPrefix != null) {
-        // AUTO-GENERATE IDs: {Prefix}{RecordingNumber:000}{VerseNumber:000}
-        finalFragments = [];
-        final recStr = recordingNumber.toString().padLeft(3, '0');
 
-        for (int i = 0; i < rawFragments.length; i++) {
-          final verseStr = (i + 1).toString().padLeft(3, '0');
-          final generatedId = '$generatedIdPrefix$recStr$verseStr';
-
-          finalFragments.add(rawFragments[i].copyWith(id: generatedId));
+          responsePort?.send({
+            'type': 'result',
+            'data': outputFragments.map((f) => f.toJson()).toList(),
+          });
+        } catch (e) {
+          responsePort?.send({
+            'type': 'error',
+            'error': e.toString(),
+          });
         }
       }
-
-      sendPort.send({'type': 'result', 'data': finalFragments});
-    } catch (e) {
-      sendPort.send({'type': 'error', 'error': e.toString()});
-    } finally {
-      if (workDir.existsSync()) workDir.deleteSync(recursive: true);
     }
   }
 }

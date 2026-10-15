@@ -1,0 +1,79 @@
+fixture,verse_index,text,pred_start,truth_start,error_seconds,abs_error_seconds
+english_genesis_1,0,"In the beginning God created the heavens and the earth.",4.990,4.860,0.130,0.130
+english_genesis_1,1,"Now the earth was formless and void, and darkness was over the surface of the deep. And the Spirit of God was hovering over the surface of the waters.",8.970,8.980,-0.010,0.010
+english_genesis_1,2,"And God said, “Let there be light,” and there was light.",18.790,18.726,0.064,0.064
+english_genesis_1,3,"And God saw that the light was good, and He separated the light from the darkness.",23.370,23.358,0.012,0.012
+english_genesis_1,4,"God called the light “day,” and the darkness He called “night.” And there was evening, and there was morning — the first day.",28.890,28.856,0.034,0.034
+english_genesis_1,5,"And God said, “Let there be an expanse between the waters, to separate the waters from the waters.”",37.230,36.996,0.234,0.234
+english_genesis_1,6,"So God made the expanse and separated the waters beneath it from the waters above. And it was so.",44.410,44.393,0.017,0.017
+english_genesis_1,7,"God called the expanse “sky.” And there was evening, and there was morning — the second day.",51.630,51.579,0.051,0.051
+english_genesis_1,8,"And God said, “Let the waters under the sky be gathered into one place, so that the dry land may appear.” And it was so.",58.170,57.945,0.225,0.225
+english_genesis_1,9,"God called the dry land “earth,” and the gathering of waters He called “seas.” And God saw that it was good.",66.850,66.880,-0.030,0.030
+english_genesis_1,10,"Then God said, “Let the earth bring forth vegetation: seed-bearing plants and fruit trees, each bearing fruit with seed according to its kind.” And it was so.",75.610,75.350,0.260,0.260
+english_genesis_1,11,"The earth produced vegetation: seed-bearing plants according to their kinds and trees bearing fruit with seed according to their kinds. And God saw that it was good.",87.030,86.743,0.287,0.287
+english_genesis_1,12,"And there was evening, and there was morning — the third day.",98.330,98.320,0.010,0.010
+english_genesis_1,13,"And God said, “Let there be lights in the expanse of the sky to distinguish between the day and the night, and let them be signs to mark the seasons and days and years.",102.790,102.770,0.020,0.020
+english_genesis_1,14,"And let them serve as lights in the expanse of the sky to shine upon the earth.” And it was so.",113.570,113.580,-0.010,0.010
+english_genesis_1,15,"God made two great lights: the greater light to rule the day and the lesser light to rule the night. And He made the stars as well.",120.190,120.150,0.040,0.040
+english_genesis_1,16,"God set these lights in the expanse of the sky to shine upon the earth,",129.250,129.250,0.000,0.000
+english_genesis_1,17,"to preside over the day and the night, and to separate the light from the darkness. And God saw that it was good.",133.570,133.680,-0.110,0.110
+english_genesis_1,18,"And there was evening, and there was morning — the fourth day.",141.550,141.607,-0.057,0.057
+english_genesis_1,19,"And God said, “Let the waters teem with living creatures, and let birds fly above the earth in the open expanse of the sky.”",145.430,145.430,0.000,0.000
+english_genesis_1,20,"So God created the great sea creatures and every living thing that moves, with which the waters teemed according to their kinds, and every winged bird after its kind. And God saw that it was good.",153.830,153.810,0.020,0.020
+english_genesis_1,21,"Then God blessed them and said, “Be fruitful and multiply and fill the waters of the seas, and let birds multiply on the earth.”",166.990,167.011,-0.021,0.021
+english_genesis_1,22,"And there was evening, and there was morning — the fifth day.",176.050,176.060,-0.010,0.010
+english_genesis_1,23,"And God said, “Let the earth bring forth living creatures according to their kinds: livestock, land crawlers, and beasts of the earth according to their kinds.” And it was so.",180.050,180.088,-0.038,0.038
+english_genesis_1,24,"God made the beasts of the earth according to their kinds, the livestock according to their kinds, and everything that crawls upon the earth according to its kind. And God saw that it was good.",191.730,191.832,-0.102,0.102
+english_genesis_1,25,"Then God said, “Let Us make man in Our image, after Our likeness, to rule over the fish of the sea and the birds of the air, over the livestock, and over all the earth itself and every creature that crawls upon it.”",204.290,204.364,-0.074,0.074
+english_genesis_1,26,"So God created man in His own image; in the image of God He created him; male and female He created them.",218.350,218.410,-0.060,0.060
+english_genesis_1,27,"God blessed them and said to them, “Be fruitful and multiply, and fill the earth and subdue it; rule over the fish of the sea and the birds of the air and every creature that crawls upon the earth.”",226.850,226.960,-0.110,0.110
+english_genesis_1,28,"Then God said, “Behold, I have given you every seed-bearing plant on the face of all the earth, and every tree whose fruit contains seed. They will be yours for food.",238.890,238.938,-0.048,0.048
+english_genesis_1,29,"And to every beast of the earth and every bird of the air and every creature that crawls upon the earth — everything that has the breath of life in it — I have given every green plant for food.” And it was so.",249.870,249.950,-0.080,0.080
+english_genesis_1,30,"And God looked upon all that He had made, and indeed, it was very good. And there was evening, and there was morning — the sixth day.",262.550,262.600,-0.050,0.050
+greek_matthew_1,0,"¶Βίβλος γενέσεως ˚Ἰησοῦ ˚Χριστοῦ, υἱοῦ Δαυὶδ, υἱοῦ Ἀβραάμ:",3.690,3.570,0.120,0.120
+greek_matthew_1,1,"Ἀβραὰμ ἐγέννησεν τὸν Ἰσαάκ, Ἰσαὰκ δὲ ἐγέννησεν τὸν Ἰακώβ, Ἰακὼβ δὲ ἐγέννησεν τὸν Ἰούδαν καὶ τοὺς ἀδελφοὺς αὐτοῦ,",10.890,10.801,0.089,0.089
+greek_matthew_1,2,"Ἰούδας δὲ ἐγέννησεν τὸν Φαρὲς καὶ τὸν Ζάρα ἐκ τῆς Θαμάρ, Φαρὲς δὲ ἐγέννησεν τὸν Ἑσρώμ, Ἑσρὼμ δὲ ἐγέννησεν τὸν Ἀράμ,",23.870,23.903,-0.033,0.033
+greek_matthew_1,3,"Ἀρὰμ δὲ ἐγέννησεν τὸν Ἀμιναδάβ, Ἀμιναδὰβ δὲ ἐγέννησεν τὸν Ναασσών, Ναασσὼν δὲ ἐγέννησεν τὸν Σαλμών,",37.390,37.345,0.045,0.045
+greek_matthew_1,4,"Σαλμὼν δὲ ἐγέννησεν τὸν Βόες ἐκ τῆς Ῥαχάβ, Βόες δὲ ἐγέννησεν τὸν Ἰωβὴδ ἐκ τῆς Ῥούθ, Ἰωβὴδ δὲ ἐγέννησεν τὸν Ἰεσσαί,",49.830,49.775,0.055,0.055
+greek_matthew_1,5,"Ἰεσσαὶ δὲ ἐγέννησεν τὸν Δαυὶδ τὸν βασιλέα. ¶Δαυὶδ δὲ ἐγέννησεν τὸν Σολομῶνα ἐκ τῆς τοῦ Οὐρίου,",64.030,63.982,0.048,0.048
+greek_matthew_1,6,"Σολομὼν δὲ ἐγέννησεν τὸν Ῥοβοάμ, Ῥοβοὰμ δὲ ἐγέννησεν τὸν Ἀβιά, Ἀβιὰ δὲ ἐγέννησεν τὸν Ἀσάφ,",75.890,75.870,0.020,0.020
+greek_matthew_1,7,"Ἀσὰφ δὲ ἐγέννησεν τὸν Ἰωσαφάτ, Ἰωσαφὰτ δὲ ἐγέννησεν τὸν Ἰωράμ, Ἰωρὰμ δὲ ἐγέννησεν τὸν Ὀζίαν,",87.830,87.786,0.044,0.044
+greek_matthew_1,8,"Ὀζίας δὲ ἐγέννησεν τὸν Ἰωαθάμ, Ἰωαθὰμ δὲ ἐγέννησεν τὸν Ἀχάζ, Ἀχὰζ δὲ ἐγέννησεν τὸν Ἑζεκίαν,",99.610,99.595,0.015,0.015
+greek_matthew_1,9,"Ἑζεκίας δὲ ἐγέννησεν τὸν Μανασσῆ, Μανασσῆς δὲ ἐγέννησεν τὸν Ἀμώς, Ἀμὼς δὲ ἐγέννησεν τὸν Ἰωσίαν,",112.230,112.231,-0.001,0.001
+greek_matthew_1,10,"Ἰωσίας δὲ ἐγέννησεν τὸν Ἰεχονίαν καὶ τοὺς ἀδελφοὺς αὐτοῦ ἐπὶ τῆς μετοικεσίας Βαβυλῶνος.",124.350,124.385,-0.035,0.035
+greek_matthew_1,11,"¶Μετὰ δὲ τὴν μετοικεσίαν Βαβυλῶνος, Ἰεχονίας ἐγέννησεν τὸν Σαλαθιήλ, Σαλαθιὴλ δὲ ἐγέννησεν τὸν Ζοροβαβέλ,",135.430,135.392,0.038,0.038
+greek_matthew_1,12,"Ζοροβαβὲλ δὲ ἐγέννησεν τὸν Ἀβιούδ, Ἀβιοὺδ δὲ ἐγέννησεν τὸν Ἐλιακείμ, Ἐλιακεὶμ δὲ ἐγέννησεν τὸν Ἀζώρ,",147.790,147.800,-0.010,0.010
+greek_matthew_1,13,"Ἀζὼρ δὲ ἐγέννησεν τὸν Σαδώκ, Σαδὼκ δὲ ἐγέννησεν τὸν Ἀχείμ, Ἀχεὶμ δὲ ἐγέννησεν τὸν Ἐλιούδ,",159.290,159.314,-0.024,0.024
+greek_matthew_1,14,"Ἐλιοὺδ δὲ ἐγέννησεν τὸν Ἐλεάζαρ, Ἐλεάζαρ δὲ ἐγέννησεν τὸν Ματθάν, Ματθὰν δὲ ἐγέννησεν τὸν Ἰακώβ,",170.870,170.926,-0.056,0.056
+greek_matthew_1,15,"Ἰακὼβ δὲ ἐγέννησεν τὸν Ἰωσὴφ τὸν ἄνδρα Μαρίας, ἐξ ἧς ἐγεννήθη ˚Ἰησοῦς, ὁ λεγόμενος ˚Χριστός.",182.150,182.215,-0.065,0.065
+greek_matthew_1,16,"¶Πᾶσαι οὖν αἱ γενεαὶ ἀπὸ Ἀβραὰμ ἕως Δαυὶδ γενεαὶ δεκατέσσαρες, καὶ ἀπὸ Δαυὶδ ἕως τῆς μετοικεσίας Βαβυλῶνος γενεαὶ δεκατέσσαρες, καὶ ἀπὸ τῆς μετοικεσίας Βαβυλῶνος ἕως τοῦ ˚Χριστοῦ γενεαὶ δεκατέσσαρες.",195.130,195.224,-0.094,0.094
+greek_matthew_1,17,"¶Τοῦ δὲ ˚Ἰησοῦ ˚Χριστοῦ ἡ γένεσις οὕτως ἦν: μνηστευθείσης τῆς μητρὸς αὐτοῦ Μαρίας τῷ Ἰωσήφ, πρὶν ἢ συνελθεῖν αὐτοὺς, εὑρέθη ἐν γαστρὶ ἔχουσα ἐκ ˚Πνεύματος Ἁγίου.",218.790,218.924,-0.134,0.134
+greek_matthew_1,18,"Ἰωσὴφ δὲ ὁ ἀνὴρ αὐτῆς, δίκαιος ὢν καὶ μὴ θέλων αὐτὴν δειγματίσαι, ἐβουλήθη λάθρᾳ ἀπολῦσαι αὐτήν.",240.890,241.098,-0.208,0.208
+greek_matthew_1,19,"Ταῦτα δὲ αὐτοῦ ἐνθυμηθέντος, ἰδοὺ, ἄγγελος ˚Κυρίου κατʼ ὄναρ ἐφάνη αὐτῷ λέγων, “Ἰωσὴφ, υἱὸς Δαυίδ, μὴ φοβηθῇς παραλαβεῖν Μαριὰμ τὴν γυναῖκά σου, τὸ γὰρ ἐν αὐτῇ γεννηθὲν ἐκ ˚Πνεύματός ἐστιν Ἁγίου.",254.070,254.217,-0.147,0.147
+greek_matthew_1,20,"Τέξεται δὲ υἱὸν, καὶ καλέσεις τὸ ὄνομα αὐτοῦ ˚Ἰησοῦν, αὐτὸς γὰρ σώσει τὸν λαὸν αὐτοῦ ἀπὸ τῶν ἁμαρτιῶν αὐτῶν.”",278.410,278.570,-0.160,0.160
+greek_matthew_1,21,"Τοῦτο δὲ ὅλον γέγονεν, ἵνα πληρωθῇ τὸ ῥηθὲν ὑπὸ ˚Κυρίου διὰ τοῦ προφήτου λέγοντος,",292.790,292.957,-0.167,0.167
+greek_matthew_1,22,"“Ἰδοὺ, ἡ παρθένος ἐν γαστρὶ ἕξει καὶ τέξεται υἱόν, καὶ καλέσουσιν τὸ ὄνομα αὐτοῦ Ἐμμανουήλ”, ὅ ἐστιν μεθερμηνευόμενον, “Μεθʼ ἡμῶν ὁ ˚Θεός”.",301.750,301.920,-0.170,0.170
+greek_matthew_1,23,"Ἐγερθεὶς δὲ ὁ Ἰωσὴφ ἀπὸ τοῦ ὕπνου, ἐποίησεν ὡς προσέταξεν αὐτῷ ὁ ἄγγελος ˚Κυρίου, καὶ παρέλαβεν τὴν γυναῖκα αὐτοῦ,",318.330,318.434,-0.104,0.104
+greek_matthew_1,24,"καὶ οὐκ ἐγίνωσκεν αὐτὴν ἕως οὗ ἔτεκεν υἱόν· καὶ ἐκάλεσεν τὸ ὄνομα αὐτοῦ, ˚Ἰησοῦν.",330.190,330.415,-0.225,0.225
+hebrew_exodus_1,0,"וְאֵלֶּה שְׁמוֹת בְּנֵי יִשְׂרָאֵל הַבָּאִים מִצְרָיְמָה אֵת יַעֲקֹב אִישׁ וּבֵיתוֹ בָּאוּ׃",0.610,0.360,0.250,0.250
+hebrew_exodus_1,1,"רְאוּבֵן שִׁמְעוֹן לֵוִי וִיהוּדָה׃",9.650,9.468,0.182,0.182
+hebrew_exodus_1,2,"יִשָּׂשכָר זְבוּלֻן וּבִנְיָמִן׃",13.810,13.729,0.081,0.081
+hebrew_exodus_1,3,"דָּן וְנַפְתָּלִי גָּד וְאָשֵׁר׃",17.690,17.550,0.140,0.140
+hebrew_exodus_1,4,"וַיְהִי כָּל־נֶפֶשׁ יֹצְאֵי יֶרֶךְ־יַעֲקֹב שִׁבְעִים נָפֶשׁ וְיוֹסֵף הָיָה בְמִצְרָיִם׃",21.890,21.715,0.175,0.175
+hebrew_exodus_1,5,"וַיָּמָת יוֹסֵף וְכָל־אֶחָיו וְכָל־הַדּוֹר ה ההוּא׃",31.010,30.925,0.085,0.085
+hebrew_exodus_1,6,"וּבְנֵי יִשְׂרָאֵל פָּרוּ וַיִּשְׁרְצוּ וַיִּרְבּוּ וַיַּעַצְמוּ בִּמְאֹד מְאֹד וַתִּמָּלֵא הָאָרֶץ אֹתָם׃",36.530,36.411,0.119,0.119
+hebrew_exodus_1,7,"וַיָּקָם מֶלֶךְ־חָדָשׁ עַל־מִצְרָיִם אֲשֶׁר לֹא־יָדַע אֶת־יוֹסֵף׃",47.750,47.622,0.128,0.128
+hebrew_exodus_1,8,"וַיֹּאמֶר אֶל־עַמּוֹ הִנֵּה עַם בְּנֵי יִשְׂרָאֵל רַב וְעָצוּם מִמֶּנּוּ׃",54.710,54.586,0.124,0.124
+hebrew_exodus_1,9,"הָבָה נִתְחַכְּמָה לוֹ פֶּן־יִרְבֶּה וְהָיָה כִּי־תִקְרֶאנָה מִלְחָמָה וְנוֹסַף גַּם־הוּא עַל־שֹׂנְאֵינוּ וְנִלְחַם־בָּנוּ וְעָלָה מִן־הָאָרֶץ׃",62.690,62.656,0.034,0.034
+hebrew_exodus_1,10,"וַיָּשִׂימוּ עָלָיו שָׂרֵי מִסִּים לְמַעַן עַנֹּתוֹ בְּסִבְלֹתָם וַיִּבֶן עָרֵי מִסְכְּנוֹת לְפַרְעֹה אֶת־פִּתֹם וְאֶת־רַעַמְסֵס׃",75.870,75.753,0.117,0.117
+hebrew_exodus_1,11,"וְכַאֲשֶׁר יְעַנּוּ אֹתוֹ כֵּן יִרְבֶּה וְכֵן יִפְרֹץ וַיָּקֻצוּ מִפְּנֵי בְּנֵי יִשְׂרָאֵל׃",88.790,88.653,0.137,0.137
+hebrew_exodus_1,12,"וַיַּעֲבִדוּ מִצְרַיִם אֶת־בְּנֵי יִשְׂרָאֵל בְּפָרֶךְ׃",98.490,98.405,0.085,0.085
+hebrew_exodus_1,13,"וַיְמָרְרוּ אֶת־חַיֵּיהֶם בַּעֲבֹדָה קָשָׁה בְּחֹמֶר וּבִלְבֵנִים וּבְכָל־עֲבֹדָה בַּשָּׂדֶה אֵת כָּל־עֲבֹדָתָם אֲשֶׁר־עָבְדוּ בָהֶם בְּפָרֶךְ׃",103.870,103.802,0.068,0.068
+hebrew_exodus_1,14,"וַיֹּאמֶר מֶלֶךְ מִצְרַיִם לַמְיַלְּדֹת הָעִבְרִיֹּת אֲשֶׁר שֵׁם הָאַחַת שִׁפְרָה וְשֵׁם הַשֵּׁנִית פּוּעָה׃",117.890,117.813,0.077,0.077
+hebrew_exodus_1,15,"וַיֹּאמֶר בְּיַלֶּדְכֶן אֶת־הָעִבְרִיּוֹת וּרְאִיתֶן עַל־הָאָבְנָיִם אִם־בֵּן הוּא וַהֲמִתֶּן אֹתוֹ וְאִם־בַּת הִוא וָחָיָה׃",128.030,127.992,0.038,0.038
+hebrew_exodus_1,16,"וַתִּירֶאןָ הַמְיַלְּדֹת אֶת־הָאֱלֹהִים וְלֹא עָשׂוּ כַּאֲשֶׁר דִּבֶּר אֲלֵיהֶן מֶלֶךְ מִצְרָיִם וַתְּחַיֶּינָה אֶת־הַיְלָדִים׃",141.430,141.345,0.085,0.085
+hebrew_exodus_1,17,"וַיִּקְרָא מֶלֶךְ־מִצְרַיִם לַמְיַלְּדֹת וַיֹּאמֶר לָהֶן מַדּוּעַ עֲשִׂיתֶן הַדָּבָר הַזֶּה וַתְּחַיֶּינָה אֶת־הַיְלָדִים׃",153.450,153.430,0.020,0.020
+hebrew_exodus_1,18,"וַתֹּאמַרְןָ הַמְיַלְּדֹת אֶל־פַּרְעֹה כִּי לֹא כַנָּשִׁים הַמִּצְרִיֹּת הָעִבְרִיֹּת כִּי־חָיוֹת הֵנָּה בְּטֶרֶם תָּבוֹא אֲלֵהֶן הַמְיַלֶּדֶת וְיָלָדוּ׃",164.510,164.469,0.041,0.041
+hebrew_exodus_1,19,"וַיֵּיטֶב אֱלֹהִים לַמְיַלְּדֹת וַיִּרֶב הָעָם וַיַּעַצְמוּ מְאֹד׃",178.270,178.205,0.065,0.065
+hebrew_exodus_1,20,"וַיְהִי כִּי־יָרְאוּ הַמְיַלְּדֹת אֶת־הָאֱלֹהִים וַיַּעַשׂ לָהֶם בָּתִּים׃",185.650,185.575,0.075,0.075
+hebrew_exodus_1,21,"וַיְצַו פַּרְעֹה לְכָל־עַמּוֹ לֵאמֹר כָּל־הַבֵּן הַיִּלּוֹד הַיְאֹרָה תַּשְׁלִיכֻהוּ וְכָל־הַבַּת תְּחַיּוּן׃",193.090,193.044,0.046,0.046

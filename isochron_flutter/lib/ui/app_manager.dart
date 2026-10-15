@@ -14,33 +14,18 @@ import 'package:path/path.dart' as p;
 import 'models/app_state.dart';
 import '../services/alignment_service.dart';
 import '../services/audio_service.dart';
-import '../services/claim_service.dart';
-import '../services/pins_service.dart';
 
 class AppManager extends ValueNotifier<AppState> {
   final AudioService _audioService = AudioService();
   final AlignmentService _alignmentService = AlignmentService();
-  final PinsService _pinsService = PinsService();
-  final ClaimService _claimService = ClaimService();
   final _settings = UserSettingsService();
   VoidCallback? onSaveCallback;
-  String? _currentClaimedPath;
-  String? _currentLoadedTrackPath;
 
   // Callback to notify that a track has completed alignment in the background
   void Function(String trackId, List<Fragment> fragments)?
   onBackgroundAlignmentComplete;
 
   final playbackPosition = ValueNotifier(Duration.zero);
-
-  Map<int, ({double start, double end})>? _lastSavedPins;
-
-  static Map<int, ({double start, double end})> _buildPinsSnapshot(
-    List<Fragment> frags,
-  ) => {
-    for (final f in frags.where((f) => f.isPinned))
-      f.index: (start: f.pinnedStart!, end: f.pinnedEnd!),
-  };
 
   AppManager() : super(AppState(zoomLevel: UserSettingsService().lastZoom)) {
     _audioService.positionStream.listen((pos) {
@@ -53,14 +38,11 @@ class AppManager extends ValueNotifier<AppState> {
 
   @override
   void dispose() {
-    releaseCurrentClaim();
     _audioService.dispose();
     super.dispose();
   }
 
   Future<void> loadTrack(Track track, Project project) async {
-    _lastSavedPins = null;
-
     if (value.isPlaying) {
       await _audioService.pause();
     }
@@ -92,66 +74,20 @@ class AppManager extends ValueNotifier<AppState> {
       project.directoryPath,
       folderName,
     );
-    _currentLoadedTrackPath = absJsonPath;
-
-    // Release any previous claim if switching tracks
-    if (_currentClaimedPath != null && _currentClaimedPath != absJsonPath) {
-      await _claimService.releaseClaim(_currentClaimedPath!);
-      _currentClaimedPath = null;
-    }
-
-    // Check soft-lock claim status
-    final existingClaim = await _claimService.getClaim(absJsonPath);
-    final currentUser = _settings.collaboratorName;
-    bool isReadOnly = false;
-    ClaimInfo? activeClaim;
-
-    if (existingClaim != null &&
-        !_claimService.isClaimedByMe(existingClaim, currentUser)) {
-      isReadOnly = true;
-      activeClaim = existingClaim;
-      debugPrint(
-        '[CLAIM] Track ${track.name} is claimed by ${existingClaim.user}. Opening in read-only.',
-      );
-    } else {
-      await _claimService.acquireClaim(absJsonPath, user: currentUser);
-      _currentClaimedPath = absJsonPath;
-    }
 
     final playbackPath = await _ensureWavForPlayback(resolvedAudio);
     final duration = await _audioService.load(playbackPath);
 
     List<Fragment> loadedFragments = [];
     if (await File(absJsonPath).exists()) {
-      final content = await File(absJsonPath).readAsString();
-      final List<dynamic> jsonList = jsonDecode(content);
-      loadedFragments = jsonList
-          .map(
-            (j) =>
-                Fragment(index: j['index'], id: j['id'], text: j['text'])
-                  ..setRealTiming(
-                    start: (j['start'] as num).toDouble(),
-                    end: (j['end'] as num).toDouble(),
-                  ),
-          )
-          .toList();
-
-      await _pinsService.load(absJsonPath, loadedFragments);
-      _lastSavedPins = _buildPinsSnapshot(loadedFragments);
-    }
-
-    final actualDictPath = project.dictPath ?? value.dictPath;
-    Map<String, String>? rules = value.transliterationRules;
-
-    if (actualDictPath != null &&
-        rules == null &&
-        await File(actualDictPath).exists()) {
       try {
-        final jsonString = await File(actualDictPath).readAsString();
-        final Map<String, dynamic> rawMap = jsonDecode(jsonString);
-        rules = rawMap.map((k, v) => MapEntry(k, v.toString()));
+        final content = await File(absJsonPath).readAsString();
+        final List<dynamic> jsonList = jsonDecode(content);
+        loadedFragments = jsonList
+            .map((j) => Fragment.fromJson(j as Map<String, dynamic>))
+            .toList();
       } catch (e) {
-        debugPrint("Failed to load dict: $e");
+        debugPrint('[LOAD] Failed to parse existing alignment JSON: $e');
       }
     }
 
@@ -168,21 +104,14 @@ class AppManager extends ValueNotifier<AppState> {
     value = value.copyWith(
       audioPath: resolvedAudio,
       textPath: resolvedText,
-      dictPath: actualDictPath,
-      transliterationRules: rules,
       autoSavePath: absJsonPath,
       fragments: loadedFragments,
       hasIds: effectiveHasIds,
       audioDuration: duration,
-      statusMessage: isReadOnly
-          ? "Viewing ${track.name} (Read-Only: in progress by ${activeClaim?.user})"
-          : "Loaded ${track.name}",
+      statusMessage: "Loaded ${track.name}",
       hasUnsavedChanges: false,
       clearWaveform: true,
       clearFocus: true,
-      isReadOnly: isReadOnly,
-      activeClaim: activeClaim,
-      clearClaim: activeClaim == null,
     );
     playbackPosition.value = Duration.zero;
 
@@ -193,76 +122,7 @@ class AppManager extends ValueNotifier<AppState> {
     }
   }
 
-  /// Takes over an existing claim from another collaborator.
-  Future<void> takeOverClaim(Track track, Project project) async {
-    final collection = project.collections.firstWhere(
-      (c) => c.id == track.collectionId,
-      orElse: () => Collection(id: track.collectionId, name: 'Default'),
-    );
-    final absJsonPath = track.getAbsoluteOutputPath(
-      project.directoryPath,
-      collection.folderName,
-    );
-    final currentUser = _settings.collaboratorName;
-    await _claimService.acquireClaim(absJsonPath, user: currentUser);
-    _currentClaimedPath = absJsonPath;
-    value = value.copyWith(
-      isReadOnly: false,
-      clearClaim: true,
-      statusMessage: "Claim acquired by $currentUser",
-    );
-  }
-
-  /// Releases any active claim held by this manager.
-  Future<void> releaseCurrentClaim() async {
-    if (_currentClaimedPath != null) {
-      await _claimService.releaseClaim(_currentClaimedPath!);
-      _currentClaimedPath = null;
-    }
-    _currentLoadedTrackPath = null;
-    value = value.copyWith(isReadOnly: false, clearClaim: true);
-  }
-
-  /// Checks whether the claim on the current track has been released or modified remotely.
-  Future<void> checkCurrentClaim() async {
-    if (_currentLoadedTrackPath == null) return;
-    final claim = await _claimService.getClaim(_currentLoadedTrackPath!);
-    final currentUser = _settings.collaboratorName;
-
-    if (claim == null) {
-      if (value.isReadOnly) {
-        value = value.copyWith(
-          isReadOnly: false,
-          clearClaim: true,
-          statusMessage: "Claim released by remote collaborator",
-        );
-      }
-    } else if (!_claimService.isClaimedByMe(claim, currentUser)) {
-      if (!value.isReadOnly || value.activeClaim?.user != claim.user) {
-        value = value.copyWith(
-          isReadOnly: true,
-          activeClaim: claim,
-          statusMessage: "Viewing (Read-Only: claimed by ${claim.user})",
-        );
-      }
-    } else {
-      if (value.isReadOnly) {
-        value = value.copyWith(
-          isReadOnly: false,
-          clearClaim: true,
-        );
-      }
-    }
-  }
-
   Future<void> saveProject() async {
-    if (value.isReadOnly) {
-      value = value.copyWith(
-        statusMessage:
-            "Cannot save: Track is in Read-Only mode (in progress by ${value.activeClaim?.user ?? 'another collaborator'}).",
-      );
-      return;
-    }
     if (value.autoSavePath == null) {
       return exportJson();
     }
@@ -272,18 +132,7 @@ class AppManager extends ValueNotifier<AppState> {
     try {
       value = value.copyWith(statusMessage: "Saving...");
 
-      final List<Map<String, dynamic>> jsonList = value.fragments
-          .map(
-            (f) => {
-              'index': f.index,
-              if (f.id != null) 'id': f.id,
-              'text': f.text,
-              'start': double.parse(f.realStart.toStringAsFixed(3)),
-              'end': double.parse(f.realEnd.toStringAsFixed(3)),
-            },
-          )
-          .toList();
-
+      final jsonList = value.fragments.map((f) => f.toJson()).toList();
       final jsonString = const JsonEncoder.withIndent('  ').convert(jsonList);
 
       final outFile = File(value.autoSavePath!);
@@ -291,9 +140,6 @@ class AppManager extends ValueNotifier<AppState> {
         await outFile.parent.create(recursive: true);
       }
       await outFile.writeAsString(jsonString);
-
-      await savePinsFile();
-      _lastSavedPins = _buildPinsSnapshot(value.fragments);
 
       value = value.copyWith(statusMessage: "Saved.", hasUnsavedChanges: false);
       onSaveCallback?.call();
@@ -303,112 +149,63 @@ class AppManager extends ValueNotifier<AppState> {
   }
 
   Future<void> discardChanges() async {
-    final frags = List<Fragment>.from(value.fragments);
-    final snapshot = _lastSavedPins ?? {};
-
-    for (final f in frags) {
-      final saved = snapshot[f.index];
-      if (saved != null) {
-        f.setPinnedTiming(start: saved.start, end: saved.end);
-      } else {
-        f.clearPinnedTiming();
+    if (value.autoSavePath != null && await File(value.autoSavePath!).exists()) {
+      try {
+        final content = await File(value.autoSavePath!).readAsString();
+        final List<dynamic> jsonList = jsonDecode(content);
+        final loaded = jsonList
+            .map((j) => Fragment.fromJson(j as Map<String, dynamic>))
+            .toList();
+        value = value.copyWith(fragments: loaded, hasUnsavedChanges: false);
+      } catch (e) {
+        debugPrint('[DISCARD] Failed to reload saved alignment: $e');
+        value = value.copyWith(hasUnsavedChanges: false);
       }
+    } else {
+      value = value.copyWith(hasUnsavedChanges: false);
     }
-
-    if (value.autoSavePath != null) {
-      await _pinsService.save(value.autoSavePath!, frags);
-    }
-
-    value = value.copyWith(fragments: frags, hasUnsavedChanges: false);
   }
 
   Future<void> runAlignment({
     required String trackId,
-    String snapMode = 'onset',
-    int snapOffsetMs = 0,
+    String? languageCode,
+    double leadInSeconds = 0.17,
   }) async {
     if (value.audioPath == null || value.textPath == null) return;
 
-    // Capture the target context before starting async work
     final String initiatingTrackId = trackId;
     final String initiatingAudioPath = value.audioPath!;
     final String initiatingTextPath = value.textPath!;
     final String? initiatingSavePath = value.autoSavePath;
-    final String? initiatingDictPath = value.dictPath;
     final bool initiatingHasIds = value.hasIds;
+
+    // Write backup file if alignment output already exists
+    if (initiatingSavePath != null && await File(initiatingSavePath).exists()) {
+      try {
+        await File(initiatingSavePath).copy('$initiatingSavePath.bak');
+        debugPrint('[BACKUP] Created alignment backup at $initiatingSavePath.bak');
+      } catch (_) {}
+    }
 
     value = value.copyWith(
       isProcessing: true,
       progress: 0.0,
-      statusMessage: "Starting...",
+      statusMessage: "Starting MMS neural aligner...",
     );
 
-    File? tempCleanTextFile;
-    List<String> extractedIds = [];
-
     try {
-      String actualTextPath = initiatingTextPath;
-
-      if (initiatingHasIds) {
-        value = value.copyWith(statusMessage: "Preprocessing text...");
-
-        final lines = await File(initiatingTextPath).readAsLines();
-        final cleanLines = <String>[];
-
-        for (var line in lines) {
-          if (line.trim().isEmpty) continue;
-
-          final parsed = extractIdFromLine(line);
-          if (parsed.hasId) {
-            extractedIds.add(parsed.id);
-            cleanLines.add(parsed.content);
-          } else {
-            extractedIds.add("");
-            cleanLines.add(line);
-          }
-        }
-
-        final tempDir = await getTemporaryDirectory();
-        tempCleanTextFile = File(p.join(tempDir.path, 'clean_transcript.txt'));
-        await tempCleanTextFile.writeAsString(cleanLines.join('\n'));
-
-        actualTextPath = tempCleanTextFile.path;
-      }
-
-      final String? activePinsPath = initiatingSavePath == null
-          ? null
-          : PinsService.pinsPath(initiatingSavePath);
-      final passPins =
-          activePinsPath != null && await File(activePinsPath).exists();
-
-      List<Fragment> fragments = await _alignmentService.runIsochron(
-        textPath: actualTextPath,
+      final fragments = await _alignmentService.align(
+        textPath: initiatingTextPath,
         audioPath: initiatingAudioPath,
-        dictPath: initiatingDictPath,
-        pinsPath: passPins ? activePinsPath : null,
-        snapMode: snapMode,
-        snapOffsetMs: snapOffsetMs,
+        languageCode: languageCode,
+        leadInSeconds: leadInSeconds,
+        hasIds: initiatingHasIds,
         onProgress: (status, prog) {
-          // Only update UI progress if user is still actively viewing the initiating track
           if (value.autoSavePath == initiatingSavePath) {
             value = value.copyWith(statusMessage: status, progress: prog);
           }
         },
       );
-
-      if (initiatingHasIds && extractedIds.isNotEmpty) {
-        final mergedFragments = <Fragment>[];
-
-        for (int i = 0; i < fragments.length; i++) {
-          String? id;
-          if (i < extractedIds.length) {
-            id = extractedIds[i];
-          }
-
-          mergedFragments.add(fragments[i].copyWith(id: id));
-        }
-        fragments = mergedFragments;
-      }
 
       final bool isStillActive = (value.autoSavePath == initiatingSavePath);
 
@@ -417,46 +214,18 @@ class AppManager extends ValueNotifier<AppState> {
           await _generateWaveform(initiatingAudioPath);
         }
 
-        final previousFragments = value.fragments;
-        bool hasAlignmentChanges = previousFragments.length != fragments.length;
-        if (!hasAlignmentChanges) {
-          for (int i = 0; i < fragments.length; i++) {
-            final oldFrag = previousFragments[i];
-            final newFrag = fragments[i];
-            if (oldFrag.realStart != newFrag.realStart ||
-                oldFrag.realEnd != newFrag.realEnd ||
-                oldFrag.id != newFrag.id) {
-              hasAlignmentChanges = true;
-              break;
-            }
-          }
-        }
-
         value = value.copyWith(
           fragments: fragments,
           statusMessage: "Done.",
           progress: 1.0,
           isProcessing: false,
-          hasUnsavedChanges: hasAlignmentChanges || value.hasUnsavedChanges,
+          hasUnsavedChanges: true,
         );
       } else {
         // Track has changed (Background alignment completed). Write results directly to its JSON output.
         if (initiatingSavePath != null) {
-          final List<Map<String, dynamic>> jsonList = fragments
-              .map(
-                (f) => {
-                  'index': f.index,
-                  if (f.id != null) 'id': f.id,
-                  'text': f.text,
-                  'start': double.parse(f.realStart.toStringAsFixed(3)),
-                  'end': double.parse(f.realEnd.toStringAsFixed(3)),
-                },
-              )
-              .toList();
-
-          final jsonString = const JsonEncoder.withIndent(
-            '  ',
-          ).convert(jsonList);
+          final jsonList = fragments.map((f) => f.toJson()).toList();
+          final jsonString = const JsonEncoder.withIndent('  ').convert(jsonList);
           final outFile = File(initiatingSavePath);
           if (!await outFile.parent.exists()) {
             await outFile.parent.create(recursive: true);
@@ -468,17 +237,12 @@ class AppManager extends ValueNotifier<AppState> {
         }
       }
 
-      // Fire completion callback so parent can update track list status indicators
       onBackgroundAlignmentComplete?.call(initiatingTrackId, fragments);
     } catch (e) {
       if (value.autoSavePath == initiatingSavePath) {
         value = value.copyWith(isProcessing: false, statusMessage: "Error: $e");
       }
-      throw Exception(e.toString());
-    } finally {
-      if (tempCleanTextFile != null && await tempCleanTextFile.exists()) {
-        await tempCleanTextFile.delete();
-      }
+      rethrow;
     }
   }
 
@@ -544,55 +308,6 @@ class AppManager extends ValueNotifier<AppState> {
     hoveredFragmentIndex = idx;
   }
 
-  String? get _pinsPath => value.autoSavePath == null
-      ? null
-      : PinsService.pinsPath(value.autoSavePath!);
-
-  Future<void> savePinsFile() async {
-    if (value.isReadOnly) return;
-    final path = _pinsPath;
-    if (path == null) return;
-    await _pinsService.save(value.autoSavePath!, value.fragments);
-  }
-
-  void toggleFragmentPin(int index) async {
-    if (value.isReadOnly) return;
-    final frags = List<Fragment>.from(value.fragments);
-    if (index < 0 || index >= frags.length) return;
-
-    final frag = frags[index];
-    if (frag.isPinned) {
-      frag.clearPinnedTiming();
-      debugPrint('[PIN] Fragment $index unlocked');
-    } else {
-      frag.setPinnedTiming(start: frag.realStart, end: frag.realEnd);
-      debugPrint(
-        '[PIN] Fragment $index locked at ${frag.realStart.toStringAsFixed(3)}–${frag.realEnd.toStringAsFixed(3)}',
-      );
-    }
-
-    value = value.copyWith(fragments: frags, hasUnsavedChanges: true);
-    await savePinsFile();
-  }
-
-  void lockFragmentsUntil(int index) async {
-    if (value.isReadOnly) return;
-    final frags = List<Fragment>.from(value.fragments);
-    if (index < 0 || index >= frags.length) return;
-
-    for (int i = 0; i <= index; i++) {
-      final frag = frags[i];
-
-      frag.setPinnedTiming(start: frag.realStart, end: frag.realEnd);
-      debugPrint(
-        '[PIN] Fragment $index locked at ${frag.realStart.toStringAsFixed(3)}–${frag.realEnd.toStringAsFixed(3)}',
-      );
-    }
-
-    value = value.copyWith(fragments: frags, hasUnsavedChanges: true);
-    await savePinsFile();
-  }
-
   Future<void> _generateWaveform(String audioPath) async {
     try {
       final tempDir = await getTemporaryDirectory();
@@ -640,23 +355,14 @@ class AppManager extends ValueNotifier<AppState> {
     try {
       value = value.copyWith(statusMessage: "Exporting...");
 
-      final List<Map<String, dynamic>> jsonList = value.fragments
-          .map(
-            (f) => {
-              'index': f.index,
-              if (f.id != null) 'id': f.id,
-              'text': f.text,
-              'start': double.parse(f.realStart.toStringAsFixed(3)),
-              'end': double.parse(f.realEnd.toStringAsFixed(3)),
-            },
-          )
-          .toList();
-
+      final jsonList = value.fragments.map((f) => f.toJson()).toList();
       final jsonString = const JsonEncoder.withIndent('  ').convert(jsonList);
-      await File(outputFile).writeAsString(jsonString);
+
+      final file = File(outputFile);
+      await file.writeAsString(jsonString);
 
       value = value.copyWith(
-        statusMessage: "Saved to ${p.basename(outputFile)}",
+        statusMessage: "Exported successfully to: ${p.basename(outputFile)}",
       );
     } catch (e) {
       value = value.copyWith(statusMessage: "Export failed: $e");
@@ -674,7 +380,6 @@ class AppManager extends ValueNotifier<AppState> {
   }
 
   void updateFragment(int index, double newStart, double newEnd) {
-    if (value.isReadOnly) return;
     final frags = List<Fragment>.from(value.fragments);
     final duration = value.audioDuration.inMilliseconds / 1000.0;
 
@@ -689,7 +394,15 @@ class AppManager extends ValueNotifier<AppState> {
       }
     }
 
-    frags[index].setRealTiming(start: s, end: e);
+    final oldFrag = frags[index];
+    final autoStart = oldFrag.autoStart ?? oldFrag.realStart;
+
+    frags[index] = oldFrag.copyWith(
+      realStart: s,
+      realEnd: e,
+      autoStart: autoStart,
+      status: FragmentStatus.edited,
+    );
 
     Fragment? prevTimed;
     for (int i = index - 1; i >= 0; i--) {
@@ -718,6 +431,49 @@ class AppManager extends ValueNotifier<AppState> {
     }
 
     value = value.copyWith(fragments: frags, hasUnsavedChanges: true);
+  }
+
+  /// Nudges the active boundary by [deltaSeconds] and auto-replays from boundary - 0.5s.
+  void nudgeActiveBoundary(double deltaSeconds) {
+    final idx = value.selectedFragmentIndex;
+    if (idx == null || idx < 0 || idx >= value.fragments.length) return;
+    final frag = value.fragments[idx];
+    final newStart = frag.realStart + deltaSeconds;
+    updateFragment(idx, newStart, frag.realEnd);
+
+    // Auto-replay from boundary - 0.5s per Listen-and-Nudge design
+    final replayMs = ((newStart - 0.5) * 1000).clamp(0.0, double.infinity).toInt();
+    seekTo(Duration(milliseconds: replayMs));
+    if (!value.isPlaying) {
+      _audioService.play();
+    }
+  }
+
+  /// Plays boundary snippet: boundary - 1.5s -> boundary + 1.5s
+  void playBoundarySnippet() {
+    final idx = value.selectedFragmentIndex;
+    if (idx == null || idx < 0 || idx >= value.fragments.length) return;
+    final frag = value.fragments[idx];
+    final snippetStartMs = ((frag.realStart - 1.5) * 1000).clamp(0.0, double.infinity).toInt();
+    seekTo(Duration(milliseconds: snippetStartMs));
+    if (!value.isPlaying) {
+      _audioService.play();
+    }
+  }
+
+  /// Marks verse as reviewed and advances to next verse.
+  void markReviewedAndAdvance() {
+    final idx = value.selectedFragmentIndex;
+    if (idx == null || idx < 0 || idx >= value.fragments.length) return;
+    final frags = List<Fragment>.from(value.fragments);
+    frags[idx] = frags[idx].copyWith(status: FragmentStatus.reviewed);
+
+    final nextIndex = idx + 1 < frags.length ? idx + 1 : null;
+    value = value.copyWith(
+      fragments: frags,
+      hasUnsavedChanges: true,
+      selectedFragmentIndex: nextIndex,
+    );
   }
 
   Future<String> _ensureWavForPlayback(String originalPath) async {
@@ -762,43 +518,35 @@ class AppManager extends ValueNotifier<AppState> {
 
   Future<void> initManualAlignment() async {
     if (value.textPath == null) return;
-
     final lines = await File(value.textPath!).readAsLines();
-    List<Fragment> frags = [];
+    final frags = <Fragment>[];
     int idx = 0;
 
     for (var line in lines) {
       if (line.trim().isEmpty) continue;
-
       String? id;
-      String text = line;
+      String content = line;
 
       if (value.hasIds) {
-        final parsed = splitIdAndText(line);
-        if (parsed.id != null) {
-          id = parsed.id;
-          text = parsed.text;
-        } else {
-          id = "";
-          text = line;
-        }
+        final parsed = extractIdFromLine(line);
+        id = parsed.hasId ? parsed.id : null;
+        content = parsed.content;
       }
 
-      final f = Fragment(index: idx++, id: id, text: text);
-      f.setRealTiming(start: -1.0, end: -1.0);
-      frags.add(f);
+      frags.add(
+        Fragment(
+          index: idx++,
+          id: id,
+          text: content,
+          status: FragmentStatus.legacy,
+        )..setRealTiming(start: -1.0, end: -1.0),
+      );
     }
 
-    value = value.copyWith(
-      fragments: frags,
-      hasUnsavedChanges: false,
-      selectedFragmentIndex: 0,
-      statusMessage: "Manual Setup Complete. Ready to capture.",
-    );
+    value = value.copyWith(fragments: frags, hasUnsavedChanges: false);
   }
 
   void clearFragmentTiming(int index) {
-    if (value.isReadOnly) return;
     final frags = List<Fragment>.from(value.fragments);
     final duration = value.audioDuration.inMilliseconds / 1000.0;
 
@@ -822,14 +570,16 @@ class AppManager extends ValueNotifier<AppState> {
       prevTimed.setRealTiming(start: prevTimed.realStart, end: newEnd);
     }
 
-    frags[index].setRealTiming(start: -1.0, end: -1.0);
-    frags[index].clearPinnedTiming();
+    frags[index] = frags[index].copyWith(
+      realStart: -1.0,
+      realEnd: -1.0,
+      status: FragmentStatus.edited,
+    );
 
     value = value.copyWith(fragments: frags, hasUnsavedChanges: true);
   }
 
   void captureFragmentTiming(BuildContext context, [int? specificIndex]) {
-    if (value.isReadOnly) return;
     final index = specificIndex ?? value.selectedFragmentIndex;
     if (index == null || index < 0 || index >= value.fragments.length) return;
 
@@ -886,7 +636,15 @@ class AppManager extends ValueNotifier<AppState> {
     }
 
     double endT = nextTimed != null ? nextTimed.realStart : duration;
-    frags[index].setRealTiming(start: t, end: endT);
+    final oldFrag = frags[index];
+    final autoStart = oldFrag.autoStart ?? (oldFrag.realStart >= 0 ? oldFrag.realStart : null);
+
+    frags[index] = oldFrag.copyWith(
+      realStart: t,
+      realEnd: endT,
+      autoStart: autoStart,
+      status: FragmentStatus.edited,
+    );
 
     if (prevTimed != null) {
       prevTimed.setRealTiming(start: prevTimed.realStart, end: t);

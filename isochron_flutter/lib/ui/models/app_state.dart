@@ -1,5 +1,4 @@
 import 'package:isochron_cli/isochron_cli.dart';
-import 'package:isochron_flutter/services/claim_service.dart';
 import 'package:just_waveform/just_waveform.dart';
 
 class AppState {
@@ -8,7 +7,6 @@ class AppState {
   final double progress;
   final String? audioPath;
   final String? textPath;
-  final String? dictPath;
   final bool hasIds;
   final List<Fragment> fragments;
   final Waveform? waveform;
@@ -18,10 +16,7 @@ class AppState {
   final int? focusedFragmentIndex;
   final String? autoSavePath;
   final bool hasUnsavedChanges;
-  final Map<String, String>? transliterationRules;
   final int? selectedFragmentIndex;
-  final bool isReadOnly;
-  final ClaimInfo? activeClaim;
 
   const AppState({
     this.isProcessing = false,
@@ -29,7 +24,6 @@ class AppState {
     this.progress = 0.0,
     this.audioPath,
     this.textPath,
-    this.dictPath,
     this.hasIds = false,
     this.fragments = const [],
     this.waveform,
@@ -39,10 +33,7 @@ class AppState {
     this.focusedFragmentIndex,
     this.autoSavePath,
     this.hasUnsavedChanges = false,
-    this.transliterationRules,
     this.selectedFragmentIndex,
-    this.isReadOnly = false,
-    this.activeClaim,
   });
 
   AppState copyWith({
@@ -51,7 +42,6 @@ class AppState {
     double? progress,
     String? audioPath,
     String? textPath,
-    String? dictPath,
     bool? hasIds,
     List<Fragment>? fragments,
     Waveform? waveform,
@@ -63,12 +53,8 @@ class AppState {
     bool clearFocus = false,
     String? autoSavePath,
     bool? hasUnsavedChanges,
-    Map<String, String>? transliterationRules,
     int? selectedFragmentIndex,
     bool clearSelection = false,
-    bool? isReadOnly,
-    ClaimInfo? activeClaim,
-    bool clearClaim = false,
   }) {
     return AppState(
       isProcessing: isProcessing ?? this.isProcessing,
@@ -76,7 +62,6 @@ class AppState {
       progress: progress ?? this.progress,
       audioPath: audioPath ?? this.audioPath,
       textPath: textPath ?? this.textPath,
-      dictPath: dictPath ?? this.dictPath,
       hasIds: hasIds ?? this.hasIds,
       fragments: fragments ?? this.fragments,
       waveform: clearWaveform ? null : (waveform ?? this.waveform),
@@ -88,12 +73,9 @@ class AppState {
           : (focusedFragmentIndex ?? this.focusedFragmentIndex),
       autoSavePath: autoSavePath ?? this.autoSavePath,
       hasUnsavedChanges: hasUnsavedChanges ?? this.hasUnsavedChanges,
-      transliterationRules: transliterationRules ?? this.transliterationRules,
       selectedFragmentIndex: clearSelection
           ? null
           : (selectedFragmentIndex ?? this.selectedFragmentIndex),
-      isReadOnly: isReadOnly ?? this.isReadOnly,
-      activeClaim: clearClaim ? null : (activeClaim ?? this.activeClaim),
     );
   }
 }

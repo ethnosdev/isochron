@@ -9,12 +9,10 @@ import 'components/studio_fragment_list.dart';
 
 class StudioEditor extends StatefulWidget {
   final AppManager homeManager;
-  final VoidCallback? onTakeOverClaim;
 
   const StudioEditor({
     super.key,
     required this.homeManager,
-    this.onTakeOverClaim,
   });
 
   @override
@@ -23,83 +21,6 @@ class StudioEditor extends StatefulWidget {
 
 class _StudioEditorState extends State<StudioEditor> {
   final ScrollController _waveScroll = ScrollController();
-
-  // --- Keyboard Action Handlers ---
-
-  void _handleNudge(double deltaSeconds) {
-    final state = widget.homeManager.value;
-    if (state.fragments.isEmpty) return;
-
-    final currentSec =
-        widget.homeManager.playbackPosition.value.inMilliseconds / 1000.0;
-
-    final activeIndex = state.fragments.indexWhere(
-      (f) => currentSec >= f.realStart && currentSec < f.realEnd,
-    );
-
-    if (activeIndex != -1) {
-      final frag = state.fragments[activeIndex];
-
-      // Distance to the boundary BEFORE the cursor
-      final distToStart = currentSec - frag.realStart;
-      // Distance to the boundary AFTER the cursor
-      final distToEnd = frag.realEnd - currentSec;
-
-      // If the playhead is sitting right on the UPCOMING timing (closer to the end,
-      // and within 0.5s of it), nudge that upcoming timing instead.
-      if (distToEnd < distToStart &&
-          distToEnd <= 0.5 &&
-          activeIndex + 1 < state.fragments.length) {
-        final nextFrag = state.fragments[activeIndex + 1];
-        widget.homeManager.updateFragment(
-          activeIndex + 1,
-          nextFrag.realStart + deltaSeconds,
-          nextFrag.realEnd,
-        );
-        return;
-      }
-
-      // Normally, move the timing BEFORE the cursor (the start of the current fragment)
-      widget.homeManager.updateFragment(
-        activeIndex,
-        frag.realStart + deltaSeconds,
-        frag.realEnd,
-      );
-    }
-  }
-
-  void _handleLockUntil() {
-    final state = widget.homeManager.value;
-    final idx =
-        widget.homeManager.hoveredFragmentIndex ??
-        state.focusedFragmentIndex ??
-        _getActivePlayheadIndex() ??
-        state.selectedFragmentIndex;
-    if (idx != null) widget.homeManager.lockFragmentsUntil(idx);
-  }
-
-  void _handleTogglePin() {
-    final state = widget.homeManager.value;
-    final idx =
-        widget.homeManager.hoveredFragmentIndex ??
-        state.focusedFragmentIndex ??
-        _getActivePlayheadIndex() ??
-        state.selectedFragmentIndex;
-    if (idx != null) widget.homeManager.toggleFragmentPin(idx);
-  }
-
-  int? _getActivePlayheadIndex() {
-    final state = widget.homeManager.value;
-    final currentSec =
-        widget.homeManager.playbackPosition.value.inMilliseconds / 1000.0;
-    final idx = state.fragments.indexWhere(
-      (f) =>
-          f.realStart >= 0 &&
-          currentSec >= f.realStart &&
-          currentSec < f.realEnd,
-    );
-    return idx != -1 ? idx : null;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -116,16 +37,43 @@ class _StudioEditorState extends State<StudioEditor> {
         const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
             widget.homeManager.skipToPrevious(),
 
-        // Nudge Timings (Cmd + Arrows)
+        // Listen-and-Nudge Timings (Cmd + Arrows): 50ms
         const SingleActivator(LogicalKeyboardKey.arrowRight, meta: true): () =>
-            _handleNudge(0.15),
+            widget.homeManager.nudgeActiveBoundary(0.050),
         const SingleActivator(LogicalKeyboardKey.arrowLeft, meta: true): () =>
-            _handleNudge(-0.15),
+            widget.homeManager.nudgeActiveBoundary(-0.050),
 
-        // Pinning (L / Shift + L)
-        const SingleActivator(LogicalKeyboardKey.keyL): _handleLockUntil,
-        const SingleActivator(LogicalKeyboardKey.keyL, shift: true):
-            _handleTogglePin,
+        // Fine Nudge (Cmd + Opt + Arrows): 10ms
+        const SingleActivator(
+          LogicalKeyboardKey.arrowRight,
+          meta: true,
+          alt: true,
+        ): () => widget.homeManager.nudgeActiveBoundary(0.010),
+        const SingleActivator(
+          LogicalKeyboardKey.arrowLeft,
+          meta: true,
+          alt: true,
+        ): () => widget.homeManager.nudgeActiveBoundary(-0.010),
+
+        // Coarse Nudge (Cmd + Shift + Arrows): 250ms
+        const SingleActivator(
+          LogicalKeyboardKey.arrowRight,
+          meta: true,
+          shift: true,
+        ): () => widget.homeManager.nudgeActiveBoundary(0.250),
+        const SingleActivator(
+          LogicalKeyboardKey.arrowLeft,
+          meta: true,
+          shift: true,
+        ): () => widget.homeManager.nudgeActiveBoundary(-0.250),
+
+        // Boundary snippet playback (B)
+        const SingleActivator(LogicalKeyboardKey.keyB): () =>
+            widget.homeManager.playBoundarySnippet(),
+
+        // Mark Reviewed & Advance (R)
+        const SingleActivator(LogicalKeyboardKey.keyR): () =>
+            widget.homeManager.markReviewedAndAdvance(),
 
         // Capture Timing (Enter)
         const SingleActivator(LogicalKeyboardKey.enter): () =>
@@ -156,49 +104,6 @@ class _StudioEditorState extends State<StudioEditor> {
             // Editor State
             return Column(
               children: [
-                // --- Read-Only Claim Warning Banner ---
-                if (state.isReadOnly && state.activeClaim != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: CupertinoColors.systemYellow.withValues(alpha: 0.15),
-                      border: Border(
-                        bottom: BorderSide(
-                          color: CupertinoColors.systemYellow.withValues(alpha: 0.5),
-                        ),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        const MacosIcon(
-                          CupertinoIcons.lock_fill,
-                          color: CupertinoColors.systemYellow,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            "In progress by ${state.activeClaim!.user} (Editor in Read-Only mode)",
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        if (widget.onTakeOverClaim != null)
-                          PushButton(
-                            controlSize: ControlSize.small,
-                            secondary: true,
-                            onPressed: widget.onTakeOverClaim,
-                            child: const Text("Take Over Claim"),
-                          ),
-                      ],
-                    ),
-                  ),
-
                 // --- Processing Bar ---
                 if (state.isProcessing)
                   Container(
@@ -263,7 +168,6 @@ class _StudioEditorState extends State<StudioEditor> {
                     child: StudioFragmentList(
                       fragments: state.fragments,
                       playbackNotifier: widget.homeManager.playbackPosition,
-                      rules: state.transliterationRules,
                       selectedIndex: state.selectedFragmentIndex,
                       onSelect: widget.homeManager.selectFragment,
                       onCapture: (i) =>

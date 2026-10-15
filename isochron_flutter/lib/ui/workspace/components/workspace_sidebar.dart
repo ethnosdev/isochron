@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
-import 'package:isochron_flutter/services/claim_service.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/workspace/components/inline_text_editor.dart';
 import 'package:isochron_flutter/ui/workspace/models/sidebar_node.dart';
@@ -200,36 +199,7 @@ Widget _buildTreeRowForNode(
           manager.selectedNode?.track == track &&
           manager.selectedNode?.type == NodeType.track;
 
-      final jsonPath = track.getAbsoluteOutputPath(
-        manager.project!.directoryPath,
-        col.folderName,
-      );
-      final claim = ClaimService().getClaimSync(jsonPath);
       Widget? trailingWidget;
-      if (claim != null) {
-        trailingWidget = MacosTooltip(
-          message: "In progress by ${claim.user}",
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-            decoration: BoxDecoration(
-              color: CupertinoColors.systemYellow.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                color: CupertinoColors.systemYellow.withValues(alpha: 0.6),
-                width: 0.8,
-              ),
-            ),
-            child: Text(
-              claim.initials,
-              style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                color: CupertinoColors.systemYellow,
-              ),
-            ),
-          ),
-        );
-      }
 
       return _buildTreeRow(
         context: context,

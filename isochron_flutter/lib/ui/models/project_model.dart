@@ -160,12 +160,11 @@ class Project {
   String name;
   final String directoryPath;
   List<Collection> collections;
-  String? dictPath;
+  String? languageCode;
+  int boundaryLeadInMs;
   bool defaultHasIds;
   bool defaultGenerateIds;
   String? defaultIdPrefix;
-  String snapMode;
-  int? snapOffset;
   bool copyMediaIntoProject;
   bool hasPromptedForMediaStorage;
 
@@ -174,12 +173,11 @@ class Project {
     required this.name,
     required this.directoryPath,
     List<Collection>? collections,
-    this.dictPath,
+    this.languageCode,
+    this.boundaryLeadInMs = 170,
     this.defaultHasIds = false,
     this.defaultGenerateIds = false,
     this.defaultIdPrefix,
-    this.snapMode = 'onset',
-    this.snapOffset,
     this.copyMediaIntoProject = false,
     this.hasPromptedForMediaStorage = false,
   }) : collections = collections ?? [];
@@ -191,12 +189,11 @@ class Project {
     'id': id,
     'name': name,
     'collections': collections.map((c) => c.toMasterJson()).toList(),
-    'dictPath': dictPath,
+    if (languageCode != null) 'languageCode': languageCode,
+    'boundaryLeadInMs': boundaryLeadInMs,
     'defaultHasIds': defaultHasIds,
     'defaultGenerateIds': defaultGenerateIds,
     'defaultIdPrefix': defaultIdPrefix,
-    'snapMode': snapMode,
-    'snapOffset': snapOffset,
     'copyMediaIntoProject': copyMediaIntoProject,
     'hasPromptedForMediaStorage': hasPromptedForMediaStorage,
   };
@@ -301,18 +298,16 @@ class Project {
       name: json['name']?.toString() ?? 'Project',
       directoryPath: json['directoryPath']?.toString() ?? '',
       collections: migratedCollections,
-      dictPath:
-          json['dictPath']?.toString() ??
-          json['dictionaryPath']?.toString() ??
-          json['dictAssetId']?.toString(),
+      languageCode: json['languageCode']?.toString(),
+      boundaryLeadInMs: json['boundaryLeadInMs'] is int
+          ? json['boundaryLeadInMs'] as int
+          : 170,
       defaultHasIds: json['defaultHasIds'] ?? json['hasIds'] ?? false,
       defaultGenerateIds:
           json['defaultGenerateIds'] ?? json['generateIds'] ?? false,
       defaultIdPrefix:
           json['defaultIdPrefix']?.toString() ??
           json['generatedIdPrefix']?.toString(),
-      snapMode: json['snapMode']?.toString() ?? 'onset',
-      snapOffset: json['snapOffset'] is int ? json['snapOffset'] : null,
       copyMediaIntoProject: json['copyMediaIntoProject'] ?? false,
       hasPromptedForMediaStorage: json['hasPromptedForMediaStorage'] ?? false,
     );

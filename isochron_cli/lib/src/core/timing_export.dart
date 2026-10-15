@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:path/path.dart' as p;
 
 import 'fragment.dart';
@@ -122,6 +123,34 @@ class TimingExport {
     }
 
     return buffer.toString();
+  }
+
+  /// Exports fragments as either JSON or timing format payload.
+  static String exportPayload({
+    required List<Fragment> fragments,
+    required CliOutputFormat format,
+    required String? sourceTextPath,
+    bool requireIds = false,
+  }) {
+    if (format == CliOutputFormat.json) {
+      final jsonOutput = fragments
+          .map((f) => {
+                'index': f.index,
+                if (f.id != null) 'id': f.id,
+                'text': f.text,
+                'start': double.parse(f.realStart.toStringAsFixed(3)),
+                'end': double.parse(f.realEnd.toStringAsFixed(3)),
+              })
+          .toList();
+      return jsonEncode(jsonOutput);
+    } else {
+      final metadata = parseMetadataFromSourceFilename(sourceTextPath);
+      return generateTimingPayload(
+        fragments,
+        metadata,
+        requireIds: requireIds,
+      );
+    }
   }
 
   static String defaultTimingFilenameFromSourcePath(String? sourcePath) {

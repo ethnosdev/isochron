@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:isochron_cli/isochron_cli.dart';
-import 'package:isochron_flutter/ui/theme/app_theme.dart';
 
 class FragmentList extends StatefulWidget {
   final List<Fragment> fragments;
   final Duration currentPos;
-  final Map<String, String>? rules;
   final int? selectedIndex;
   final Function(int) onJumpTo;
   final Function(int) onDoubleTap;
@@ -17,7 +15,6 @@ class FragmentList extends StatefulWidget {
     super.key,
     required this.fragments,
     required this.currentPos,
-    this.rules,
     this.selectedIndex,
     required this.onJumpTo,
     required this.onDoubleTap,
@@ -33,8 +30,7 @@ class FragmentList extends StatefulWidget {
 class _FragmentListState extends State<FragmentList> {
   final ScrollController _scrollController = ScrollController();
 
-  // Conditionally increase item height to accommodate 3 lines
-  double get _itemHeight => widget.rules != null ? 84.0 : 64.0;
+  double get _itemHeight => 64.0;
 
   @override
   void didUpdateWidget(FragmentList oldWidget) {
@@ -90,11 +86,6 @@ class _FragmentListState extends State<FragmentList> {
       itemBuilder: (ctx, i) {
         final f = widget.fragments[i];
 
-        String? transliteratedText;
-        if (widget.rules != null) {
-          transliteratedText = Transliterator.convert(f.text, widget.rules!);
-        }
-
         final isActive =
             f.realStart >= 0 &&
             widget.currentPos.inMilliseconds >= (f.realStart * 1000) &&
@@ -133,7 +124,6 @@ class _FragmentListState extends State<FragmentList> {
               onTap: null,
               dense: true,
               visualDensity: VisualDensity.compact,
-              isThreeLine: transliteratedText != null,
 
               // --- 1. LEADING (The Circle Number) ---
               leading: Column(
@@ -141,14 +131,10 @@ class _FragmentListState extends State<FragmentList> {
                 children: [
                   CircleAvatar(
                     radius: 10,
-                    backgroundColor: f.isPinned
-                        ? AppTheme.warning(context)
-                        : isActive
+                    backgroundColor: isActive
                         ? colorScheme.primary
                         : colorScheme.surfaceContainerHighest,
-                    foregroundColor: f.isPinned
-                        ? Colors.black
-                        : isActive
+                    foregroundColor: isActive
                         ? colorScheme.onPrimary
                         : colorScheme.onSurfaceVariant,
                     child: Text(
@@ -159,10 +145,6 @@ class _FragmentListState extends State<FragmentList> {
                       ),
                     ),
                   ),
-                  if (f.isPinned) ...[
-                    const SizedBox(height: 4),
-                    Icon(Icons.lock, size: 12, color: AppTheme.warning(context)),
-                  ],
                 ],
               ),
 
@@ -202,26 +184,11 @@ class _FragmentListState extends State<FragmentList> {
                 ],
               ),
 
-              // --- 3. SUBTITLE (Transliteration & Timing/Capture) ---
+              // --- 3. SUBTITLE (Timing/Capture) ---
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Transliteration Inject
-                  if (transliteratedText != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      transliteratedText,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: colorScheme.onSurfaceVariant.withValues(
-                          alpha: 0.8,
-                        ),
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 4),
 
                   // Timing Data OR Capture Button

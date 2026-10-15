@@ -1,10 +1,9 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
+import 'package:isochron_flutter/ui/settings/model_panel.dart';
 import 'package:macos_ui/macos_ui.dart';
-import 'package:path/path.dart' as p;
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
 
 class ProjectSettingsView extends StatefulWidget {
@@ -27,7 +26,8 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
   late String _prefix;
 
   late TextEditingController _prefixController;
-  late TextEditingController _offsetController;
+  late TextEditingController _langController;
+  late TextEditingController _leadInController;
   late TextEditingController _collaboratorNameController;
 
   @override
@@ -38,8 +38,11 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
     _prefix = widget.project.defaultIdPrefix ?? "";
 
     _prefixController = TextEditingController(text: _prefix);
-    _offsetController = TextEditingController(
-      text: widget.project.snapOffset?.toString() ?? '',
+    _langController = TextEditingController(
+      text: widget.project.languageCode ?? '',
+    );
+    _leadInController = TextEditingController(
+      text: widget.project.boundaryLeadInMs.toString(),
     );
     _collaboratorNameController = TextEditingController(
       text: UserSettingsService().collaboratorName,
@@ -49,7 +52,8 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
   @override
   void dispose() {
     _prefixController.dispose();
-    _offsetController.dispose();
+    _langController.dispose();
+    _leadInController.dispose();
     _collaboratorNameController.dispose();
     super.dispose();
   }
@@ -66,6 +70,12 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
     widget.project.defaultGenerateIds = _generateIds;
     widget.project.defaultHasIds = _hasIds;
     widget.project.defaultIdPrefix = _prefix;
+    final lang = _langController.text.trim();
+    widget.project.languageCode = lang.isEmpty ? null : lang.toLowerCase();
+    final leadIn = int.tryParse(_leadInController.text.trim());
+    if (leadIn != null && leadIn >= 0) {
+      widget.project.boundaryLeadInMs = leadIn;
+    }
     widget.onSaved();
   }
 
@@ -75,9 +85,7 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
 
     final textFieldDecoration = BoxDecoration(
       color: theme.brightness == Brightness.dark
-          ? const Color(
-              0xFF2A2A2A,
-            ) // Lighter grey for better contrast in dark mode
+          ? const Color(0xFF2A2A2A)
           : const Color(0xFFFFFFFF),
       border: Border.all(color: theme.dividerColor),
       borderRadius: BorderRadius.circular(5.0),
@@ -199,7 +207,6 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                     onChanged: (val) {
                       setState(() {
                         widget.project.copyMediaIntoProject = val;
-                        // Mark as prompted so they aren't asked again
                         widget.project.hasPromptedForMediaStorage = true;
                       });
                       _triggerSave();
@@ -285,142 +292,81 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
               Container(height: 1, color: theme.dividerColor),
               const SizedBox(height: 32),
 
-              // --- SNAP MODE ---
-              Text("Boundary Snap Mode", style: theme.typography.headline),
+              // --- MMS ALIGNMENT SETTINGS ---
+              Text("MMS Aligner Settings", style: theme.typography.headline),
               const SizedBox(height: 8),
               Text(
-                "Determines how audio boundaries are calculated when resolving dynamic time warping.",
+                "Configure language support and boundary calibration for Meta MMS-300M forced alignment.",
                 style: TextStyle(
                   color: theme.typography.body.color?.withValues(alpha: 0.7),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
+
+              Text(
+                "Language Code (ISO 639-3):",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: theme.typography.body.color,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "Optional 3-letter language code (e.g. ell, eng, heb, cmn). Prefilled automatically from standard Bible filenames.",
+                style: TextStyle(
+                  fontSize: 12,
+                  color: theme.typography.body.color?.withValues(alpha: 0.7),
+                ),
+              ),
+              const SizedBox(height: 8),
               SizedBox(
-                width: 300,
-                child: MacosPopupButton<String>(
-                  value: widget.project.snapMode,
-                  items: const [
-                    MacosPopupMenuItem<String>(
-                      value: 'onset',
-                      child: Text('Onset (Snap to speech start)'),
-                    ),
-                    MacosPopupMenuItem<String>(
-                      value: 'gap',
-                      child: Text('Gap (Snap to center of silence)'),
-                    ),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() => widget.project.snapMode = val);
-                      _triggerSave();
-                    }
-                  },
+                width: 150,
+                child: MacosTextField(
+                  controller: _langController,
+                  placeholder: 'e.g. eng',
+                  decoration: textFieldDecoration,
+                  onChanged: (_) => _triggerSave(),
                 ),
               ),
 
-              // <--- CONDITIONAL ONSET OFFSET FIELD --->
-              if (widget.project.snapMode == 'onset') ...[
-                const SizedBox(height: 16),
-                Text(
-                  "Snap Offset (ms)",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: theme.typography.body.color,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "Subtracts milliseconds from the detected onset to catch breath sounds or soft consonants.",
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: theme.typography.body.color?.withValues(alpha: 0.7),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: 150,
-                  child: MacosTextField(
-                    controller: _offsetController,
-                    placeholder: 'e.g. 250',
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: textFieldDecoration,
-                    onChanged: (val) {
-                      widget.project.snapOffset = val.isEmpty
-                          ? null
-                          : int.tryParse(val);
-                      _triggerSave();
-                    },
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 32),
-              Container(height: 1, color: theme.dividerColor),
-              const SizedBox(height: 32),
-
-              // --- TRANSLITERATION ---
+              const SizedBox(height: 20),
               Text(
-                "Global Transliteration Dictionary",
-                style: theme.typography.headline,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                "Provide a JSON map to convert non-Latin characters into Latin characters to assist the alignment engine.",
+                "Boundary Lead-In (ms):",
                 style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: theme.typography.body.color,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "Milliseconds subtracted from speech onset to catch breath sounds and initial consonants (default: 170 ms).",
+                style: TextStyle(
+                  fontSize: 12,
                   color: theme.typography.body.color?.withValues(alpha: 0.7),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: 150,
+                child: MacosTextField(
+                  controller: _leadInController,
+                  placeholder: '170',
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: textFieldDecoration,
+                  onChanged: (_) => _triggerSave(),
+                ),
+              ),
+
+              const SizedBox(height: 24),
               Row(
                 children: [
                   PushButton(
                     controlSize: ControlSize.regular,
                     secondary: true,
-                    onPressed: () async {
-                      final settings = UserSettingsService();
-                      final res = await FilePicker.pickFiles(
-                        allowedExtensions: ['json'],
-                        type: FileType.custom,
-                        initialDirectory: settings.lastDictDir,
-                      );
-                      if (res != null && res.files.single.path != null) {
-                        settings.setLastDictDir(
-                          p.dirname(res.files.single.path!),
-                        );
-                        setState(
-                          () =>
-                              widget.project.dictPath = res.files.single.path!,
-                        );
-                        _triggerSave();
-                      }
-                    },
-                    child: const Text("Select JSON File..."),
+                    onPressed: () => ModelPanel.show(context),
+                    child: const Text("Manage Acoustic Model..."),
                   ),
-                  const SizedBox(width: 16),
-                  if (widget.project.dictPath != null) ...[
-                    Expanded(
-                      child: Text(
-                        p.basename(widget.project.dictPath!),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    MacosIconButton(
-                      icon: MacosIcon(
-                        CupertinoIcons.clear_circled_solid,
-                        color: AppTheme.grey(context),
-                      ),
-                      onPressed: () {
-                        setState(() => widget.project.dictPath = null);
-                        _triggerSave();
-                      },
-                    ),
-                  ] else
-                    Text(
-                      "No dictionary selected.",
-                      style: TextStyle(color: AppTheme.grey(context)),
-                    ),
                 ],
               ),
             ],

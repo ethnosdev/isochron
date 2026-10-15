@@ -74,14 +74,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
   late bool _generateIds;
   late TextEditingController _prefixController;
 
-  // Step 3 Fields (Conditional)
-  String? _dictPath;
-
-  bool get _isFirstCollection =>
-      widget.project.collections.isNotEmpty &&
-      widget.project.collections.first.id == widget.collection.id;
-
-  int get _totalSteps => _isFirstCollection ? 4 : 3;
+  int get _totalSteps => 3;
 
   @override
   void initState() {
@@ -97,7 +90,6 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
     _copyMedia = widget.project.copyMediaIntoProject;
     _hasIds = widget.project.defaultHasIds;
     _generateIds = widget.project.defaultGenerateIds;
-    _dictPath = widget.project.dictPath;
     _audioFiles.clear();
     _textFiles.clear();
     _pairedItems.clear();
@@ -243,7 +235,6 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
     widget.project.defaultHasIds = _hasIds;
     widget.project.defaultGenerateIds = _generateIds;
     widget.project.defaultIdPrefix = _prefixController.text.trim();
-    widget.project.dictPath = _dictPath;
 
     Future<String> processFile(
       String originalPath,
@@ -613,70 +604,6 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
     );
   }
 
-  Widget _buildStep3(BuildContext context, MacosThemeData theme) {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text("Transliteration Dictionary", style: theme.typography.title2),
-          const SizedBox(height: 8),
-          Text(
-            "Map non-Latin character strings to Latin phonetic characters to assist alignment systems.",
-            style: TextStyle(
-              color: theme.typography.body.color?.withValues(alpha: 0.7),
-            ),
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              PushButton(
-                controlSize: ControlSize.regular,
-                secondary: true,
-                onPressed: () async {
-                  final settings = UserSettingsService();
-                  final res = await FilePicker.pickFiles(
-                    allowedExtensions: ['json'],
-                    type: FileType.custom,
-                    initialDirectory: settings.lastDictDir,
-                  );
-                  if (res != null && res.files.single.path != null) {
-                    settings.setLastDictDir(p.dirname(res.files.single.path!));
-                    setState(() => _dictPath = res.files.single.path!);
-                  }
-                },
-                child: const Text("Select JSON File..."),
-              ),
-              const SizedBox(width: 16),
-              if (_dictPath != null) ...[
-                Expanded(
-                  child: Text(
-                    p.basename(_dictPath!),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                MacosIconButton(
-                  icon: MacosIcon(
-                    CupertinoIcons.clear_circled_solid,
-                    color: AppTheme.grey(context),
-                  ),
-                  onPressed: () {
-                    setState(() => _dictPath = null);
-                  },
-                ),
-              ] else
-                Text(
-                  "No dictionary configured.",
-                  style: TextStyle(color: AppTheme.grey(context)),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildWizardSidebar(BuildContext context) {
     final theme = MacosTheme.of(context);
     final activeColor = AppTheme.accent(context);
@@ -686,7 +613,6 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
       'Identity & Storage',
       'Import Files',
       'ID Strategy',
-      if (_isFirstCollection) 'Transliteration',
     ];
 
     return Container(
@@ -763,11 +689,6 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
         return _buildStep1(context, theme);
       case 2:
         return _buildStep2(context, theme, textFieldDecoration);
-      case 3:
-        if (_isFirstCollection) {
-          return _buildStep3(context, theme);
-        }
-        return const SizedBox();
       default:
         return const SizedBox();
     }

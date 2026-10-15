@@ -142,12 +142,6 @@ class WorkspaceRouter extends StatelessWidget {
       case NodeType.track:
         return StudioEditor(
           homeManager: manager.homeManager,
-          onTakeOverClaim: () {
-            final track = manager.selectedNode?.track;
-            if (track != null && manager.project != null) {
-              manager.homeManager.takeOverClaim(track, manager.project!);
-            }
-          },
         );
 
       case NodeType.text:

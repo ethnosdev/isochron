@@ -323,35 +323,18 @@ class _WaveformViewState extends State<WaveformView> {
                                   currentPos.inMilliseconds / 1000.0,
                               totalSeconds: totalSec,
                               zoomLevel: widget.state.zoomLevel,
+                              activeFragmentIndex: widget.state.selectedFragmentIndex,
                               accentColor: AppTheme.accent(context),
                               waveColor: AppTheme.grey(context).withValues(
                                 alpha: 0.5,
                               ),
                               playheadColor: AppTheme.playhead(context),
-                              pinnedColor: AppTheme.warning(context),
                               contentWidth: contentWidth,
                               padding: _hPadding,
                             ),
                           );
                         },
                       ),
-                      for (final f in widget.state.fragments)
-                        if (f.isPinned)
-                          Positioned(
-                            left:
-                                (f.realStart + f.realEnd) /
-                                    2 /
-                                    totalSec *
-                                    contentWidth +
-                                _hPadding -
-                                8,
-                            top: 4,
-                            child: Icon(
-                              CupertinoIcons.lock_fill,
-                              size: 14,
-                              color: AppTheme.warning(context),
-                            ),
-                          ),
                     ],
                   ),
                 ),
@@ -388,7 +371,7 @@ class _WaveformViewState extends State<WaveformView> {
     bool isNearBoundary = false;
 
     for (final f in widget.state.fragments) {
-      if (f.isPinned || f.realStart < 0) continue;
+      if (f.realStart < 0) continue;
       if ((f.realStart - hoverTime).abs() < thresholdSeconds ||
           (f.realEnd - hoverTime).abs() < thresholdSeconds) {
         isNearBoundary = true;
@@ -422,7 +405,7 @@ class _WaveformViewState extends State<WaveformView> {
       final fragStartPx = (f.realStart / totalSec) * contentWidth + _hPadding;
       final fragEndPx = (f.realEnd / totalSec) * contentWidth + _hPadding;
       if (x >= fragStartPx && x <= fragEndPx) {
-        widget.controller.toggleFragmentPin(f.index);
+        widget.controller.selectFragment(f.index);
         return;
       }
     }
@@ -434,7 +417,7 @@ class _WaveformViewState extends State<WaveformView> {
         (_hoverThresholdPx / contentWidth) * totalSec;
 
     for (var f in widget.state.fragments) {
-      if (f.realStart < 0 || f.isPinned) continue;
+      if (f.realStart < 0) continue;
       if ((f.realStart - time).abs() < thresholdSeconds) {
         widget.controller.clearFragmentTiming(f.index);
         return;
@@ -447,29 +430,17 @@ class _WaveformViewState extends State<WaveformView> {
     final pixelsPerSecond = contentWidth / totalSec;
     final thresholdSec = 15.0 / pixelsPerSecond;
 
-    final pinnedPositions = <double>{};
-    for (final f in widget.state.fragments) {
-      if (f.isPinned && f.realStart >= 0) {
-        pinnedPositions.add(f.realStart);
-        pinnedPositions.add(f.realEnd);
-      }
-    }
-
-    bool isNearPinned(double t) =>
-        pinnedPositions.any((p) => (p - t).abs() < thresholdSec);
-
     for (var f in widget.state.fragments) {
-      if (f.isPinned || f.realStart < 0) continue;
+      if (f.realStart < 0) continue;
 
-      if ((f.realStart - time).abs() < thresholdSec &&
-          !isNearPinned(f.realStart)) {
+      if ((f.realStart - time).abs() < thresholdSec) {
         setState(() {
           _dragIndex = f.index;
           _dragStart = true;
         });
         return;
       }
-      if ((f.realEnd - time).abs() < thresholdSec && !isNearPinned(f.realEnd)) {
+      if ((f.realEnd - time).abs() < thresholdSec) {
         setState(() {
           _dragIndex = f.index;
           _dragStart = false;

@@ -1,14 +1,25 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:args/args.dart';
 import 'package:isochron_cli/src/core/isochron_processor.dart';
-import 'package:isochron_cli/src/core/drivers.dart';
 import 'package:isochron_cli/src/platform/mac_drivers.dart';
-import 'package:isochron_cli/src/core/boundary_strategy.dart';
 import 'package:isochron_cli/src/core/text_parser.dart';
 import 'package:isochron_cli/src/core/timing_export.dart';
+import 'package:isochron_cli/src/eval/evaluator.dart';
+import 'package:isochron_cli/src/mms/mms_pipeline.dart';
+import 'package:isochron_cli/src/mms/mms_tokenizer.dart';
+import 'package:isochron_cli/src/mms/model_manager.dart';
 
 void main(List<String> arguments) async {
+  if (arguments.isNotEmpty && arguments.first == 'eval') {
+    await _handleEval(arguments.sublist(1));
+    return;
+  }
+
+  if (arguments.isNotEmpty && arguments.first == 'model') {
+    await _handleModel(arguments.sublist(1));
+    return;
+  }
+
   final parser = ArgParser()
     ..addOption('text', abbr: 't', help: 'Path to the input text file')
     ..addOption('audio', abbr: 'a', help: 'Path to the input audio file')
@@ -19,24 +30,22 @@ void main(List<String> arguments) async {
     ..addOption('format',
         allowed: ['json', 'timing'],
         help: 'Output format. If omitted, inferred from --output extension.')
-    ..addOption('dict',
-        help: 'Path to a JSON file containing transliteration rules')
-    ..addOption('pins',
-        help:
-            'Path to a JSON file containing known-correct timings for specific fragments. '
-            'Keys are fragment indices (0-based strings), values are objects with "start" and "end" in seconds. '
-            'Example: {"0":{"start":0.0,"end":1.4},"7":{"start":12.3,"end":15.2}}')
-    ..addOption('snap-mode',
-        allowed: ['onset', 'gap'],
-        help: 'Controls how fragment boundaries are refined. '
-            '"onset" snaps to the start of speech (legacy behaviour). '
-            '"gap" snaps to the middle of the detected silence gap.',
-        defaultsTo: 'onset')
-    ..addOption(
-      'snap-offset',
-      help: 'Milliseconds subtracted from each onset-snapped phrase start '
-          '(snap-mode onset only; default 0).',
-    )
+    ..addOption('lang', help: 'ISO 639-3 language code for uroman (e.g. ell, eng, heb)')
+    ..addOption('lead-in',
+        defaultsTo: '0.17',
+        help: 'Seconds subtracted from speech onset for verse start (default 0.17)')
+    ..addOption('star-score',
+        defaultsTo: '0.0',
+        help: 'Wildcard star token log-probability (default 0.0)')
+    ..addOption('star-placement',
+        allowed: ['segment', 'edges'],
+        defaultsTo: 'segment',
+        help: 'Where to place wildcard tokens: "segment" (between all verses) or "edges" (start and end only)')
+    ..addOption('model-path', help: 'Path to custom ONNX model file override')
+    ..addOption('model-variant',
+        allowed: ['int8', 'fp16', 'fp32'],
+        defaultsTo: 'int8',
+        help: 'Model variant to load from local cache: int8, fp16, fp32')
     ..addFlag('has-ids',
         help:
             'Extract leading phrase ID from each line (tab or space separated). '
@@ -56,39 +65,33 @@ void main(List<String> arguments) async {
     final results = parser.parse(arguments);
 
     if (results['help'] as bool) {
-      print('Isochron Aligner - Native Cross-Platform Architecture');
+      print('Isochron Forced Aligner CLI');
+      print('Commands:');
+      print('  eval              Score aligners against ground-truth fixtures');
+      print('  model             Manage MMS ONNX models (download, status, delete)');
+      print('\nOptions for alignment:');
       print(parser.usage);
       exit(0);
     }
 
     final textPath = results['text'];
     final audioPath = results['audio'];
-    final dictPath = results['dict'];
-    final pinsPath = results['pins'];
+    final languageCode = results['lang'] as String?;
+    final leadInSeconds = double.tryParse(results['lead-in'] ?? '0.17') ?? 0.17;
+    final starScore = double.tryParse(results['star-score'] ?? '0.0') ?? 0.0;
+    final starPlacement = results['star-placement'] == 'edges'
+        ? StarPlacement.edges
+        : StarPlacement.segment;
+    final modelPath = results['model-path'] as String?;
+    final variantStr = results['model-variant'] as String? ?? 'int8';
+    final modelVariant = ModelVariant.values.firstWhere(
+      (v) => v.name == variantStr,
+      orElse: () => ModelVariant.int8,
+    );
+
     final outputPath = results['output'] as String?;
     final requestedFormat = results['format'] as String?;
-
-    final snapModeRaw = results['snap-mode'] as String? ?? 'onset';
-    final snapOffsetRaw = results['snap-offset'] as String?;
     final verbose = results['verbose'] as bool;
-
-    int snapOffsetMs = 0;
-    if (snapOffsetRaw != null && snapOffsetRaw.trim().isNotEmpty) {
-      final parsed = int.tryParse(snapOffsetRaw.trim());
-      if (parsed == null) {
-        stderr.writeln(
-            'Error: --snap-offset must be a non-negative integer (milliseconds).');
-        exit(1);
-      }
-      if (parsed < 0) {
-        stderr.writeln('Error: --snap-offset must be >= 0.');
-        exit(1);
-      }
-      snapOffsetMs = parsed;
-    }
-
-    Map<String, String>? rules;
-    Map<int, ({double start, double end})>? pinnedTimings;
 
     if (textPath == null || audioPath == null) {
       stderr.writeln('Error: Both --text and --audio are required.');
@@ -96,8 +99,6 @@ void main(List<String> arguments) async {
       exit(1);
     }
 
-    // Centralized in shared core: format precedence, derived defaults from
-    // source text when output is omitted, and extension normalization.
     final effectiveOutput = TimingExport.resolveEffectiveOutput(
       explicitOutputPath: outputPath,
       requestedFormat: requestedFormat,
@@ -106,164 +107,173 @@ void main(List<String> arguments) async {
     final effectiveFormat = effectiveOutput.format;
     final effectiveOutputPath = effectiveOutput.outputPath;
 
-    // --- Load Dictionary ---
-    if (dictPath != null) {
-      if (verbose) print('Loading transliteration rules from: $dictPath');
-      final dictFile = File(dictPath);
-      if (!dictFile.existsSync()) {
-        stderr.writeln("Error: Dictionary file not found.");
-        exit(1);
-      }
+    final text = await File(textPath).readAsString();
+    final hasTabs = detectTabDelimitedIds(text);
+    final hasIdsFlag = results['has-ids'] as bool;
+    final effectiveHasIds = hasIdsFlag || hasTabs;
 
-      final jsonString = await dictFile.readAsString();
-      try {
-        final rawMap = jsonDecode(jsonString) as Map<String, dynamic>;
-        rules = rawMap.map((key, value) => MapEntry(key, value.toString()));
-      } catch (e) {
-        stderr.writeln("Error: Invalid JSON format in dictionary file.");
-        exit(1);
-      }
-    }
+    final requireIds = results.wasParsed('require-ids')
+        ? (results['require-ids'] as bool)
+        : effectiveHasIds;
 
-    // --- Load Pins ---
-    if (pinsPath != null) {
-      if (verbose) print('Loading pinned timings from: $pinsPath');
-      final pinsFile = File(pinsPath);
-      if (!pinsFile.existsSync()) {
-        stderr.writeln('Error: Pins file not found: $pinsPath');
-        exit(1);
-      }
-      try {
-        final rawMap =
-            jsonDecode(await pinsFile.readAsString()) as Map<String, dynamic>;
-        pinnedTimings = {};
-        for (final entry in rawMap.entries) {
-          final idx = int.tryParse(entry.key);
-          if (idx == null) {
-            stderr.writeln(
-                'Warning: Skipping invalid pin key "${entry.key}" (must be an integer index).');
-            continue;
-          }
-          final obj = entry.value as Map<String, dynamic>;
-          final start = (obj['start'] as num).toDouble();
-          final end = (obj['end'] as num).toDouble();
-          pinnedTimings[idx] = (start: start, end: end);
-        }
-        if (verbose) print('Loaded ${pinnedTimings.length} pinned timing(s).');
-      } catch (e) {
-        stderr.writeln('Error: Invalid JSON format in pins file: $e');
-        exit(1);
-      }
-    }
-
-    // --- OS DETECTION & DRIVER INJECTION ---
-    late AudioDriver audioDriver;
-    late TtsDriver ttsDriver;
-
-    if (Platform.isMacOS) {
-      if (verbose) print('OS Detected: macOS. Using native Apple frameworks.');
-      audioDriver = MacAudioDriver();
-      ttsDriver = MacTtsDriver();
-    } else if (Platform.isWindows) {
-      stderr.writeln(
-          'Error: Windows is not yet supported natively. Implement WindowsDrivers first.');
-      exit(1);
-    } else if (Platform.isLinux) {
-      stderr.writeln(
-          'Error: Linux is not yet supported natively. Implement LinuxDrivers first.');
-      exit(1);
-    } else {
-      stderr.writeln('Error: Unsupported Operating System.');
-      exit(1);
-    }
-
-    // Map CLI option to SnapMode enum. Default is conservative: onset.
-    final SnapMode snapMode =
-        snapModeRaw == 'gap' ? SnapMode.gapCenter : SnapMode.onset;
-
-    // --- Setup Workspace ---
-    final workDir = Directory.systemTemp.createTempSync('isochron_cli_');
-    if (verbose) print('Workspace: ${workDir.path}');
-
+    final workDir = await Directory.systemTemp.createTemp('isochron_cli_');
     try {
-      if (verbose) print('Starting alignment pipeline...');
-      final textFile = File(textPath);
-      final rawText = await textFile.readAsString();
-
-      final autoDetectedTabs = detectTabDelimitedIds(rawText);
-      final bool hasIds = results.wasParsed('has-ids')
-          ? (results['has-ids'] as bool)
-          : (results.wasParsed('require-ids')
-              ? (results['require-ids'] as bool)
-              : autoDetectedTabs);
-      final bool requireIds = results.wasParsed('require-ids')
-          ? (results['require-ids'] as bool)
-          : hasIds;
-
-      // --- RUN PROCESSOR ---
       final fragments = await IsochronProcessor.process(
-        text: rawText,
+        text: text,
         audioPath: audioPath,
         workDir: workDir,
-        audioDriver: audioDriver,
-        ttsDriver: ttsDriver,
-        transliterationRules: rules,
-        pinnedTimings: pinnedTimings,
-        onProgress: verbose
-            ? (status, pct) =>
-                print('[${(pct * 100).toStringAsFixed(1)}%] $status')
-            : null,
-        snapMode: snapMode,
-        snapOffsetMs: snapOffsetMs,
-        hasIds: hasIds,
+        audioDriver: MacAudioDriver(),
+        hasIds: effectiveHasIds,
+        languageCode: languageCode,
+        leadInSeconds: leadInSeconds,
+        starScore: starScore,
+        starPlacement: starPlacement,
+        modelPath: modelPath,
+        modelVariant: modelVariant,
+        onProgress: (status, pct) {
+          if (verbose) {
+            stdout.write('\r[${(pct * 100).toStringAsFixed(0)}%] $status');
+          }
+        },
       );
-      // ---------------------
+      if (verbose) stdout.writeln();
 
-      if (verbose) {
-        print('Alignment complete. Found ${fragments.length} fragments.');
-      }
-
-      // --- Output Generation ---
-      if (effectiveFormat == CliOutputFormat.json) {
-        // Preserve existing JSON schema for downstream compatibility.
-        final jsonOutput = fragments
-            .map((f) => {
-                  'index': f.index,
-                  if (f.id != null) 'id': f.id,
-                  'text': f.text,
-                  'start': double.parse(f.realStart.toStringAsFixed(3)),
-                  'end': double.parse(f.realEnd.toStringAsFixed(3)),
-                })
-            .toList();
-
-        final jsonFile = File(effectiveOutputPath);
-        await jsonFile.writeAsString(jsonEncode(jsonOutput));
-      } else {
-        // Timing export reuses shared core so CLI + Flutter stay identical.
-        final metadata = TimingExport.parseMetadataFromSourceFilename(textPath);
-        final payload = TimingExport.generateTimingPayload(
-          fragments,
-          metadata,
-          requireIds: requireIds,
-        );
-        final textFile = File(effectiveOutputPath);
-        await textFile.writeAsString(payload);
-      }
-
-      print('Success! Saved to: $effectiveOutputPath');
-    } catch (e, stack) {
-      stderr.writeln('Critical Error: $e');
-      if (verbose) stderr.writeln(stack);
-      exit(1);
+      final outputFile = File(effectiveOutputPath);
+      final payload = TimingExport.exportPayload(
+        fragments: fragments,
+        format: effectiveFormat,
+        sourceTextPath: textPath,
+        requireIds: requireIds,
+      );
+      await outputFile.writeAsString(payload);
+      print('Saved output to: ${outputFile.path}');
     } finally {
-      if (!verbose) {
-        workDir.deleteSync(recursive: true);
-      } else {
-        print('Debug: Temp files left in ${workDir.path}');
+      if (await workDir.exists()) {
+        await workDir.delete(recursive: true);
       }
     }
   } catch (e) {
     stderr.writeln('Error: $e');
     exit(1);
+  }
+}
+
+Future<void> _handleEval(List<String> args) async {
+  final parser = ArgParser()
+    ..addOption('fixtures', abbr: 'f', defaultsTo: 'fixtures', help: 'Path to fixtures directory')
+    ..addOption('csv', help: 'Optional output CSV file path')
+    ..addOption('lead-in', defaultsTo: '0.17', help: 'Lead-in in seconds (default 0.17)')
+    ..addOption('star-score', defaultsTo: '0.0', help: 'Wildcard star token log-probability (default 0.0)')
+    ..addOption('star-placement', allowed: ['segment', 'edges'], defaultsTo: 'segment')
+    ..addOption('model-variant', allowed: ['int8', 'fp16', 'fp32'], defaultsTo: 'int8')
+    ..addFlag('help', abbr: 'h', negatable: false);
+
+  final results = parser.parse(args);
+  if (results['help'] as bool) {
+    print('Usage: isochron eval [options]');
+    print(parser.usage);
+    exit(0);
+  }
+
+  final fixturesPath = results['fixtures'] as String;
+  final fixturesDir = Directory(fixturesPath);
+  if (!fixturesDir.existsSync()) {
+    stderr.writeln('Error: Fixtures directory not found: $fixturesPath');
+    exit(1);
+  }
+
+  final leadIn = double.tryParse(results['lead-in'] ?? '0.17') ?? 0.17;
+  final starScore = double.tryParse(results['star-score'] ?? '0.0') ?? 0.0;
+  final starPlacement = results['star-placement'] == 'edges'
+      ? StarPlacement.edges
+      : StarPlacement.segment;
+  final variantStr = results['model-variant'] as String? ?? 'int8';
+  final variant = ModelVariant.values.firstWhere(
+    (v) => v.name == variantStr,
+    orElse: () => ModelVariant.int8,
+  );
+
+  final evaluator = Evaluator();
+  stdout.writeln('Running evaluation on fixtures in: ${fixturesDir.path}');
+
+  final agg = await evaluator.evaluateDirectory(
+    fixturesDir,
+    mmsOptions: MmsPipelineOptions(
+      leadInSeconds: leadIn,
+      starScore: starScore,
+      starPlacement: starPlacement,
+      modelVariant: variant,
+    ),
+    onProgress: (fixture, pct) {
+      stdout.write('\r[${(pct * 100).toStringAsFixed(0)}%] Evaluating: $fixture...   ');
+    },
+  );
+  stdout.writeln();
+
+  final report = Evaluator.formatReport(agg);
+  stdout.write(report);
+
+  final csvPath = results['csv'] as String?;
+  if (csvPath != null) {
+    final csvFile = File(csvPath);
+    await Evaluator.exportCsv(agg, csvFile);
+    stdout.writeln('Exported CSV metrics to: ${csvFile.path}');
+  }
+}
+
+Future<void> _handleModel(List<String> args) async {
+  final parser = ArgParser()
+    ..addOption('variant', allowed: ['int8', 'fp16', 'fp32'], defaultsTo: 'int8')
+    ..addFlag('help', abbr: 'h', negatable: false);
+
+  if (args.isEmpty || args.contains('-h') || args.contains('--help')) {
+    print('Usage: isochron model <status|download|delete> [--variant int8|fp16|fp32]');
+    exit(0);
+  }
+
+  final command = args.first;
+  final results = parser.parse(args.sublist(1));
+
+  final variantStr = results['variant'] as String? ?? 'int8';
+  final variant = ModelVariant.values.firstWhere(
+    (v) => v.name == variantStr,
+    orElse: () => ModelVariant.int8,
+  );
+
+  final manager = ModelManager();
+
+  switch (command) {
+    case 'status':
+      final status = await manager.checkStatus(variant, verifySha: true);
+      final file = manager.getFile(variant);
+      print('Model: ${variant.filename}');
+      print('Path:   ${file.path}');
+      print('Status: ${status.name}');
+      if (status == ModelStatus.ready) {
+        print('Size:   ${(variant.sizeBytes / 1024 / 1024).toStringAsFixed(1)} MB');
+      }
+      break;
+
+    case 'download':
+      print('Downloading ${variant.filename}...');
+      final file = await manager.download(
+        variant,
+        onProgress: (pct, rec, total) {
+          final mbRec = (rec / 1024 / 1024).toStringAsFixed(1);
+          final mbTot = (total / 1024 / 1024).toStringAsFixed(1);
+          stdout.write('\r[${(pct * 100).toStringAsFixed(1)}%] $mbRec / $mbTot MB');
+        },
+      );
+      print('\nDownloaded and verified: ${file.path}');
+      break;
+
+    case 'delete':
+      await manager.delete(variant);
+      print('Deleted ${variant.filename}');
+      break;
+
+    default:
+      stderr.writeln('Unknown model command: $command');
+      exit(1);
   }
 }

@@ -6,6 +6,7 @@ import 'package:isochron_flutter/services/export_service.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
 import 'package:isochron_flutter/ui/workspace/workspace_manager.dart';
+import 'package:isochron_cli/isochron_cli.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
 
@@ -145,11 +146,44 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
           ),
           showLabel: true,
           onPressed: () async {
+            final track = selectedNode!.track!;
+            final frags = manager.homeManager.value.fragments;
+            final hasUserEdits = frags.any(
+              (f) =>
+                  f.status == FragmentStatus.edited ||
+                  f.status == FragmentStatus.reviewed,
+            );
+
+            if (hasUserEdits && context.mounted) {
+              final proceed = await showCupertinoDialog<bool>(
+                context: context,
+                builder: (dialogCtx) => CupertinoAlertDialog(
+                  title: const Text("Re-align Track?"),
+                  content: const Text(
+                    "This track contains edited or reviewed verse boundaries.\n\n"
+                    "Re-aligning will overwrite these boundaries with new automatic predictions. "
+                    "A backup (.bak) of the current alignment will be saved.",
+                  ),
+                  actions: [
+                    CupertinoDialogAction(
+                      isDestructiveAction: true,
+                      onPressed: () => Navigator.pop(dialogCtx, true),
+                      child: const Text("Overwrite"),
+                    ),
+                    CupertinoDialogAction(
+                      isDefaultAction: true,
+                      onPressed: () => Navigator.pop(dialogCtx, false),
+                      child: const Text("Cancel"),
+                    ),
+                  ],
+                ),
+              );
+              if (proceed != true) return;
+            }
+
             try {
               await manager.homeManager.runAlignment(
-                trackId: selectedNode!.track!.id,
-                snapMode: manager.project!.snapMode,
-                snapOffsetMs: manager.project!.snapOffset ?? 0,
+                trackId: track.id,
               );
             } catch (e) {
               if (context.mounted) {

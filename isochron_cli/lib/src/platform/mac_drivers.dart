@@ -18,23 +18,3 @@ class MacAudioDriver implements AudioDriver {
     await WavUtils.concatenate(files, output);
   }
 }
-
-class MacTtsDriver implements TtsDriver {
-  @override
-  Future<void> synthesize(String text, String outputPath) async {
-    // Directly synthesize to 16kHz mono WAV using macOS `say`
-    final sayResult = await Process.run('/usr/bin/say', [
-      '-v',
-      'Samantha',
-      '--file-format=WAVE',
-      '--data-format=LEI16@16000',
-      '-o',
-      outputPath,
-      text,
-    ]);
-
-    if (sayResult.exitCode != 0) {
-      throw Exception("macOS 'say' failed: ${sayResult.stderr}");
-    }
-  }
-}

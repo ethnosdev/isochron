@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:test/test.dart';
 
@@ -164,6 +165,52 @@ is1\tIntroductory Section
       ];
 
       expect(payload.trim().split('\n'), equals(expectedLines));
+    });
+
+    test('exportPayload generates json format correctly', () {
+      final fragments = [
+        Fragment(index: 0, id: '1', text: 'First verse')
+          ..setRealTiming(start: 0.123, end: 1.456),
+        Fragment(index: 1, id: '2', text: 'Second verse')
+          ..setRealTiming(start: 1.456, end: 3.789),
+      ];
+
+      final payload = TimingExport.exportPayload(
+        fragments: fragments,
+        format: CliOutputFormat.json,
+        sourceTextPath: 'eng-01-GEN-01.txt',
+      );
+
+      final decoded = jsonDecode(payload) as List<dynamic>;
+      expect(decoded.length, 2);
+      expect(decoded[0]['index'], 0);
+      expect(decoded[0]['id'], '1');
+      expect(decoded[0]['text'], 'First verse');
+      expect(decoded[0]['start'], 0.123);
+      expect(decoded[0]['end'], 1.456);
+      expect(decoded[1]['index'], 1);
+      expect(decoded[1]['id'], '2');
+      expect(decoded[1]['text'], 'Second verse');
+      expect(decoded[1]['start'], 1.456);
+      expect(decoded[1]['end'], 3.789);
+    });
+
+    test('exportPayload generates timing format correctly with parsed metadata', () {
+      final fragments = [
+        Fragment(index: 0, id: '1', text: 'First verse')
+          ..setRealTiming(start: 0.123, end: 1.456),
+      ];
+
+      final payload = TimingExport.exportPayload(
+        fragments: fragments,
+        format: CliOutputFormat.timing,
+        sourceTextPath: 'eng-01-GEN-01.txt',
+      );
+
+      expect(payload, contains('\\id GEN'));
+      expect(payload, contains('\\c 01'));
+      expect(payload, contains('\\level phrase'));
+      expect(payload, contains('0.123\t1.456\t1'));
     });
   });
 

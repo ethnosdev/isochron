@@ -6,7 +6,6 @@ import 'package:isochron_flutter/ui/theme/app_theme.dart';
 class StudioFragmentList extends StatefulWidget {
   final List<Fragment> fragments;
   final ValueNotifier<Duration> playbackNotifier;
-  final Map<String, String>? rules;
   final int? selectedIndex;
 
   final Function(int) onSelect;
@@ -19,7 +18,6 @@ class StudioFragmentList extends StatefulWidget {
     super.key,
     required this.fragments,
     required this.playbackNotifier,
-    this.rules,
     this.selectedIndex,
     required this.onSelect,
     required this.onJumpTo,
@@ -40,7 +38,6 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
   @override
   void initState() {
     super.initState();
-    // Listen directly to the playhead for auto-scrolling
     widget.playbackNotifier.addListener(_onPlaybackPositionChanged);
   }
 
@@ -72,7 +69,6 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
   void _scrollToIndex(int index) {
     if (!_scrollController.hasClients) return;
 
-    // Put the active item exactly at the top (or 1 row down for slight context)
     final targetIndex = index > 0 ? index - 1 : 0;
     final idealOffset = targetIndex * _rowHeight;
     final min = _scrollController.position.minScrollExtent;
@@ -82,6 +78,48 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
       idealOffset.clamp(min, max),
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOut,
+    );
+  }
+
+  Widget _buildStatusBadge(BuildContext context, FragmentStatus status) {
+    Color bg;
+    Color fg;
+    String label;
+
+    switch (status) {
+      case FragmentStatus.edited:
+        bg = CupertinoColors.systemOrange.withValues(alpha: 0.18);
+        fg = CupertinoColors.systemOrange;
+        label = "Edited";
+        break;
+      case FragmentStatus.reviewed:
+        bg = CupertinoColors.systemGreen.withValues(alpha: 0.18);
+        fg = CupertinoColors.systemGreen;
+        label = "Reviewed";
+        break;
+      case FragmentStatus.auto:
+        bg = CupertinoColors.systemBlue.withValues(alpha: 0.15);
+        fg = CupertinoColors.systemBlue;
+        label = "Auto";
+        break;
+      case FragmentStatus.legacy:
+        return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 9.5,
+          color: fg,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
     );
   }
 
@@ -111,21 +149,12 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
             final f = widget.fragments[i];
             final hasTime = f.realStart >= 0;
 
-            String? transliteratedText;
-            if (widget.rules != null) {
-              transliteratedText = Transliterator.convert(
-                f.text,
-                widget.rules!,
-              );
-            }
-
             final isPlaying =
                 hasTime &&
                 currentPos.inMilliseconds >= (f.realStart * 1000) &&
                 currentPos.inMilliseconds < (f.realEnd * 1000);
 
             final isSelected = widget.selectedIndex == i;
-
             final bool isHighlighted = isPlaying || (isSelected && !hasTime);
 
             final macBlue = AppTheme.accent(context);
@@ -178,15 +207,6 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                          // Display the lock independently so the index is never hidden
-                          if (f.isPinned) ...[
-                            const SizedBox(height: 2),
-                            Icon(
-                              CupertinoIcons.lock_fill,
-                              size: 10,
-                              color: AppTheme.warning(context),
-                            ),
-                          ],
                         ],
                       ),
                     ),
@@ -220,6 +240,20 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                                 ),
                                 const SizedBox(width: 8),
                               ],
+                              _buildStatusBadge(context, f.status),
+                              if (f.status != FragmentStatus.legacy)
+                                const SizedBox(width: 6),
+                              if (f.warnings.isNotEmpty) ...[
+                                MacosTooltip(
+                                  message: f.warnings.join('\n'),
+                                  child: Icon(
+                                    CupertinoIcons.exclamationmark_triangle_fill,
+                                    size: 12,
+                                    color: CupertinoColors.systemYellow,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                              ],
                               Expanded(
                                 child: Text(
                                   f.text,
@@ -233,19 +267,6 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                               ),
                             ],
                           ),
-                          if (transliteratedText != null) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              transliteratedText,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: subTextColor,
-                                fontFamily: 'Courier',
-                              ),
-                            ),
-                          ],
                         ],
                       ),
                     ),

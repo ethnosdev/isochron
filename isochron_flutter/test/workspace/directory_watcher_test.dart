@@ -158,36 +158,6 @@ void main() {
       wm.dispose();
     });
 
-    test('handles .claim.json remote update', () async {
-      final wm = WorkspaceManager();
-      final projectDir = p.join(tempDir.path, 'TestProject');
-      await wm.createProject(projectDir, 'TestProject');
-
-      final col = wm.project!.collections.first;
-      final claimFile = File(
-        p.join(
-          projectDir,
-          'collections',
-          col.folderName,
-          'alignments',
-          'track_01.claim.json',
-        ),
-      );
-      await claimFile.parent.create(recursive: true);
-      await claimFile.writeAsString(
-        jsonEncode({'user': 'Alice Smith', 'claimedAt': DateTime.now().toIso8601String()}),
-      );
-
-      bool notified = false;
-      wm.addListener(() => notified = true);
-
-      await wm.handleRemoteSyncForTest(claimFile.path);
-
-      expect(notified, isTrue);
-
-      wm.dispose();
-    });
-
     test('handles remote alignment completion updating pending track to done', () async {
       final wm = WorkspaceManager();
       final projectDir = p.join(tempDir.path, 'TestProject');

@@ -8,12 +8,12 @@ class IsochronWaveformPainter extends CustomPainter {
   final double playbackPosSeconds;
   final double totalSeconds;
   final double zoomLevel;
+  final int? activeFragmentIndex;
 
   // --- Dynamic Theme Colors ---
   final Color accentColor;
   final Color waveColor;
   final Color playheadColor;
-  final Color pinnedColor;
 
   final double contentWidth;
   final double padding;
@@ -24,22 +24,19 @@ class IsochronWaveformPainter extends CustomPainter {
     required this.playbackPosSeconds,
     required this.totalSeconds,
     required this.zoomLevel,
+    this.activeFragmentIndex,
     required this.accentColor,
     required this.waveColor,
     required this.playheadColor,
-    required this.pinnedColor,
     required this.contentWidth,
     required this.padding,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Shift the entire drawing system to the right by [padding]
     canvas.save();
     canvas.translate(padding, 0);
 
-    // Pass the calculated "audio width" (contentWidth) instead of size.width
-    // so the time-to-pixel math remains accurate.
     _drawWaveform(canvas, Size(contentWidth, size.height));
     _drawFragments(canvas, Size(contentWidth, size.height));
     _drawPlayhead(canvas, Size(contentWidth, size.height));
@@ -51,12 +48,11 @@ class IsochronWaveformPainter extends CustomPainter {
     final wavePaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0
-      ..color = waveColor; // <-- Uses dynamic color from theme
+      ..color = waveColor;
 
     final totalSamples = waveform.length;
     const double pixelStep = 1.0;
 
-    // We iterate 0 -> contentWidth
     for (double x = 0; x < size.width; x += pixelStep) {
       final sampleIdx = ((x / size.width) * totalSamples).toInt();
       if (sampleIdx >= 0 && sampleIdx < totalSamples) {
@@ -72,16 +68,17 @@ class IsochronWaveformPainter extends CustomPainter {
 
     for (final frag in fragments) {
       if (frag.realStart < 0) continue;
-      final bool pinned = frag.isPinned;
-      final Color lineColor = pinned ? pinnedColor : accentColor;
+
+      final bool isActive = (frag.index == activeFragmentIndex);
+      final Color lineColor = isActive ? Colors.amberAccent : accentColor;
 
       final paintLine = Paint()
         ..color = lineColor
-        ..strokeWidth = pinned ? 2.5 : 2.0;
+        ..strokeWidth = isActive ? 3.0 : 2.0;
 
-      final paintFill = Paint()..color = lineColor.withValues(alpha: 0.15);
+      final paintFill = Paint()
+        ..color = lineColor.withValues(alpha: isActive ? 0.25 : 0.12);
 
-      // Map time -> pixels using contentWidth
       final xStart = (frag.realStart / totalSeconds) * size.width;
       final xEnd = (frag.realEnd / totalSeconds) * size.width;
 
@@ -93,7 +90,28 @@ class IsochronWaveformPainter extends CustomPainter {
       );
       canvas.drawLine(Offset(xEnd, 0), Offset(xEnd, size.height), paintLine);
 
-      // Pin indicator drawn as a widget overlay in WaveformView — nothing to paint here.
+      // Ghost Marker: Subtle dashed line at autoStart if edited
+      if (frag.status == FragmentStatus.edited &&
+          frag.autoStart != null &&
+          (frag.autoStart! - frag.realStart).abs() > 0.01) {
+        final xGhost = (frag.autoStart! / totalSeconds) * size.width;
+        final ghostPaint = Paint()
+          ..color = accentColor.withValues(alpha: 0.45)
+          ..strokeWidth = 1.5;
+
+        // Draw vertical dashed line
+        double curY = 0.0;
+        const dashLen = 4.0;
+        const gapLen = 4.0;
+        while (curY < size.height) {
+          canvas.drawLine(
+            Offset(xGhost, curY),
+            Offset(xGhost, (curY + dashLen).clamp(0.0, size.height)),
+            ghostPaint,
+          );
+          curY += dashLen + gapLen;
+        }
+      }
 
       if (xEnd - xStart > 25) {
         textPainter.text = TextSpan(
@@ -113,22 +131,17 @@ class IsochronWaveformPainter extends CustomPainter {
   void _drawPlayhead(Canvas canvas, Size size) {
     final x = (playbackPosSeconds / totalSeconds) * size.width;
     final paint = Paint()
-      ..color =
-          playheadColor // <-- Uses dynamic color from theme
+      ..color = playheadColor
       ..strokeWidth = 2.0;
 
     canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
 
-    // Triangle Cap
     final pathHead = Path();
     pathHead.moveTo(x - 6, 0);
     pathHead.lineTo(x + 6, 0);
     pathHead.lineTo(x, 8);
     pathHead.close();
-    canvas.drawPath(
-      pathHead,
-      Paint()..color = playheadColor,
-    ); // <-- dynamic color
+    canvas.drawPath(pathHead, Paint()..color = playheadColor);
   }
 
   double _normalise(int s, double height) {

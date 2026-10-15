@@ -1,3 +1,20 @@
+import 'dart:math' as math;
+
+enum FragmentStatus {
+  auto,
+  edited,
+  reviewed,
+  legacy;
+
+  static FragmentStatus fromString(String? value) {
+    if (value == null) return FragmentStatus.legacy;
+    return FragmentStatus.values.firstWhere(
+      (v) => v.name == value.toLowerCase(),
+      orElse: () => FragmentStatus.legacy,
+    );
+  }
+}
+
 class Fragment {
   /// The sequential internal identifier (0, 1, 2...)
   /// Critical for array lookups and UI list ordering.
@@ -10,32 +27,37 @@ class Fragment {
   /// The actual text content to be spoken
   final String text;
 
-  /// Transliterated text if original text uses non-latin alphabet
-  String? spokenText;
-
-  // --- Anchor Timings ---
-  double anchorStart = 0.0;
-  double anchorEnd = 0.0;
-
   // --- Real Timings ---
   double realStart = 0.0;
   double realEnd = 0.0;
 
-  // --- Pinned Timings (user-verified) ---
-  /// If set, these values were supplied by the user and are treated as ground truth.
-  /// The alignment pipeline will use these as hard boundaries rather than computing them.
-  double? pinnedStart;
-  double? pinnedEnd;
+  // --- MMS Fields ---
+  /// The original aligner recommendation (for ghost marker display).
+  double? autoStart;
 
-  /// Returns true if the user has locked in the timing for this fragment.
-  bool get isPinned => pinnedStart != null;
+  /// Confidence score between 0.0 and 1.0.
+  double? confidence;
+
+  /// Diagnostic anomaly flags (e.g. not_at_pause, long_verse).
+  List<String> flags = [];
+
+  /// Lifecycle status: auto, edited, reviewed, or legacy.
+  FragmentStatus status;
+
+  /// Tokenizer and processing warnings (e.g. dropped digits, empty text).
+  List<String> warnings = [];
 
   Fragment({
     required this.index,
     required this.text,
     this.id,
-    this.spokenText,
-  });
+    this.autoStart,
+    this.confidence,
+    List<String>? flags,
+    this.status = FragmentStatus.auto,
+    List<String>? warnings,
+  })  : flags = flags ?? [],
+        warnings = warnings ?? [];
 
   /// Helper to update real timing after alignment
   void setRealTiming({required double start, required double end}) {
@@ -43,23 +65,37 @@ class Fragment {
     realEnd = end;
   }
 
-  /// Locks in user-verified timing so the pipeline treats this fragment as a
-  /// fixed boundary rather than aligning it via DTW.
-  void setPinnedTiming({required double start, required double end}) {
-    pinnedStart = start;
-    pinnedEnd = end;
-  }
+  Map<String, dynamic> toJson() => {
+        'index': index,
+        if (id != null) 'id': id,
+        'text': text,
+        'start': double.parse(realStart.toStringAsFixed(3)),
+        'end': double.parse(realEnd.toStringAsFixed(3)),
+        if (autoStart != null)
+          'autoStart': double.parse(autoStart!.toStringAsFixed(3)),
+        if (confidence != null)
+          'confidence': double.parse(confidence!.toStringAsFixed(3)),
+        if (flags.isNotEmpty) 'flags': flags,
+        if (status != FragmentStatus.legacy) 'status': status.name,
+        if (warnings.isNotEmpty) 'warnings': warnings,
+      };
 
-  /// Removes the pin, returning this fragment to normal DTW-aligned status.
-  void clearPinnedTiming() {
-    pinnedStart = null;
-    pinnedEnd = null;
-  }
-
-  /// Helper to update anchor timing during synthesis
-  void setAnchorTiming({required double start, required double end}) {
-    anchorStart = start;
-    anchorEnd = end;
+  factory Fragment.fromJson(Map<String, dynamic> json) {
+    final f = Fragment(
+      index: json['index'] as int,
+      id: json['id']?.toString(),
+      text: json['text'] as String? ?? '',
+      autoStart: (json['autoStart'] as num?)?.toDouble(),
+      confidence: (json['confidence'] as num?)?.toDouble(),
+      flags: (json['flags'] as List?)?.map((e) => e.toString()).toList(),
+      status: FragmentStatus.fromString(json['status']?.toString()),
+      warnings: (json['warnings'] as List?)?.map((e) => e.toString()).toList(),
+    );
+    f.setRealTiming(
+      start: (json['start'] as num?)?.toDouble() ?? 0.0,
+      end: (json['end'] as num?)?.toDouble() ?? 0.0,
+    );
+    return f;
   }
 
   Fragment copyWith({
@@ -68,28 +104,30 @@ class Fragment {
     String? text,
     double? realStart,
     double? realEnd,
+    double? autoStart,
+    double? confidence,
+    List<String>? flags,
+    FragmentStatus? status,
+    List<String>? warnings,
   }) {
     final f = Fragment(
       index: index ?? this.index,
       id: id ?? this.id,
       text: text ?? this.text,
+      autoStart: autoStart ?? this.autoStart,
+      confidence: confidence ?? this.confidence,
+      flags: flags ?? List.from(this.flags),
+      status: status ?? this.status,
+      warnings: warnings ?? List.from(this.warnings),
     );
     f.realStart = realStart ?? this.realStart;
     f.realEnd = realEnd ?? this.realEnd;
-    f.spokenText = spokenText;
-    f.anchorStart = anchorStart;
-    f.anchorEnd = anchorEnd;
-    f.pinnedStart = pinnedStart;
-    f.pinnedEnd = pinnedEnd;
     return f;
   }
 
   @override
   String toString() {
-    // Helpful for debugging: shows ID if present, otherwise Index
     final label = id != null ? "ID:$id" : "#$index";
-    return 'Fragment($label, text: "${text.substring(0, min(10, text.length))}...", $realStart - $realEnd)';
+    return 'Fragment($label, text: "${text.substring(0, math.min(10, text.length))}...", $realStart - $realEnd)';
   }
-
-  int min(int a, int b) => a < b ? a : b;
 }

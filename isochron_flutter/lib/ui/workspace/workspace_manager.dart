@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:isochron_flutter/services/alignment_service.dart';
-import 'package:isochron_flutter/services/pins_service.dart';
 import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
 import 'package:isochron_flutter/utils/id_extraction.dart';
 import 'package:isochron_flutter/ui/app_manager.dart';
@@ -147,7 +146,6 @@ class WorkspaceManager extends ChangeNotifier {
 
   void closeProject() {
     _stopDirectoryWatcher();
-    homeManager.releaseCurrentClaim();
     project = null;
     selectedNode = null;
     expandedNodes.clear();
@@ -203,10 +201,6 @@ class WorkspaceManager extends ChangeNotifier {
 
         if (await oldJsonFile.exists()) {
           await oldJsonFile.copy(newJsonPath);
-          final oldPinsFile = File(PinsService.pinsPath(oldJsonFile.path));
-          if (await oldPinsFile.exists()) {
-            await oldPinsFile.copy(PinsService.pinsPath(newJsonPath));
-          }
         }
 
         String? finalAudio = track.audioPath;
@@ -318,9 +312,7 @@ class WorkspaceManager extends ChangeNotifier {
       project!.directoryPath,
       collection.folderName,
     );
-    final pinsPath = PinsService.pinsPath(jsonPath);
     if (await File(jsonPath).exists()) await File(jsonPath).delete();
-    if (await File(pinsPath).exists()) await File(pinsPath).delete();
 
     collection.tracks.remove(track);
     if (selectedNode?.track == track) {
@@ -374,7 +366,6 @@ class WorkspaceManager extends ChangeNotifier {
         project!.directoryPath,
         col.folderName,
       );
-      final oldPinsPath = PinsService.pinsPath(oldJsonPath);
 
       final newFilename = '${cleanNewName}_timing.json';
       track.name = cleanNewName;
@@ -384,7 +375,6 @@ class WorkspaceManager extends ChangeNotifier {
         project!.directoryPath,
         col.folderName,
       );
-      final newPinsPath = PinsService.pinsPath(newJsonPath);
 
       try {
         final alignDir = Directory(p.dirname(newJsonPath));
@@ -392,9 +382,6 @@ class WorkspaceManager extends ChangeNotifier {
 
         if (await File(oldJsonPath).exists()) {
           await File(oldJsonPath).rename(newJsonPath);
-        }
-        if (await File(oldPinsPath).exists()) {
-          await File(oldPinsPath).rename(newPinsPath);
         }
       } catch (e) {
         debugPrint("Failed to rename physical files: $e");
@@ -413,9 +400,7 @@ class WorkspaceManager extends ChangeNotifier {
       project!.directoryPath,
       collection.folderName,
     );
-    final pinsPath = PinsService.pinsPath(jsonPath);
     if (await File(jsonPath).exists()) await File(jsonPath).delete();
-    if (await File(pinsPath).exists()) await File(pinsPath).delete();
 
     track.status = AlignmentStatus.pending;
     await collection.saveTracks(project!.directoryPath);
@@ -501,12 +486,11 @@ class WorkspaceManager extends ChangeNotifier {
           actualTextPath = tempCleanTextFile.path;
         }
 
-        List<Fragment> fragments = await alignmentService.runIsochron(
+        List<Fragment> fragments = await alignmentService.align(
           textPath: actualTextPath,
           audioPath: resolvedAudio,
-          dictPath: project!.dictPath,
-          snapMode: project!.snapMode,
-          snapOffsetMs: project!.snapOffset ?? 0,
+          languageCode: project!.languageCode,
+          leadInSeconds: project!.boundaryLeadInMs / 1000.0,
           onProgress: (status, prog) {
             if (isBatchRunning) {
               batchStatus = status;
@@ -766,12 +750,7 @@ class WorkspaceManager extends ChangeNotifier {
           }
         }
       }
-      // 2. Track claim updated/released/created remotely
-      else if (normalizedPath.endsWith('.claim.json')) {
-        needsNotify = true;
-        await homeManager.checkCurrentClaim();
-      }
-      // 3. Project settings / collections updated remotely
+      // 2. Project settings / collections updated remotely
       else if (normalizedPath ==
           p.canonicalize(p.join(project!.directoryPath, 'project.json'))) {
         try {

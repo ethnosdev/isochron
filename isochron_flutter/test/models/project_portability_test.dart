@@ -106,13 +106,13 @@ void main() {
 
       // Modify project settings and save ONLY settings
       project.name = 'Updated Project Name';
-      project.snapMode = 'gap';
+      project.languageCode = 'heb';
       await project.saveSettingsOnly();
 
       // Verify project.json was updated
       final updatedProjectJson = jsonDecode(await projectJsonFile.readAsString());
       expect(updatedProjectJson['name'], 'Updated Project Name');
-      expect(updatedProjectJson['snapMode'], 'gap');
+      expect(updatedProjectJson['languageCode'], 'heb');
       expect(updatedProjectJson.containsKey('directoryPath'), isFalse);
 
       // Verify collection files were untouched

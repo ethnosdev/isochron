@@ -1,18 +1,21 @@
 name: isochron_cli
-description: A synthesis-based forced aligner CLI.
+description: A pure-Dart Meta MMS neural forced aligner CLI.
 version: 0.0.1
 # repository: https://github.com/your_username/isochron
 
 environment:
-  sdk: ^3.0.0
+  sdk: ^3.13.5
 
 dependencies:
   args: ^2.4.2
   path: ^1.9.0
-  # Fast Fourier Transform (FFT) implementation
-  fftea: ^1.4.0
+  ffi: ^2.2.0
+  crypto: ^3.0.7
+  http: ^1.6.0
+  uroman: ^1.1.0
   unorm_dart: ^0.3.2
 
 dev_dependencies:
+  ffigen: ^23.0.0
   lints: ^6.0.0
   test: ^1.24.0
