@@ -23,6 +23,48 @@ class _StudioEditorState extends State<StudioEditor> {
   final ScrollController _waveScroll = ScrollController();
 
   @override
+  void dispose() {
+    _waveScroll.dispose();
+    super.dispose();
+  }
+
+  void _scrollToTime(
+    double anchorTime,
+    double zoomLevel,
+    Duration audioDuration,
+  ) {
+    if (audioDuration.inMilliseconds == 0) return;
+
+    void doScroll() {
+      if (!_waveScroll.hasClients) return;
+
+      final viewportWidth = _waveScroll.position.viewportDimension;
+      final totalDuration = audioDuration.inMilliseconds / 1000.0;
+      final centerOffset = WaveformView.calculateCenterOffset(
+        anchorTime: anchorTime,
+        totalDurationSeconds: totalDuration,
+        viewportWidth: viewportWidth,
+        zoomLevel: zoomLevel,
+      );
+
+      _waveScroll.animateTo(
+        centerOffset.clamp(
+          0.0,
+          _waveScroll.position.maxScrollExtent,
+        ),
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+      );
+    }
+
+    if (_waveScroll.hasClients) {
+      doScroll();
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => doScroll());
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     // Wrap the entire editor in a shortcut listener
     return CallbackShortcuts(
@@ -185,6 +227,13 @@ class _StudioEditorState extends State<StudioEditor> {
                             milliseconds: (frag.realStart * 1000).ceil(),
                           ),
                         );
+                        if (frag.realStart >= 0) {
+                          _scrollToTime(
+                            frag.realStart,
+                            widget.homeManager.value.zoomLevel,
+                            widget.homeManager.value.audioDuration,
+                          );
+                        }
                       },
                       onDoubleTap: (idx) {
                         widget.homeManager.enterFocusMode(idx);

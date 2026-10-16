@@ -14,6 +14,21 @@ class WaveformView extends StatefulWidget {
   final ScrollController scrollController;
   final ValueNotifier<Duration> playbackNotifier;
 
+  static const double hPadding = 40.0;
+
+  static double calculateCenterOffset({
+    required double anchorTime,
+    required double totalDurationSeconds,
+    required double viewportWidth,
+    required double zoomLevel,
+  }) {
+    if (totalDurationSeconds <= 0) return 0.0;
+    final contentWidth = viewportWidth * zoomLevel;
+    final targetPixel =
+        (anchorTime / totalDurationSeconds) * contentWidth + hPadding;
+    return targetPixel - (viewportWidth / 2);
+  }
+
   const WaveformView({
     super.key,
     required this.controller,
@@ -26,29 +41,43 @@ class WaveformView extends StatefulWidget {
   State<WaveformView> createState() => _WaveformViewState();
 }
 
-class _WaveformViewState extends State<WaveformView> {
+class _WaveformViewState extends State<WaveformView>
+    with TickerProviderStateMixin {
   int? _dragIndex;
   bool _dragStart = true;
-  static const double _hPadding = 40.0;
+  static const double _hPadding = WaveformView.hPadding;
   SystemMouseCursor _cursor = SystemMouseCursors.basic;
   static const double _hoverThresholdPx = 10.0;
   bool _isPanZooming = false;
+  late final AnimationController _flingController;
+  double _flingVelocity = 0.0;
+  VelocityTracker? _panVelocityTracker;
 
   @override
   void initState() {
     super.initState();
+    _flingController = AnimationController.unbounded(vsync: this)
+      ..addListener(_handleFlingTick);
     widget.playbackNotifier.addListener(_autoScrollOnPlayback);
   }
 
   @override
   void didUpdateWidget(WaveformView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Only auto-center if the system changed focus via a double click
+    // Auto-center if the system changed focus via a double click
     if (oldWidget.state.focusedFragmentIndex !=
             widget.state.focusedFragmentIndex &&
         widget.state.focusedFragmentIndex != null) {
       final idx = widget.state.focusedFragmentIndex!;
       if (idx < widget.state.fragments.length) {
+        _centerOnTime(widget.state.fragments[idx].realStart);
+      }
+    } else if (oldWidget.state.selectedFragmentIndex !=
+            widget.state.selectedFragmentIndex &&
+        widget.state.selectedFragmentIndex != null) {
+      final idx = widget.state.selectedFragmentIndex!;
+      if (idx < widget.state.fragments.length &&
+          widget.state.fragments[idx].realStart >= 0) {
         _centerOnTime(widget.state.fragments[idx].realStart);
       }
     }
@@ -63,23 +92,78 @@ class _WaveformViewState extends State<WaveformView> {
 
       final viewportWidth = widget.scrollController.position.viewportDimension;
       final totalDuration = widget.state.audioDuration.inMilliseconds / 1000.0;
-      final contentWidth = viewportWidth * widget.state.zoomLevel;
+      final centerOffset = WaveformView.calculateCenterOffset(
+        anchorTime: anchorTime,
+        totalDurationSeconds: totalDuration,
+        viewportWidth: viewportWidth,
+        zoomLevel: widget.state.zoomLevel,
+      );
 
-      final targetPixel =
-          (anchorTime / totalDuration) * contentWidth + _hPadding;
-      final centerOffset = targetPixel - (viewportWidth / 2);
+      _stopFling();
+      final target = centerOffset.clamp(
+        0.0,
+        widget.scrollController.position.maxScrollExtent,
+      );
 
-      widget.scrollController.jumpTo(
-        centerOffset.clamp(
-          0.0,
-          widget.scrollController.position.maxScrollExtent,
-        ),
+      widget.scrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
       );
     });
   }
 
+  void _handleFlingTick() {
+    if (!widget.scrollController.hasClients) {
+      _stopFling();
+      return;
+    }
+    final maxScroll = widget.scrollController.position.maxScrollExtent;
+    final current = _flingController.value;
+    final target = current.clamp(0.0, maxScroll);
+    widget.scrollController.jumpTo(target);
+    if ((_flingVelocity < 0 && current <= 0.0) ||
+        (_flingVelocity > 0 && current >= maxScroll)) {
+      _stopFling();
+    }
+  }
+
+  void _applyFling(double velocity) {
+    if (!widget.scrollController.hasClients ||
+        widget.state.audioDuration.inMilliseconds == 0) {
+      return;
+    }
+
+    _stopFling();
+
+    final currentOffset = widget.scrollController.offset;
+    final maxScroll = widget.scrollController.position.maxScrollExtent;
+
+    if ((currentOffset <= 0.0 && velocity < 0) ||
+        (currentOffset >= maxScroll && velocity > 0)) {
+      return;
+    }
+
+    final simulation = ClampingScrollSimulation(
+      position: currentOffset,
+      velocity: velocity,
+      friction: 0.015,
+    );
+
+    _flingVelocity = velocity;
+    _flingController.animateWith(simulation);
+  }
+
+  void _stopFling() {
+    if (_flingController.isAnimating) {
+      _flingController.stop();
+    }
+  }
+
   @override
   void dispose() {
+    _stopFling();
+    _flingController.dispose();
     widget.playbackNotifier.removeListener(_autoScrollOnPlayback);
     super.dispose();
   }
@@ -156,6 +240,7 @@ class _WaveformViewState extends State<WaveformView> {
         // --- HELPER: Perfectly Anchored Exponential Zoom ---
         void applyZoom(double zoomIntensity, double viewportX) {
           if (zoomIntensity == 0) return;
+          _stopFling();
 
           final currentZoom = widget.state.zoomLevel;
 
@@ -193,6 +278,7 @@ class _WaveformViewState extends State<WaveformView> {
         // --- HELPER: Handles horizontal panning ---
         void applyPan(double panDelta) {
           if (panDelta == 0) return;
+          _stopFling();
           final currentOffset = widget.scrollController.offset;
           widget.scrollController.jumpTo(
             (currentOffset + panDelta).clamp(
@@ -204,10 +290,12 @@ class _WaveformViewState extends State<WaveformView> {
 
         return Listener(
           behavior: HitTestBehavior.opaque,
+          onPointerDown: (_) => _stopFling(),
 
           // 1. STANDARD MOUSE WHEELS
           onPointerSignal: (event) {
             if (event is PointerScrollEvent) {
+              _stopFling();
               final keys = HardwareKeyboard.instance.logicalKeysPressed;
               final isControl =
                   keys.contains(LogicalKeyboardKey.controlLeft) ||
@@ -228,6 +316,9 @@ class _WaveformViewState extends State<WaveformView> {
           // 2. MAC TRACKPADS (Two-finger swipe)
           onPointerPanZoomStart: (_) {
             _isPanZooming = true;
+            _stopFling();
+            _panVelocityTracker =
+                VelocityTracker.withKind(PointerDeviceKind.trackpad);
             // Force-drop any marker if user drops a 2nd finger to scroll
             if (_dragIndex != null) {
               setState(() {
@@ -236,8 +327,16 @@ class _WaveformViewState extends State<WaveformView> {
               });
             }
           },
-          onPointerPanZoomEnd: (_) => _isPanZooming = false,
+          onPointerPanZoomEnd: (_) {
+            _isPanZooming = false;
+            final v =
+                _panVelocityTracker?.getVelocity().pixelsPerSecond.dx ?? 0.0;
+            if (v.abs() > 50.0) {
+              _applyFling(-v);
+            }
+          },
           onPointerPanZoomUpdate: (event) {
+            _panVelocityTracker?.addPosition(event.timeStamp, event.position);
             final keys = HardwareKeyboard.instance.logicalKeysPressed;
             final isControl =
                 keys.contains(LogicalKeyboardKey.controlLeft) ||
@@ -248,12 +347,12 @@ class _WaveformViewState extends State<WaveformView> {
             // Vertical 2-finger swipe OR holding control = ZOOM
             if (isControl ||
                 event.panDelta.dy.abs() > event.panDelta.dx.abs()) {
-              // Negative dy means pushing fingers UP. We want up = Zoom IN.
+              _stopFling();
+              _panVelocityTracker = null;
               applyZoom(-event.panDelta.dy * 0.015, event.localPosition.dx);
             }
             // Horizontal 2-finger swipe = PAN
             else if (event.panDelta.dx.abs() > 0) {
-              // Trackpad panDelta is inverted relative to scrollDelta
               applyPan(-event.panDelta.dx);
             }
           },
@@ -288,6 +387,7 @@ class _WaveformViewState extends State<WaveformView> {
                   ),
                   onHorizontalDragStart: (d) {
                     if (_isPanZooming) return;
+                    _stopFling();
                     _handleDragStart(
                       d.localPosition.dx,
                       contentWidth,
@@ -296,18 +396,29 @@ class _WaveformViewState extends State<WaveformView> {
                   },
                   onHorizontalDragUpdate: (d) {
                     if (_isPanZooming) return;
-                    _handleDragUpdate(
-                      d.localPosition.dx,
-                      contentWidth,
-                      totalSec,
-                    );
+                    if (_dragIndex != null) {
+                      _handleDragUpdate(
+                        d.localPosition.dx,
+                        contentWidth,
+                        totalSec,
+                      );
+                    } else {
+                      applyPan(-d.delta.dx);
+                    }
                   },
-                  onHorizontalDragEnd: (_) {
+                  onHorizontalDragEnd: (d) {
                     if (_isPanZooming) return;
-                    setState(() {
-                      _dragIndex = null;
-                      _cursor = SystemMouseCursors.basic;
-                    });
+                    if (_dragIndex != null) {
+                      setState(() {
+                        _dragIndex = null;
+                        _cursor = SystemMouseCursors.basic;
+                      });
+                    } else {
+                      final v = d.primaryVelocity ?? 0.0;
+                      if (v.abs() > 50.0) {
+                        _applyFling(-v);
+                      }
+                    }
                   },
                   child: Stack(
                     children: [

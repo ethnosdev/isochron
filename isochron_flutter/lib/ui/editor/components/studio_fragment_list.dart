@@ -358,7 +358,7 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
 
                     // 3. TIMING / ACTIONS COLUMN
                     SizedBox(
-                      width: 195,
+                      width: 215,
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
