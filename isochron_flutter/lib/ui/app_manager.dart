@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/utils/id_extraction.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:just_waveform/just_waveform.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:path_provider/path_provider.dart';
@@ -26,23 +29,80 @@ class AppManager extends ValueNotifier<AppState> {
   onBackgroundAlignmentComplete;
 
   final playbackPosition = ValueNotifier(Duration.zero);
+  StreamSubscription<Duration>? _posSub;
+  StreamSubscription<PlayerState>? _stateSub;
+  int? _stopPlaybackAtMs;
+  int? _resetPlaybackToMs;
+  int? _resettingToMs;
+  Timer? _stopPlaybackTimer;
+  Timer? _resettingTimeoutTimer;
 
   AppManager() : super(AppState(zoomLevel: UserSettingsService().lastZoom)) {
-    _audioService.positionStream.listen((pos) {
-      playbackPosition.value = pos;
-    });
-    _audioService.stateStream.listen((s) {
+    _posSub = _audioService.positionStream.listen(handleAudioPosition);
+    _stateSub = _audioService.stateStream.listen((s) {
       value = value.copyWith(isPlaying: s.playing);
     });
   }
 
+  void _cancelFragmentPlayback() {
+    _resettingToMs = null;
+    _resettingTimeoutTimer?.cancel();
+    _resettingTimeoutTimer = null;
+    _stopPlaybackTimer?.cancel();
+    _stopPlaybackTimer = null;
+    _stopPlaybackAtMs = null;
+    _resetPlaybackToMs = null;
+  }
+
+  void _onFragmentPlaybackComplete() {
+    final resetMs = _resetPlaybackToMs;
+    _stopPlaybackTimer?.cancel();
+    _stopPlaybackTimer = null;
+    _stopPlaybackAtMs = null;
+    _resetPlaybackToMs = null;
+    _audioService.pause();
+    if (resetMs != null) {
+      _resettingToMs = resetMs;
+      _resettingTimeoutTimer?.cancel();
+      _resettingTimeoutTimer = Timer(const Duration(milliseconds: 500), () {
+        _resettingToMs = null;
+        _resettingTimeoutTimer = null;
+      });
+      seekTo(Duration(milliseconds: resetMs), isInternalReset: true);
+      playbackPosition.value = Duration(milliseconds: resetMs);
+    }
+  }
+
+  @visibleForTesting
+  void handleAudioPosition(Duration pos) {
+    if (_resettingToMs != null) {
+      if ((pos.inMilliseconds - _resettingToMs!).abs() <= 50) {
+        _resettingToMs = null;
+        _resettingTimeoutTimer?.cancel();
+        _resettingTimeoutTimer = null;
+        playbackPosition.value = pos;
+      }
+      return;
+    }
+    if (_stopPlaybackAtMs != null && pos.inMilliseconds >= _stopPlaybackAtMs!) {
+      _onFragmentPlaybackComplete();
+      return;
+    }
+    playbackPosition.value = pos;
+  }
+
   @override
   void dispose() {
+    _cancelFragmentPlayback();
+    _posSub?.cancel();
+    _stateSub?.cancel();
     _audioService.dispose();
+    playbackPosition.dispose();
     super.dispose();
   }
 
   Future<void> loadTrack(Track track, Project project) async {
+    _cancelFragmentPlayback();
     if (value.isPlaying) {
       await _audioService.pause();
     }
@@ -268,7 +328,7 @@ class AppManager extends ValueNotifier<AppState> {
 
     final currentMs = playbackPosition.value.inMilliseconds;
     final prevFrag = value.fragments.lastWhere(
-      (f) => (f.realStart * 1000) < currentMs - 100,
+      (f) => (f.realStart * 1000) < currentMs - 300,
       orElse: () => value.fragments.first,
     );
 
@@ -372,9 +432,22 @@ class AppManager extends ValueNotifier<AppState> {
     }
   }
 
-  void togglePlay() =>
-      value.isPlaying ? _audioService.pause() : _audioService.play();
-  void seekTo(Duration d) => _audioService.seek(d);
+  void togglePlay() {
+    _cancelFragmentPlayback();
+    value.isPlaying ? _audioService.pause() : _audioService.play();
+  }
+
+  void seekTo(Duration d, {bool isInternalReset = false}) {
+    if (!isInternalReset) {
+      _cancelFragmentPlayback();
+    } else {
+      _stopPlaybackTimer?.cancel();
+      _stopPlaybackTimer = null;
+      _stopPlaybackAtMs = null;
+      _resetPlaybackToMs = null;
+    }
+    _audioService.seek(d);
+  }
 
   void setZoom(double z) {
     final clampedZoom = z.clamp(1.0, 500.0);
@@ -436,37 +509,121 @@ class AppManager extends ValueNotifier<AppState> {
     value = value.copyWith(fragments: frags, hasUnsavedChanges: true);
   }
 
-  /// Nudges the active boundary by [deltaSeconds] and auto-replays from boundary - 0.5s.
+  int? _latchedNudgeFragmentIndex;
+
+  /// Returns true if Cmd (on macOS) or Ctrl (on other platforms) is currently pressed.
+  bool _isModifierPressed() {
+    final keys = HardwareKeyboard.instance.logicalKeysPressed;
+    return keys.contains(LogicalKeyboardKey.meta) ||
+        keys.contains(LogicalKeyboardKey.metaLeft) ||
+        keys.contains(LogicalKeyboardKey.metaRight) ||
+        keys.contains(LogicalKeyboardKey.control) ||
+        keys.contains(LogicalKeyboardKey.controlLeft) ||
+        keys.contains(LogicalKeyboardKey.controlRight);
+  }
+
+  /// Clears any latched fragment index for nudge operations.
+  void clearNudgeLatch() {
+    _latchedNudgeFragmentIndex = null;
+  }
+
+  /// Nudges the active boundary by [deltaSeconds] and seeks directly to the new boundary position.
+  /// If audio was playing, it continues playing immediately from that position; if paused,
+  /// it updates the playhead position without starting playback.
   void nudgeActiveBoundary(double deltaSeconds) {
-    final idx = value.selectedFragmentIndex;
+    if (value.fragments.isEmpty) return;
+
+    if (!_isModifierPressed()) {
+      _latchedNudgeFragmentIndex = null;
+    }
+
+    int? idx = _latchedNudgeFragmentIndex;
+    if (idx == null || idx < 0 || idx >= value.fragments.length) {
+      final currentSec = playbackPosition.value.inMilliseconds / 1000.0;
+      final playheadIdx = value.fragments.indexWhere(
+        (f) =>
+            f.realStart >= 0 &&
+            currentSec >= f.realStart &&
+            currentSec < f.realEnd,
+      );
+      if (playheadIdx != -1) {
+        idx = playheadIdx;
+      } else {
+        idx = value.selectedFragmentIndex;
+      }
+    }
+
     if (idx == null || idx < 0 || idx >= value.fragments.length) return;
+    _latchedNudgeFragmentIndex = idx;
+
     final frag = value.fragments[idx];
+    if (frag.realStart < 0) return;
+
     final newStart = frag.realStart + deltaSeconds;
     updateFragment(idx, newStart, frag.realEnd);
 
-    // Auto-replay from boundary - 0.5s per Listen-and-Nudge design
-    final replayMs = ((newStart - 0.5) * 1000).clamp(0.0, double.infinity).toInt();
-    seekTo(Duration(milliseconds: replayMs));
-    if (!value.isPlaying) {
+    if (value.selectedFragmentIndex != idx) {
+      value = value.copyWith(selectedFragmentIndex: idx);
+    }
+
+    final newStartMs = (newStart * 1000).clamp(0.0, double.infinity).toInt();
+    seekTo(Duration(milliseconds: newStartMs));
+    if (value.isPlaying) {
       _audioService.play();
     }
   }
 
-  /// Plays boundary snippet: boundary - 1.5s -> boundary + 1.5s
-  void playBoundarySnippet() {
-    final idx = value.selectedFragmentIndex;
+  /// Plays only the current fragment (from realStart to realEnd) and then stops,
+  /// resetting the playhead to the beginning of the fragment when finished.
+  void playCurrentFragment() {
+    _cancelFragmentPlayback();
+
+    final currentSec = playbackPosition.value.inMilliseconds / 1000.0;
+    int? idx = value.fragments.indexWhere(
+      (f) =>
+          f.realStart >= 0 &&
+          currentSec >= f.realStart &&
+          currentSec < f.realEnd,
+    );
+    if (idx == -1) {
+      idx = value.selectedFragmentIndex;
+    }
+
     if (idx == null || idx < 0 || idx >= value.fragments.length) return;
     final frag = value.fragments[idx];
-    final snippetStartMs = ((frag.realStart - 1.5) * 1000).clamp(0.0, double.infinity).toInt();
-    seekTo(Duration(milliseconds: snippetStartMs));
-    if (!value.isPlaying) {
-      _audioService.play();
-    }
+    if (frag.realStart < 0 || frag.realEnd <= frag.realStart) return;
+
+    final startMs = (frag.realStart * 1000).ceil();
+    final endMs = (frag.realEnd * 1000).ceil();
+    final durationMs = endMs - startMs;
+    if (durationMs <= 0) return;
+
+    seekTo(Duration(milliseconds: startMs));
+    playbackPosition.value = Duration(milliseconds: startMs);
+    _stopPlaybackAtMs = endMs;
+    _resetPlaybackToMs = startMs;
+    _audioService.play();
+
+    _stopPlaybackTimer = Timer(Duration(milliseconds: durationMs + 100), () {
+      if (_stopPlaybackAtMs != null) {
+        _onFragmentPlaybackComplete();
+      }
+    });
   }
 
   /// Marks verse as reviewed and advances to next verse.
   void markReviewedAndAdvance() {
-    final idx = value.selectedFragmentIndex;
+    final currentSec = playbackPosition.value.inMilliseconds / 1000.0;
+    int? idx = value.fragments.indexWhere(
+      (f) =>
+          f.realStart >= 0 &&
+          currentSec >= f.realStart &&
+          currentSec < f.realEnd,
+    );
+    if (idx == -1) {
+      idx = value.selectedFragmentIndex;
+    }
+
     if (idx == null || idx < 0 || idx >= value.fragments.length) return;
     final frags = List<Fragment>.from(value.fragments);
     frags[idx] = frags[idx].copyWith(status: FragmentStatus.reviewed);
@@ -477,6 +634,10 @@ class AppManager extends ValueNotifier<AppState> {
       hasUnsavedChanges: true,
       selectedFragmentIndex: nextIndex,
     );
+
+    if (nextIndex != null && frags[nextIndex].realStart >= 0) {
+      seekTo(Duration(milliseconds: (frags[nextIndex].realStart * 1000).ceil()));
+    }
   }
 
   /// Jumps to the next verse with diagnostic anomaly flags, wrapping around the track.
@@ -535,6 +696,7 @@ class AppManager extends ValueNotifier<AppState> {
   }
 
   void selectFragment(int? index) {
+    clearNudgeLatch();
     value = value.copyWith(selectedFragmentIndex: index);
   }
 

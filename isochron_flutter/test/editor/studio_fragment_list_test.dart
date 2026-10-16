@@ -8,20 +8,24 @@ void main() {
   Widget buildTestWidget({
     required List<Fragment> fragments,
     ValueNotifier<Duration>? playbackNotifier,
+    double height = 600,
   }) {
     return MacosApp(
       home: MacosWindow(
-        child: SizedBox(
-          width: 800,
-          height: 600,
-          child: StudioFragmentList(
-            fragments: fragments,
-            playbackNotifier: playbackNotifier ?? ValueNotifier(Duration.zero),
-            onSelect: (_) {},
-            onJumpTo: (_) {},
-            onDoubleTap: (_) {},
-            onCapture: (_) {},
-            onClear: (_) {},
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 800,
+            height: height,
+            child: StudioFragmentList(
+              fragments: fragments,
+              playbackNotifier: playbackNotifier ?? ValueNotifier(Duration.zero),
+              onSelect: (_) {},
+              onJumpTo: (_) {},
+              onDoubleTap: (_) {},
+              onCapture: (_) {},
+              onClear: (_) {},
+            ),
           ),
         ),
       ),
@@ -105,6 +109,121 @@ void main() {
 
       final idPos = tester.getTopLeft(find.text('MAT.1.1'));
       expect(origPos.dx, greaterThan(idPos.dx));
+    });
+  });
+
+  group('StudioFragmentList scrolling near end of list', () {
+    testWidgets('does not scroll current item up when last item is visible in the viewport', (tester) async {
+      final playbackNotifier = ValueNotifier<Duration>(Duration.zero);
+      final fragments = List.generate(
+        5,
+        (i) => Fragment(
+          index: i,
+          text: 'Fragment verse $i',
+        )..setRealTiming(start: i * 2.0, end: (i + 1) * 2.0),
+      );
+
+      await tester.pumpWidget(
+        buildTestWidget(
+          fragments: fragments,
+          playbackNotifier: playbackNotifier,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // All 5 items fit in 600px viewport, so the last item (Fragment verse 4) is visible
+      expect(find.text('Fragment verse 4'), findsOneWidget);
+      final initialVerse3Pos = tester.getTopLeft(find.text('Fragment verse 3'));
+
+      // Advance playback to Fragment verse 3 (starts at 6.0s)
+      playbackNotifier.value = const Duration(milliseconds: 6500);
+      await tester.pumpAndSettle();
+
+      // Because the last item is visible and verse 3 is already visible,
+      // it should not attempt to scroll verse 3 up to the top
+      final currentVerse3Pos = tester.getTopLeft(find.text('Fragment verse 3'));
+      expect(currentVerse3Pos.dy, equals(initialVerse3Pos.dy));
+
+      playbackNotifier.dispose();
+    });
+
+    testWidgets('scrolls current item up when last item is NOT visible', (tester) async {
+      final playbackNotifier = ValueNotifier<Duration>(Duration.zero);
+      final fragments = List.generate(
+        50,
+        (i) => Fragment(
+          index: i,
+          text: 'Fragment verse $i',
+        )..setRealTiming(start: i * 2.0, end: (i + 1) * 2.0),
+      );
+
+      await tester.pumpWidget(
+        buildTestWidget(
+          fragments: fragments,
+          playbackNotifier: playbackNotifier,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // In a long list of 50 items, last item (Fragment verse 49) is NOT visible
+      expect(find.text('Fragment verse 49'), findsNothing);
+      final initialVerse5Pos = tester.getTopLeft(find.text('Fragment verse 5'));
+
+      // Advance playback to Fragment verse 5 (starts at 10.0s)
+      playbackNotifier.value = const Duration(milliseconds: 10500);
+      await tester.pumpAndSettle();
+
+      // Since last item is NOT visible, verse 5 scrolls up towards target alignment
+      final currentVerse5Pos = tester.getTopLeft(find.text('Fragment verse 5'));
+      expect(currentVerse5Pos.dy, lessThan(initialVerse5Pos.dy));
+
+      playbackNotifier.dispose();
+    });
+
+    testWidgets('scrolls enough to reveal the full last item if it is not showing fully', (tester) async {
+      final playbackNotifier = ValueNotifier<Duration>(Duration.zero);
+      // Create 3 items in a 130px height viewport so that item 2 (last item) is partially cut off at the bottom
+      final fragments = List.generate(
+        3,
+        (i) => Fragment(
+          index: i,
+          text: 'Fragment verse $i',
+        )..setRealTiming(start: i * 2.0, end: (i + 1) * 2.0),
+      );
+
+      await tester.pumpWidget(
+        buildTestWidget(
+          fragments: fragments,
+          playbackNotifier: playbackNotifier,
+          height: 130,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Verify last item is visible but partially cut off at bottom
+      final lastItemFinder = find.text('Fragment verse 2');
+      expect(lastItemFinder, findsOneWidget);
+      final initialLastItemBottom = tester.getBottomLeft(lastItemFinder).dy;
+      expect(initialLastItemBottom, greaterThan(130.0));
+
+      // Advance playback to Fragment verse 1 (starts at 2.0s)
+      playbackNotifier.value = const Duration(milliseconds: 2500);
+      await tester.pumpAndSettle();
+
+      // The list should scroll just enough to reveal the full last item within the 130px viewport
+      final currentLastItemBottom = tester.getBottomLeft(lastItemFinder).dy;
+      expect(currentLastItemBottom, lessThan(initialLastItemBottom));
+      expect(currentLastItemBottom, lessThanOrEqualTo(130.0 + 1.0));
+
+      // Advance playback again to Fragment verse 2 (starts at 4.0s)
+      playbackNotifier.value = const Duration(milliseconds: 4500);
+      await tester.pumpAndSettle();
+
+      // Since the full last item is now visible, it does not scroll again
+      final subsequentLastItemBottom = tester.getBottomLeft(lastItemFinder).dy;
+      expect(subsequentLastItemBottom, equals(currentLastItemBottom));
+
+      playbackNotifier.dispose();
     });
   });
 }

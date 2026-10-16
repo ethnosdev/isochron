@@ -72,14 +72,11 @@ class _WaveformViewState extends State<WaveformView>
       if (idx < widget.state.fragments.length) {
         _centerOnTime(widget.state.fragments[idx].realStart);
       }
-    } else if (oldWidget.state.selectedFragmentIndex !=
-            widget.state.selectedFragmentIndex &&
-        widget.state.selectedFragmentIndex != null) {
-      final idx = widget.state.selectedFragmentIndex!;
-      if (idx < widget.state.fragments.length &&
-          widget.state.fragments[idx].realStart >= 0) {
-        _centerOnTime(widget.state.fragments[idx].realStart);
-      }
+    } else if (oldWidget.state.fragments != widget.state.fragments) {
+      // Timing was edited: if playhead went off screen, move to beginning of view, otherwise don't move
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _ensurePlayheadVisible();
+      });
     }
   }
 
@@ -169,13 +166,16 @@ class _WaveformViewState extends State<WaveformView>
   }
 
   void _autoScrollOnPlayback() {
+    // Only auto-scroll on playback tick if audio is actively playing
+    if (!widget.state.isPlaying) return;
+    _ensurePlayheadVisible();
+  }
+
+  void _ensurePlayheadVisible() {
     if (!widget.scrollController.hasClients ||
         widget.state.audioDuration.inMilliseconds == 0) {
       return;
     }
-
-    // Only auto-scroll if audio is actually playing
-    if (!widget.state.isPlaying) return;
 
     final viewportWidth = widget.scrollController.position.viewportDimension;
     final totalDuration = widget.state.audioDuration.inMilliseconds / 1000.0;
@@ -193,11 +193,9 @@ class _WaveformViewState extends State<WaveformView>
 
     final currentScroll = widget.scrollController.offset;
 
-    // If the playhead touches the right edge of the visible screen
+    // If the playhead goes off screen to the right, align with beginning of waveform view
     if (absolutePlayhead >= currentScroll + viewportWidth) {
       widget.scrollController.animateTo(
-        // Scroll exactly to the content pixel. This makes the visual playhead
-        // align perfectly with the 40px left padding boundary on the screen.
         playheadContentPixel.clamp(
           0.0,
           widget.scrollController.position.maxScrollExtent,
@@ -205,15 +203,19 @@ class _WaveformViewState extends State<WaveformView>
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
       );
-    } else if (absolutePlayhead < currentScroll) {
-      // If playhead jumped backwards out of view
-      widget.scrollController.jumpTo(
-        (absolutePlayhead - (viewportWidth * 0.5)).clamp(
+    }
+    // If the playhead goes off screen to the left, align with beginning of waveform view
+    else if (absolutePlayhead < currentScroll) {
+      widget.scrollController.animateTo(
+        playheadContentPixel.clamp(
           0.0,
           widget.scrollController.position.maxScrollExtent,
         ),
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
       );
     }
+    // Otherwise, playhead is within visible screen: do not move the view
   }
 
   @override
@@ -375,11 +377,6 @@ class _WaveformViewState extends State<WaveformView>
                   behavior: HitTestBehavior.opaque,
                   onTapUp: (d) =>
                       _handleTap(d.localPosition.dx, contentWidth, totalSec),
-                  onDoubleTapDown: (d) => _handleDoubleTap(
-                    d.localPosition.dx,
-                    contentWidth,
-                    totalSec,
-                  ),
                   onSecondaryTapDown: (d) => _handleRightClick(
                     d.localPosition.dx,
                     contentWidth,
@@ -434,7 +431,6 @@ class _WaveformViewState extends State<WaveformView>
                                   currentPos.inMilliseconds / 1000.0,
                               totalSeconds: totalSec,
                               zoomLevel: widget.state.zoomLevel,
-                              activeFragmentIndex: widget.state.selectedFragmentIndex,
                               accentColor: AppTheme.accent(context),
                               waveColor: AppTheme.grey(context).withValues(
                                 alpha: 0.5,
@@ -509,18 +505,6 @@ class _WaveformViewState extends State<WaveformView>
 
   void _handleTap(double x, double contentWidth, double totalSec) =>
       _handleSeek(x, contentWidth, totalSec);
-
-  void _handleDoubleTap(double x, double contentWidth, double totalSec) {
-    for (final f in widget.state.fragments) {
-      if (f.realStart < 0) continue;
-      final fragStartPx = (f.realStart / totalSec) * contentWidth + _hPadding;
-      final fragEndPx = (f.realEnd / totalSec) * contentWidth + _hPadding;
-      if (x >= fragStartPx && x <= fragEndPx) {
-        widget.controller.selectFragment(f.index);
-        return;
-      }
-    }
-  }
 
   void _handleRightClick(double x, double contentWidth, double totalSec) {
     final time = _pxToSeconds(x, contentWidth, totalSec);

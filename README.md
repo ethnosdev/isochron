@@ -84,19 +84,19 @@ dart run bin/isochron_cli.dart eval --fixtures ../fixtures --csv results.csv
 
 Isochron's Studio Editor is designed for hands-on-keyboard productivity:
 
-| Shortcut                    | Action                    | Description                                                   |
-| :-------------------------- | :------------------------ | :------------------------------------------------------------ |
-| **`Space`**                 | **Play / Pause**          | Toggles audio playback.                                       |
-| **`←` / `→`**               | **Prev / Next Verse**     | Selects previous or next verse.                               |
-| **`Cmd + ←` / `→`**         | **Nudge 50 ms**           | Shifts active boundary by 50 ms with **instant auto-replay**. |
-| **`Cmd + Opt + ←` / `→`**   | **Fine Nudge (10 ms)**    | Micro-adjustment for precise speech onsets.                   |
-| **`Cmd + Shift + ←` / `→`** | **Coarse Nudge (250 ms)** | Large adjustment across pauses.                               |
-| **`B`**                     | **Play Snippet**          | Plays 1.5s before and after the active boundary.              |
-| **`R`**                     | **Mark Reviewed**         | Marks verse as reviewed and advances to next.                 |
-| **`F`**                     | **Jump to Flag**          | Jumps directly to the next flagged verse requiring review.    |
-| **`Enter`**                 | **Capture Timing**        | Captures current playhead position as boundary start.         |
-| **`Cmd + S`**               | **Save**                  | Saves project alignment to JSON.                              |
-| **`Ctrl + ↑` / `↓`**        | **Zoom In / Out**         | Step zooms waveform display.                                  |
+| Shortcut                    | Action                    | Description                                                    |
+| :-------------------------- | :------------------------ | :------------------------------------------------------------- |
+| **`Space`**                 | **Play / Pause**          | Toggles audio playback.                                        |
+| **`←` / `→`**               | **Prev / Next Verse**     | Selects previous or next verse.                                |
+| **`Cmd + ←` / `→`**         | **Nudge 150 ms**          | Shifts active boundary by 150 ms with **instant auto-replay**. |
+| **`Cmd + Opt + ←` / `→`**   | **Fine Nudge (50 ms)**    | Micro-adjustment for precise speech onsets.                    |
+| **`Cmd + Shift + ←` / `→`** | **Coarse Nudge (500 ms)** | Large adjustment across pauses.                                |
+| **`P`**                     | **Play Fragment**         | Plays only the current fragment and then stops.                |
+| **`R`**                     | **Mark Reviewed**         | Marks verse as reviewed and advances to next.                  |
+| **`F`**                     | **Jump to Flag**          | Jumps directly to the next flagged verse requiring review.     |
+| **`Enter`**                 | **Capture Timing**        | Captures current playhead position as boundary start.          |
+| **`Cmd + S`**               | **Save**                  | Saves project alignment to JSON.                               |
+| **`Ctrl + ↑` / `↓`**        | **Zoom In / Out**         | Step zooms waveform display.                                   |
 
 ---
 

@@ -66,13 +66,43 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
     );
   }
 
+  static const double _targetAlignment = 0.15;
+
   void _scrollToIndex(int index) {
     if (!_itemScrollController.isAttached) return;
+
+    final positions = _itemPositionsListener.itemPositions.value;
+    if (positions.isNotEmpty && widget.fragments.isNotEmpty) {
+      final lastIndex = widget.fragments.length - 1;
+      final lastItemPos =
+          positions.where((p) => p.index == lastIndex).firstOrNull;
+
+      if (lastItemPos != null) {
+        final currentPos = positions.where((p) => p.index == index).firstOrNull;
+        if (currentPos != null && currentPos.itemLeadingEdge >= 0) {
+          // If the last item is not showing fully, scroll just enough to reveal it
+          // without overshooting and causing an overscroll bounce.
+          if (lastItemPos.itemTrailingEdge > 1.001) {
+            final lastItemHeight =
+                lastItemPos.itemTrailingEdge - lastItemPos.itemLeadingEdge;
+            final alignment = (1.0 - lastItemHeight).clamp(0.0, 1.0);
+            _itemScrollController.scrollTo(
+              index: lastIndex,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut,
+              alignment: alignment,
+            );
+          }
+          return;
+        }
+      }
+    }
+
     _itemScrollController.scrollTo(
       index: index,
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOut,
-      alignment: 0.15,
+      alignment: _targetAlignment,
     );
   }
 

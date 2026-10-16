@@ -23,9 +23,32 @@ class _StudioEditorState extends State<StudioEditor> {
   final ScrollController _waveScroll = ScrollController();
 
   @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+  }
+
+  @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     _waveScroll.dispose();
     super.dispose();
+  }
+
+  bool _handleKeyEvent(KeyEvent event) {
+    if (event is KeyUpEvent) {
+      final keys = HardwareKeyboard.instance.logicalKeysPressed;
+      final hasModifier = keys.contains(LogicalKeyboardKey.meta) ||
+          keys.contains(LogicalKeyboardKey.metaLeft) ||
+          keys.contains(LogicalKeyboardKey.metaRight) ||
+          keys.contains(LogicalKeyboardKey.control) ||
+          keys.contains(LogicalKeyboardKey.controlLeft) ||
+          keys.contains(LogicalKeyboardKey.controlRight);
+      if (!hasModifier) {
+        widget.homeManager.clearNudgeLatch();
+      }
+    }
+    return false;
   }
 
   void _scrollToTime(
@@ -79,39 +102,63 @@ class _StudioEditorState extends State<StudioEditor> {
         const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
             widget.homeManager.skipToPrevious(),
 
-        // Listen-and-Nudge Timings (Cmd + Arrows): 50ms
+        // Standard Nudge (Cmd / Ctrl + Arrows): 150ms
         const SingleActivator(LogicalKeyboardKey.arrowRight, meta: true): () =>
-            widget.homeManager.nudgeActiveBoundary(0.050),
+            widget.homeManager.nudgeActiveBoundary(0.150),
         const SingleActivator(LogicalKeyboardKey.arrowLeft, meta: true): () =>
-            widget.homeManager.nudgeActiveBoundary(-0.050),
+            widget.homeManager.nudgeActiveBoundary(-0.150),
+        const SingleActivator(LogicalKeyboardKey.arrowRight, control: true): () =>
+            widget.homeManager.nudgeActiveBoundary(0.150),
+        const SingleActivator(LogicalKeyboardKey.arrowLeft, control: true): () =>
+            widget.homeManager.nudgeActiveBoundary(-0.150),
 
-        // Fine Nudge (Cmd + Opt + Arrows): 10ms
+        // Fine Nudge (Cmd / Ctrl + Opt + Arrows): 50ms
         const SingleActivator(
           LogicalKeyboardKey.arrowRight,
           meta: true,
           alt: true,
-        ): () => widget.homeManager.nudgeActiveBoundary(0.010),
+        ): () => widget.homeManager.nudgeActiveBoundary(0.050),
         const SingleActivator(
           LogicalKeyboardKey.arrowLeft,
           meta: true,
           alt: true,
-        ): () => widget.homeManager.nudgeActiveBoundary(-0.010),
+        ): () => widget.homeManager.nudgeActiveBoundary(-0.050),
+        const SingleActivator(
+          LogicalKeyboardKey.arrowRight,
+          control: true,
+          alt: true,
+        ): () => widget.homeManager.nudgeActiveBoundary(0.050),
+        const SingleActivator(
+          LogicalKeyboardKey.arrowLeft,
+          control: true,
+          alt: true,
+        ): () => widget.homeManager.nudgeActiveBoundary(-0.050),
 
-        // Coarse Nudge (Cmd + Shift + Arrows): 250ms
+        // Coarse Nudge (Cmd / Ctrl + Shift + Arrows): 500ms
         const SingleActivator(
           LogicalKeyboardKey.arrowRight,
           meta: true,
           shift: true,
-        ): () => widget.homeManager.nudgeActiveBoundary(0.250),
+        ): () => widget.homeManager.nudgeActiveBoundary(0.500),
         const SingleActivator(
           LogicalKeyboardKey.arrowLeft,
           meta: true,
           shift: true,
-        ): () => widget.homeManager.nudgeActiveBoundary(-0.250),
+        ): () => widget.homeManager.nudgeActiveBoundary(-0.500),
+        const SingleActivator(
+          LogicalKeyboardKey.arrowRight,
+          control: true,
+          shift: true,
+        ): () => widget.homeManager.nudgeActiveBoundary(0.500),
+        const SingleActivator(
+          LogicalKeyboardKey.arrowLeft,
+          control: true,
+          shift: true,
+        ): () => widget.homeManager.nudgeActiveBoundary(-0.500),
 
-        // Boundary snippet playback (B)
-        const SingleActivator(LogicalKeyboardKey.keyB): () =>
-            widget.homeManager.playBoundarySnippet(),
+        // Play current fragment and stop (P)
+        const SingleActivator(LogicalKeyboardKey.keyP): () =>
+            widget.homeManager.playCurrentFragment(),
 
         // Mark Reviewed & Advance (R)
         const SingleActivator(LogicalKeyboardKey.keyR): () =>

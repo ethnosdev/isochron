@@ -79,8 +79,8 @@ void main() {
     });
   });
 
-  group('WaveformView auto-scrolling on selectedFragmentIndex', () {
-    testWidgets('visually scrolls (animates) to centered position when selectedFragmentIndex changes', (tester) async {
+  group('WaveformView view movement during timing edits and playback', () {
+    testWidgets('does not recenter the view when selectedFragmentIndex changes', (tester) async {
       final scrollController = ScrollController();
       final controller = AppManager();
       final playbackNotifier = ValueNotifier<Duration>(Duration.zero);
@@ -120,31 +120,87 @@ void main() {
       await tester.pumpWidget(buildWidget(state));
       await tester.pumpAndSettle();
 
-      // Initially at offset 0 (beginning)
-      expect(scrollController.offset, 0.0);
+      // Scroll to a custom offset
+      scrollController.jumpTo(500.0);
+      await tester.pumpAndSettle();
+      expect(scrollController.offset, 500.0);
 
-      // Now update selectedFragmentIndex to 2 (Verse 3, anchorTime = 50.0s)
+      // Now update selectedFragmentIndex to 2 (Verse 3)
       state = state.copyWith(selectedFragmentIndex: 2);
       await tester.pumpWidget(buildWidget(state));
+      await tester.pumpAndSettle();
 
-      final viewportWidth = scrollController.position.viewportDimension;
-      final expectedOffset = WaveformView.calculateCenterOffset(
-        anchorTime: 50.0,
-        totalDurationSeconds: 100.0,
-        viewportWidth: viewportWidth,
-        zoomLevel: 5.0,
+      // View should NOT recenter or move; it stays at 500.0
+      expect(scrollController.offset, 500.0);
+
+      scrollController.dispose();
+      controller.dispose();
+      playbackNotifier.dispose();
+    });
+
+    testWidgets('moves playhead to beginning of waveform view when playhead goes off screen, but not when on screen', (tester) async {
+      tester.view.physicalSize = const Size(1000, 600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final scrollController = ScrollController();
+      final controller = AppManager();
+      final playbackNotifier = ValueNotifier<Duration>(Duration.zero);
+      final waveform = createMockWaveform();
+
+      final fragments = [
+        Fragment(index: 0, text: 'Verse 1')..setRealTiming(start: 0.0, end: 50.0),
+        Fragment(index: 1, text: 'Verse 2')..setRealTiming(start: 50.0, end: 100.0),
+      ];
+
+      final state = AppState(
+        audioDuration: const Duration(seconds: 100),
+        zoomLevel: 5.0, // 5x zoom => 5000px content
+        waveform: waveform,
+        fragments: fragments,
+        selectedFragmentIndex: 0,
+        isPlaying: true,
       );
 
-      // Advance one frame for post-frame callback to trigger animateTo
-      await tester.pump();
-      // Mid-animation check at 150ms: should have moved partially towards expectedOffset
-      await tester.pump(const Duration(milliseconds: 150));
-      expect(scrollController.offset > 0.0, isTrue);
-      expect(scrollController.offset < expectedOffset, isTrue);
-
-      // Finish animation
+      await tester.pumpWidget(
+        MacosApp(
+          home: MacosWindow(
+            child: SizedBox(
+              width: 1000,
+              height: 200,
+              child: WaveformView(
+                controller: controller,
+                state: state,
+                scrollController: scrollController,
+                playbackNotifier: playbackNotifier,
+              ),
+            ),
+          ),
+        ),
+      );
       await tester.pumpAndSettle();
-      expect(scrollController.offset, expectedOffset);
+
+      // Position view at offset 1000 (visible range 1000 to 2000)
+      scrollController.jumpTo(1000.0);
+      await tester.pumpAndSettle();
+
+      // Playhead at 25s: contentPixel = 1250, absolutePlayhead = 1290 (inside visible range [1000, 2000])
+      playbackNotifier.value = const Duration(seconds: 25);
+      await tester.pumpAndSettle();
+      // On screen: view should NOT move
+      expect(scrollController.offset, 1000.0);
+
+      // Playhead at 50s: contentPixel = 2500, absolutePlayhead = 2540 (off screen to the right)
+      playbackNotifier.value = const Duration(seconds: 50);
+      await tester.pumpAndSettle();
+      // Should align with beginning of waveform view (2500.0)
+      expect(scrollController.offset, 2500.0);
+
+      // Playhead jumps to 5s: contentPixel = 250, absolutePlayhead = 290 (off screen to the left)
+      playbackNotifier.value = const Duration(seconds: 5);
+      await tester.pumpAndSettle();
+      // Should align with beginning of waveform view (250.0)
+      expect(scrollController.offset, 250.0);
 
       scrollController.dispose();
       controller.dispose();
