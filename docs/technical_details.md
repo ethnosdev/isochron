@@ -50,17 +50,18 @@ Isochron replaces legacy speech synthesis and acoustic MFCC dynamic time warping
 ## 2. Acoustic Model & ONNX Runtime FFI
 
 ### MMS-300M Backbone
-The core acoustic model is Meta's `mms-300m` architecture (*Pratap et al., 2023*), consisting of:
+The core acoustic model is Meta's `mms-300m` architecture (*Pratap et al., 2024*), consisting of:
 - **Feature Encoder:** 7 temporal convolutional layers with kernel sizes `[10, 3, 3, 3, 3, 2, 2]` and strides `[5, 2, 2, 2, 2, 2, 2]`. Total subsampling factor is **320 samples** at 16,000 Hz, producing an output frame rate of **50 Hz** (**20.0 ms per frame**).
-- **Transformer Context Network:** 24 Conformer/Transformer layers with 16 attention heads and hidden dimension 1024.
+- **Transformer Context Network:** 24 Transformer encoder layers with 16 attention heads and hidden dimension 1024.
 - **CTC Projection Head:** Linear layer projecting to vocabulary classes.
 
 ### ONNX Vocabulary & Class Structure
-Isochron uses a 32-class projection structure:
+Isochron uses a 32-class projection structure (shape `[T, 32]`):
 - Index `0`: CTC Blank token (`<blank>`).
-- Indices `1 .. 30`: Latin characters `a` through `z` and primary phonetic tokens.
-- Index `31`: Apostrophe / glottal stop `'`.
-- Index `32` (Appended): Wildcard star token ($\langle * \rangle$) with calibrated log-probability insertion penalty $S_* = -2.0$.
+- Indices `1 .. 3`: Special tokens `<pad>`, `</s>`, and `<unk>`.
+- Indices `4 .. 27`, `29 .. 30`: Latin characters `a` through `z` (ordered by MMS training dictionary frequency: `a, i, e, n, o, u, t, s, r, m, k, l, d, g, h, y, b, p, w, c, v, j, z, f, q, x`).
+- Index `28`: Apostrophe / glottal stop `'`.
+- Index `31` (Appended): Wildcard star token (`*`) with calibrated log-probability insertion penalty $S_* = -2.0$.
 
 ### Pure Dart FFI & Native Memory
 Instead of relying on third-party Flutter plugin wrappers, `isochron_cli` interfaces directly with `libonnxruntime.dylib` via `dart:ffi`:
@@ -90,7 +91,7 @@ Isochron supports over 1,130 languages without requiring language-specific phone
    - Lowercases all characters.
    - Strips diacritics and combining accents.
    - Retains characters `a`–`z` and `'`.
-   - Replaces non-alphabetical punctuation and whitespace with blank tokens.
+   - Replaces non-alphabetical punctuation and whitespace with spaces, allowing inter-word gaps to be absorbed by CTC blank states during alignment.
    - Strips isolated numeric digits and reports a warning if unexpanded numbers are detected.
 3. **Star Token Placement:** Wildcard star tokens are inserted between segments (`starPlacement = segment`) to absorb unscripted acoustic artifacts, breaths, and inter-verse pauses without degrading speech boundary onsets.
 
@@ -126,7 +127,7 @@ CTC segmentation reliably finds phonetic transitions, but speech boundaries ofte
 ### Signal Energy Envelope
 - **Frame Size:** 10 ms rectangular windows (160 samples at 16 kHz), offering $2\times$ the temporal resolution of the 20 ms CTC grid.
 - **Log Energy (dBFS):**
-  $$E_{\text{dBFS}} = 20 \log_{10}\left(\sqrt{\frac{1}{K}\sum_{k=0}^{K-1} x_k^2} + 10^{-12}\right)$$
+  $$E_{\text{dBFS}} = 20 \log_{10}\left(\sqrt{\frac{1}{K}\sum_{k=0}^{K-1} x_k^2} + 10^{-7}\right)$$
 
 ### Adaptive Noise Modeling
 Recordings vary widely in ambient room noise, microphone preamplification, and dynamic range. Rather than hard-coding static decibel thresholds:
@@ -234,16 +235,10 @@ Evaluation was conducted against ground-truth human-verified verse timings acros
 ## 11. References & Academic Citations
 
 1. **MMS Architecture & Universal Speech Modeling:**  
-   Pratap, V., Sriram, A., Tomasello, P., et al. (2023). *Scaling Speech Technology to 1,000+ Languages*. arXiv:2305.13516. Published in *Journal of Machine Learning Research (JMLR)*, 2024.
-2. **CTC Segmentation:**  
-   Kürzinger, L., Winkelbauer, D., Li, L., et al. (2020). *CTC-Segmentation of Large Corpora for German End-to-End Speech Recognition*. Speech and Computer (SPECOM 2020), Springer, Cham. arXiv:2007.09127.
-3. **Universal Romanization:**  
-   Hermjakob, U., May, J., & Knight, K. (2018). *Out-of-the-box Universal Romanization Tool (uroman)*. Proceedings of the 56th Annual Meeting of the Association for Computational Linguistics (ACL), Melbourne, Australia.
+   Pratap, V., Tjandra, A., Shi, B., Tomasello, P., Babu, A., Kundu, S., et al. (2024). *Scaling Speech Technology to 1,000+ Languages*. Journal of Machine Learning Research (JMLR), Vol. 25, No. 97, pp. 1–52. arXiv:2305.13516. *(Referenced in Section 2)*
+2. **Universal Romanization (`uroman`):**  
+   Hermjakob, U., May, J., & Knight, K. (2018). *Out-of-the-box Universal Romanization Tool*. Proceedings of the 56th Annual Meeting of the Association for Computational Linguistics (ACL): System Demonstrations, pp. 13–18, Melbourne, Australia. *(Referenced in Section 4)*
+3. **Connectionist Temporal Classification (CTC):**  
+   Graves, A., Fernández, S., Gomez, F., & Schmidhuber, J. (2006). *Connectionist temporal classification: labelling unsegmented sequence data with recurrent neural networks*. Proceedings of the 23rd International Conference on Machine Learning (ICML 2006), pp. 369–376. *(Referenced in Section 5)*
 4. **Active Speech Level & Energy Measurement:**  
-   ITU-T Recommendation P.56 (05/93). *Objective measurement of active speech level*. International Telecommunication Union, Geneva.
-5. **Voice Activity Detection & Hangover Debounce:**  
-   ITU-T Recommendation G.729 Annex B (10/96). *A silence compression scheme for G.729*. International Telecommunication Union, Geneva.
-6. **Robust Noise Floor Estimation:**  
-   Hirsch, H. G., & Ehrlicher, C. (1995). *Noise estimation techniques for robust speech recognition*. IEEE International Conference on Acoustics, Speech, and Signal Processing (ICASSP 1995), Vol. 1, pp. 153–156.
-7. **Wildcard Insertion & Edge Erosion in MMS Trellises:**  
-   Ashraf, M. (2023). *ctc-forced-aligner: CTC-based forced alignment tool*. PyTorch / TorchAudio MMS_FA Pipeline documentation.
+   ITU-T Recommendation P.56 (03/93). *Objective measurement of active speech level*. International Telecommunication Union, Geneva. *(Referenced in Section 6)*

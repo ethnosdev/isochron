@@ -2,7 +2,7 @@
 
 **Isochron** is a high-precision neural forced alignment studio and command-line suite written in pure **Dart**, optimized natively for **macOS (Apple Silicon)**.
 
-It aligns spoken audio recordings to written text transcripts with sub-10 millisecond acoustic precision across **1,130+ languages**, running **100% locally and offline** on your Mac.
+It aligns spoken audio recordings to written text transcripts with 10-millisecond acoustic resolution (**45 ms median error**) across **1,130+ languages**, running **100% locally and offline** on your Mac.
 
 ---
 
@@ -129,14 +129,14 @@ AGGREGATE (3 fixtures)      78       0.045     0.058     0.214      93.6%    +0.
 ## 🏗️ Repository Architecture
 
 - [`isochron_cli/`](file:///Users/suragch/Dev/ethnosdev/isochron/isochron_cli): The pure-Dart forced aligner engine.
-  - `src/ort/`: Direct `dart:ffi` bindings to the native ONNX Runtime C API.
-  - `src/mms/`: Tokenizer (`uroman`), sliding-window emissions engine, CTC Viterbi aligner, boundary placer, pause snapper, omission detector, and constrained aligner.
-  - `src/audio/`: WAV RIFF chunk parser, dBFS signal energy analyzer, and adaptive silence detector.
-  - `src/eval/`: Fixture accuracy scoring suite with CSV export.
+  - `lib/src/ort/`: Direct `dart:ffi` bindings to the native ONNX Runtime C API.
+  - `lib/src/mms/`: Tokenizer (`uroman`), sliding-window emissions engine, CTC Viterbi aligner, boundary placer, pause snapper, omission detector, and constrained aligner.
+  - `lib/src/audio/`: WAV RIFF chunk parser, dBFS signal energy analyzer, and adaptive silence detector.
+  - `lib/src/eval/`: Fixture accuracy scoring suite with CSV export.
 - [`isochron_flutter/`](file:///Users/suragch/Dev/ethnosdev/isochron/isochron_flutter): The native macOS studio application.
-  - `services/`: Long-lived worker isolate managing ONNX model execution without blocking the UI thread.
-  - `ui/editor/`: Waveform painter with ghost markers and amber warning tints, Listen-and-Nudge keyboard shortcuts, and verse fragment list.
-  - `ui/settings/`: Model download status panel and project language/calibration settings.
+  - `lib/services/`: Long-lived worker isolate managing ONNX model execution without blocking the UI thread.
+  - `lib/ui/editor/`: Waveform painter with ghost markers and amber warning tints, Listen-and-Nudge keyboard shortcuts, and verse fragment list.
+  - `lib/ui/settings/`: Model download status panel and project language/calibration settings.
 - [`docs/`](file:///Users/suragch/Dev/ethnosdev/isochron/docs): Complete user tutorial and technical architecture documentation.
 
 ---
