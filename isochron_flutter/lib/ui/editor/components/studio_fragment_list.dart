@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class StudioFragmentList extends StatefulWidget {
   final List<Fragment> fragments;
@@ -31,8 +32,8 @@ class StudioFragmentList extends StatefulWidget {
 }
 
 class _StudioFragmentListState extends State<StudioFragmentList> {
-  final ScrollController _scrollController = ScrollController();
-  final double _rowHeight = 56.0;
+  final ItemScrollController _itemScrollController = ItemScrollController();
+  final ItemPositionsListener _itemPositionsListener = ItemPositionsListener.create();
   int _lastActiveIndex = -1;
 
   @override
@@ -44,7 +45,6 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
   @override
   void dispose() {
     widget.playbackNotifier.removeListener(_onPlaybackPositionChanged);
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -67,17 +67,12 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
   }
 
   void _scrollToIndex(int index) {
-    if (!_scrollController.hasClients) return;
-
-    final targetIndex = index > 0 ? index - 1 : 0;
-    final idealOffset = targetIndex * _rowHeight;
-    final min = _scrollController.position.minScrollExtent;
-    final max = _scrollController.position.maxScrollExtent;
-
-    _scrollController.animateTo(
-      idealOffset.clamp(min, max),
+    if (!_itemScrollController.isAttached) return;
+    _itemScrollController.scrollTo(
+      index: index,
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOut,
+      alignment: 0.15,
     );
   }
 
@@ -215,10 +210,10 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
     return ValueListenableBuilder<Duration>(
       valueListenable: widget.playbackNotifier,
       builder: (context, currentPos, _) {
-        return ListView.builder(
-          controller: _scrollController,
+        return ScrollablePositionedList.builder(
+          itemScrollController: _itemScrollController,
+          itemPositionsListener: _itemPositionsListener,
           itemCount: widget.fragments.length,
-          itemExtent: _rowHeight,
           itemBuilder: (ctx, i) {
             final f = widget.fragments[i];
             final hasTime = f.realStart >= 0;
@@ -252,101 +247,110 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                 if (hasTime) widget.onDoubleTap(i);
               },
               child: Container(
-                height: _rowHeight,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                constraints: const BoxConstraints(minHeight: 52.0),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
                   color: bgColor,
                   border: Border(bottom: BorderSide(color: theme.dividerColor)),
                 ),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     // 1. STATUS & INDEX COLUMN
                     SizedBox(
                       width: 32,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (isPlaying)
-                            Icon(
-                              CupertinoIcons.speaker_2_fill,
-                              size: 14,
-                              color: macBlue,
-                            )
-                          else
-                            Text(
-                              "${f.index}",
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: subTextColor,
-                                fontWeight: FontWeight.bold,
+                      child: Center(
+                        child: isPlaying
+                            ? Icon(
+                                CupertinoIcons.speaker_2_fill,
+                                size: 14,
+                                color: macBlue,
+                              )
+                            : Text(
+                                "${f.index}",
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: subTextColor,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
-                        ],
                       ),
                     ),
 
                     // 2. TEXT COLUMN
                     Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              if (f.id != null && f.id!.isNotEmpty) ...[
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: badgeBgColor,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    f.id!,
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: badgeTextColor,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
+                          if (f.id != null && f.id!.isNotEmpty) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: badgeBgColor,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                f.id!,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: badgeTextColor,
+                                  fontWeight: FontWeight.w600,
                                 ),
-                                const SizedBox(width: 8),
-                              ],
-                              _buildStatusBadge(context, f.status),
-                              if (f.status != FragmentStatus.legacy)
-                                const SizedBox(width: 6),
-                              if (f.confidence != null) ...[
-                                _buildConfidenceBadge(context, f.confidence),
-                                const SizedBox(width: 6),
-                              ],
-                              for (final flag in f.flags) ...[
-                                _buildFlagBadge(context, flag),
-                              ],
-                              if (f.warnings.isNotEmpty) ...[
-                                MacosTooltip(
-                                  message: f.warnings.join('\n'),
-                                  child: Icon(
-                                    CupertinoIcons.exclamationmark_triangle_fill,
-                                    size: 12,
-                                    color: CupertinoColors.systemYellow,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                              ],
-                              Expanded(
-                                child: Text(
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          _buildStatusBadge(context, f.status),
+                          if (f.status != FragmentStatus.legacy)
+                            const SizedBox(width: 6),
+                          if (f.confidence != null) ...[
+                            _buildConfidenceBadge(context, f.confidence),
+                            const SizedBox(width: 6),
+                          ],
+                          for (final flag in f.flags) ...[
+                            _buildFlagBadge(context, flag),
+                          ],
+                          if (f.warnings.isNotEmpty) ...[
+                            MacosTooltip(
+                              message: f.warnings.join('\n'),
+                              child: Icon(
+                                CupertinoIcons.exclamationmark_triangle_fill,
+                                size: 12,
+                                color: CupertinoColors.systemYellow,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          Expanded(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
                                   f.text,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     color: textColor,
                                     fontSize: 13,
+                                    height: 1.35,
                                   ),
                                 ),
-                              ),
-                            ],
+                                if (f.romanizedText != null) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    f.romanizedText!,
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -354,7 +358,7 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
 
                     // 3. TIMING / ACTIONS COLUMN
                     SizedBox(
-                      width: 180,
+                      width: 195,
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [

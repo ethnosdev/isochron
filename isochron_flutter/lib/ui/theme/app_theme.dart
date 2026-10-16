@@ -1,4 +1,4 @@
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:macos_ui/macos_ui.dart';
 
 class AppTheme {
@@ -54,6 +54,9 @@ class AppTheme {
   static const Color darkPlayhead = Color(0xFFFFA300); // Amber Gold
   static const Color darkGrey = Color(0xFF6D7A77);
 
+  static const Color lightRomanized = Color(0xFF855300); // Warm amber gold
+  static const Color darkRomanized = Color(0xFFF0D076); // Soft warm yellow / gold
+
   // --- SEMANTIC RESOLVERS ---
 
   static Color accent(BuildContext context) {
@@ -102,5 +105,13 @@ class AppTheme {
     return MacosTheme.of(context).brightness == Brightness.dark
         ? darkAccent
         : lightAccent;
+  }
+
+  static Color romanizedText(BuildContext context) {
+    final macosBrightness = MacosTheme.maybeOf(context)?.brightness;
+    final isDark = macosBrightness != null
+        ? macosBrightness == Brightness.dark
+        : Theme.of(context).brightness == Brightness.dark;
+    return isDark ? darkRomanized : lightRomanized;
   }
 }

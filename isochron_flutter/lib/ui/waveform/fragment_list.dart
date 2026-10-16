@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:isochron_cli/isochron_cli.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+
 
 class FragmentList extends StatefulWidget {
   final List<Fragment> fragments;
@@ -28,9 +30,8 @@ class FragmentList extends StatefulWidget {
 }
 
 class _FragmentListState extends State<FragmentList> {
-  final ScrollController _scrollController = ScrollController();
-
-  double get _itemHeight => 64.0;
+  final ItemScrollController _itemScrollController = ItemScrollController();
+  final ItemPositionsListener _itemPositionsListener = ItemPositionsListener.create();
 
   @override
   void didUpdateWidget(FragmentList oldWidget) {
@@ -51,24 +52,13 @@ class _FragmentListState extends State<FragmentList> {
   }
 
   void _scrollToIndex(int index) {
-    if (!_scrollController.hasClients) return;
-    final targetIndex = index > 0 ? index - 1 : 0;
-    final idealOffset = targetIndex * _itemHeight;
-    final min = _scrollController.position.minScrollExtent;
-    final max = _scrollController.position.maxScrollExtent;
-    final clampedOffset = idealOffset.clamp(min, max);
-
-    _scrollController.animateTo(
-      clampedOffset,
+    if (!_itemScrollController.isAttached) return;
+    _itemScrollController.scrollTo(
+      index: index,
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
+      alignment: 0.15,
     );
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
   }
 
   @override
@@ -79,10 +69,10 @@ class _FragmentListState extends State<FragmentList> {
 
     final colorScheme = Theme.of(context).colorScheme;
 
-    return ListView.builder(
-      controller: _scrollController,
+    return ScrollablePositionedList.builder(
+      itemScrollController: _itemScrollController,
+      itemPositionsListener: _itemPositionsListener,
       itemCount: widget.fragments.length,
-      itemExtent: _itemHeight,
       itemBuilder: (ctx, i) {
         final f = widget.fragments[i];
 
@@ -148,8 +138,9 @@ class _FragmentListState extends State<FragmentList> {
                 ],
               ),
 
-              // --- 2. TITLE (The Original Text & ID) ---
+              // --- 2. TITLE (The Original Text & ID & Romanized) ---
               title: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (f.id != null && f.id!.isNotEmpty) ...[
                     Container(
@@ -174,11 +165,30 @@ class _FragmentListState extends State<FragmentList> {
                     const SizedBox(width: 8),
                   ],
                   Expanded(
-                    child: Text(
-                      f.text, // <--- THIS IS THE ORIGINAL TEXT
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: colorScheme.onSurface),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          f.text, // <--- THIS IS THE ORIGINAL TEXT
+                          style: TextStyle(
+                            color: colorScheme.onSurface,
+                            height: 1.35,
+                          ),
+                        ),
+                        if (f.romanizedText != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            f.romanizedText!,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w500,
+                              color: colorScheme.onSurface,
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ],

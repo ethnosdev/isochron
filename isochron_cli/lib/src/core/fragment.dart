@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'romanizer.dart';
 
 enum FragmentStatus {
   auto,
@@ -47,6 +48,20 @@ class Fragment {
   /// Tokenizer and processing warnings (e.g. dropped digits, empty text).
   List<String> warnings = [];
 
+  String? _romanizedText;
+  bool _romanizedChecked = false;
+
+  /// Returns the romanized script of [text] using uroman if [text] is not
+  /// already in a romanized script (Latin). Returns `null` if already romanized
+  /// or if romanization produces identical text.
+  String? get romanizedText {
+    if (!_romanizedChecked) {
+      _romanizedText = Romanizer.romanize(text);
+      _romanizedChecked = true;
+    }
+    return _romanizedText;
+  }
+
   Fragment({
     required this.index,
     required this.text,
@@ -56,8 +71,11 @@ class Fragment {
     List<String>? flags,
     this.status = FragmentStatus.auto,
     List<String>? warnings,
+    String? romanizedText,
   })  : flags = flags ?? [],
-        warnings = warnings ?? [];
+        warnings = warnings ?? [],
+        _romanizedText = romanizedText,
+        _romanizedChecked = romanizedText != null;
 
   /// Helper to update real timing after alignment
   void setRealTiming({required double start, required double end}) {
@@ -78,6 +96,7 @@ class Fragment {
         if (flags.isNotEmpty) 'flags': flags,
         if (status != FragmentStatus.legacy) 'status': status.name,
         if (warnings.isNotEmpty) 'warnings': warnings,
+        if (romanizedText != null) 'romanizedText': romanizedText,
       };
 
   factory Fragment.fromJson(Map<String, dynamic> json) {
@@ -90,6 +109,7 @@ class Fragment {
       flags: (json['flags'] as List?)?.map((e) => e.toString()).toList(),
       status: FragmentStatus.fromString(json['status']?.toString()),
       warnings: (json['warnings'] as List?)?.map((e) => e.toString()).toList(),
+      romanizedText: (json['romanizedText'] ?? json['romanized'])?.toString(),
     );
     f.setRealTiming(
       start: (json['start'] as num?)?.toDouble() ?? 0.0,
@@ -109,6 +129,7 @@ class Fragment {
     List<String>? flags,
     FragmentStatus? status,
     List<String>? warnings,
+    String? romanizedText,
   }) {
     final f = Fragment(
       index: index ?? this.index,
@@ -119,6 +140,9 @@ class Fragment {
       flags: flags ?? List.from(this.flags),
       status: status ?? this.status,
       warnings: warnings ?? List.from(this.warnings),
+      romanizedText: (text != null && text != this.text)
+          ? null
+          : (romanizedText ?? _romanizedText),
     );
     f.realStart = realStart ?? this.realStart;
     f.realEnd = realEnd ?? this.realEnd;

@@ -20,10 +20,12 @@ dependencies:
   uuid: ^4.5.2
   macos_ui: ^2.2.2
   macos_window_utils: ^1.9.1
+  uroman: ^1.1.0
   
   # Our Local Engine
   isochron_cli:
     path: ../isochron_cli
+  scrollable_positioned_list: ^0.3.8
 
 dev_dependencies:
   flutter_test:

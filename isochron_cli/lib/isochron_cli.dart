@@ -7,6 +7,8 @@ export 'src/core/fragment.dart';
 export 'src/core/text_parser.dart';
 export 'src/core/isochron_processor.dart';
 export 'src/core/timing_export.dart';
+export 'src/core/romanizer.dart';
+export 'package:uroman/uroman.dart';
 
 // Drivers
 export 'src/core/drivers.dart';
