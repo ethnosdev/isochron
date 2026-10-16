@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+import '../audio/pause_detector.dart';
 import '../core/fragment.dart';
 import 'boundary_placer.dart';
 
@@ -20,6 +22,8 @@ class UnreadDetector {
     required List<PlacedVerseTiming> timings,
     required List<Fragment> fragments,
     required double trackDurationSeconds,
+    List<AudioPause>? pauses,
+    double leadInSeconds = 0.19,
   }) {
     if (timings.isEmpty) return [];
 
@@ -83,7 +87,35 @@ class UnreadDetector {
       }
 
       if (lastTimedIndex == null) {
-        reTiled.add(cur);
+        PlacedVerseTiming firstTimed = cur;
+        if (i > 0 && cur.speechStart > 0) {
+          final expectedStart = math.max(0.0, cur.speechStart - leadInSeconds);
+          if (cur.start < expectedStart - 0.5) {
+            double reanchoredStart = expectedStart;
+            if (pauses != null) {
+              for (final p in pauses) {
+                if (p.endSeconds <= cur.speechStart + 0.05 &&
+                    p.endSeconds >= cur.speechStart - 2.0) {
+                  reanchoredStart =
+                      math.max(p.endSeconds - leadInSeconds, p.startSeconds);
+                  break;
+                }
+              }
+            }
+            firstTimed = PlacedVerseTiming(
+              index: cur.index,
+              start: reanchoredStart,
+              end: cur.end,
+              speechStart: cur.speechStart,
+              speechEnd: cur.speechEnd,
+              meanLogProb: cur.meanLogProb,
+              warnings: cur.warnings,
+              flags: cur.flags,
+              confidence: cur.confidence,
+            );
+          }
+        }
+        reTiled.add(firstTimed);
         lastTimedIndex = reTiled.length - 1;
       } else {
         // Stitch previous end to current start

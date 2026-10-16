@@ -283,7 +283,13 @@ class MmsPipeline {
           );
 
           final rawStarts = placedBoundaries.map((b) => b.start).toList();
-          final snappedStarts = snapper.snapBoundaries(rawStarts, pauses);
+          final speechStarts =
+              placedBoundaries.map((b) => b.speechStart).toList();
+          final snappedStarts = snapper.snapBoundaries(
+            rawStarts,
+            pauses,
+            speechStarts: speechStarts,
+          );
 
           final snappedBoundaries = <PlacedVerseTiming>[];
           for (int i = 0; i < placedBoundaries.length; i++) {
@@ -315,6 +321,8 @@ class MmsPipeline {
           timings: placedBoundaries,
           fragments: fragments,
           trackDurationSeconds: audioData.durationSeconds,
+          pauses: pauses,
+          leadInSeconds: options.leadInSeconds,
         );
       }
 

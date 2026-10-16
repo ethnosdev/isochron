@@ -79,5 +79,47 @@ void main() {
 
       expect(snapped[0], lessThanOrEqualTo(snapped[1]));
     });
+
+    test('prevents adjacent boundaries from claiming the same pause', () {
+      // Pause from 4.0s to 5.0s
+      const pauses = [
+        AudioPause(
+          startSeconds: 4.0,
+          endSeconds: 5.0,
+          durationSeconds: 1.0,
+          minEnergyDbfs: -65.0,
+        ),
+      ];
+
+      // Two close boundaries: boundary 0 at 4.6s, boundary 1 at 5.2s
+      final raw = [4.6, 5.2];
+      final snapped = snapper.snapBoundaries(raw, pauses);
+
+      // Boundary 0 claims pause [4.0..5.0] -> 5.0 - 0.19 = 4.81s
+      expect(snapped[0], closeTo(4.81, 0.001));
+      // Boundary 1 cannot claim the same pause, must stay >= snapped[0] + minVerseDuration
+      expect(snapped[1], greaterThanOrEqualTo(snapped[0] + 0.150));
+      expect(snapped[1] - snapped[0], greaterThanOrEqualTo(0.150));
+    });
+
+    test('does not snap to distant pause when boundary occurs during continuous speech', () {
+      // Pause at [10.0 .. 10.38]
+      const pauses = [
+        AudioPause(
+          startSeconds: 10.09,
+          endSeconds: 10.38,
+          durationSeconds: 0.29,
+          minEnergyDbfs: -65.0,
+        ),
+      ];
+
+      // Boundary 0 at 10.23 (near pause), Boundary 1 at 10.89 (no pause nearby, continuous speech)
+      final raw = [10.23, 10.89];
+      final snapped = snapper.snapBoundaries(raw, pauses);
+
+      expect(snapped[0], closeTo(10.191, 0.01));
+      // Boundary 1 must NOT reach backward to 10.191; it stays near 10.89
+      expect(snapped[1], closeTo(10.89, 0.01));
+    });
   });
 }

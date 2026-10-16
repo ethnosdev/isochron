@@ -58,8 +58,48 @@ class BoundaryPlacer {
         continue;
       }
 
-      final firstToken = tokenTimings[range.tokenStartIndex];
-      final lastToken = tokenTimings[range.tokenEndIndex - 1];
+      // Filter stranded low-confidence prefix tokens separated by an internal gap > 0.5s
+      var effectiveStartIdx = range.tokenStartIndex;
+      final maxPrefixCheck = math.min(range.tokenStartIndex + 5, range.tokenEndIndex - 1);
+      for (var k = range.tokenStartIndex; k < maxPrefixCheck; k++) {
+        final curTok = tokenTimings[k];
+        final nextTok = tokenTimings[k + 1];
+        final gap = nextTok.startTimeSeconds - curTok.endTimeSeconds;
+        if (gap > 0.5) {
+          var prefixSum = 0.0;
+          for (var p = range.tokenStartIndex; p <= k; p++) {
+            prefixSum += tokenTimings[p].meanLogProb;
+          }
+          final prefixAvg = prefixSum / (k - range.tokenStartIndex + 1);
+          if (prefixAvg < -4.0) {
+            effectiveStartIdx = k + 1;
+          }
+          break;
+        }
+      }
+
+      // Filter stranded low-confidence suffix tokens separated by an internal gap > 0.5s
+      var effectiveEndIdx = range.tokenEndIndex - 1;
+      final minSuffixCheck = math.max(range.tokenStartIndex, range.tokenEndIndex - 6);
+      for (var k = range.tokenEndIndex - 1; k > minSuffixCheck; k--) {
+        final curTok = tokenTimings[k];
+        final prevTok = tokenTimings[k - 1];
+        final gap = curTok.startTimeSeconds - prevTok.endTimeSeconds;
+        if (gap > 0.5) {
+          var suffixSum = 0.0;
+          for (var p = k; p < range.tokenEndIndex; p++) {
+            suffixSum += tokenTimings[p].meanLogProb;
+          }
+          final suffixAvg = suffixSum / (range.tokenEndIndex - k);
+          if (suffixAvg < -4.0) {
+            effectiveEndIdx = k - 1;
+          }
+          break;
+        }
+      }
+
+      final firstToken = tokenTimings[effectiveStartIdx];
+      final lastToken = tokenTimings[effectiveEndIdx];
 
       final speechStart = firstToken.startFrame * OnnxEmissionsEngine.frameDurationSeconds;
       final speechEnd = lastToken.endFrame * OnnxEmissionsEngine.frameDurationSeconds;
