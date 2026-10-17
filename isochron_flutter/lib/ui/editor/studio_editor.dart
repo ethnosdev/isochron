@@ -172,10 +172,6 @@ class _StudioEditorState extends State<StudioEditor> {
         const SingleActivator(LogicalKeyboardKey.enter): () =>
             widget.homeManager.captureFragmentTiming(context),
 
-        // Save (Cmd + S)
-        const SingleActivator(LogicalKeyboardKey.keyS, meta: true): () =>
-            widget.homeManager.saveProject(),
-
         // Control + Up/Down to Zoom
         const SingleActivator(LogicalKeyboardKey.arrowUp, control: true): () =>
             widget.homeManager.setZoom(

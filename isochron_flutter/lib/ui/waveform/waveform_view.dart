@@ -410,11 +410,21 @@ class _WaveformViewState extends State<WaveformView>
                         _dragIndex = null;
                         _cursor = SystemMouseCursors.basic;
                       });
+                      widget.controller.saveProject();
                     } else {
                       final v = d.primaryVelocity ?? 0.0;
                       if (v.abs() > 50.0) {
                         _applyFling(-v);
                       }
+                    }
+                  },
+                  onHorizontalDragCancel: () {
+                    if (_dragIndex != null) {
+                      setState(() {
+                        _dragIndex = null;
+                        _cursor = SystemMouseCursors.basic;
+                      });
+                      widget.controller.saveProject();
                     }
                   },
                   child: Stack(

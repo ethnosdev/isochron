@@ -54,7 +54,17 @@ class WorkspaceManager extends ChangeNotifier {
     homeManager.onSaveCallback = () {
       if (selectedNode?.track != null && project != null) {
         final track = selectedNode!.track!;
-        track.status = AlignmentStatus.reviewed;
+        final frags = homeManager.value.fragments;
+        final hasEdits = frags.any(
+          (f) =>
+              f.status == FragmentStatus.edited ||
+              f.status == FragmentStatus.reviewed,
+        );
+        if (hasEdits) {
+          track.status = AlignmentStatus.reviewed;
+        } else if (frags.isNotEmpty && frags.any((f) => f.realStart >= 0)) {
+          track.status = AlignmentStatus.done;
+        }
         final col = project!.collections.firstWhere(
           (c) => c.id == track.collectionId,
           orElse: () => project!.collections.first,

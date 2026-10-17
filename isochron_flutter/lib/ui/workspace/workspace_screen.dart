@@ -162,48 +162,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     }
   }
 
-  Future<bool> _requestCloseEditor() async {
-    if (_manager.selectedNode?.type == NodeType.track &&
-        _manager.hasUnsavedChanges) {
-      final result = await showCupertinoDialog<String>(
-        context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: const Text('Unsaved Changes'),
-          content: const Text(
-            'You have unsaved changes in your alignment. Save before leaving?',
-          ),
-          actions: [
-            CupertinoDialogAction(
-              onPressed: () => Navigator.pop(context, 'cancel'),
-              child: const Text('Cancel'),
-            ),
-            CupertinoDialogAction(
-              isDestructiveAction: true,
-              onPressed: () => Navigator.pop(context, 'discard'),
-              child: const Text('Discard'),
-            ),
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              onPressed: () => Navigator.pop(context, 'save'),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      );
-
-      if (result == 'save') {
-        _manager.saveProject();
-        return true;
-      } else if (result == 'discard') {
-        await _manager.homeManager.discardChanges();
-        return true;
-      } else {
-        return false;
-      }
-    }
-    return true;
-  }
-
   // ---------------------------------------------------------------------------
   // BUILD
   // ---------------------------------------------------------------------------
@@ -233,16 +191,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       onOpenProject: _openProject,
       onImportCollections: _importCollectionsFromProject,
       onCloseProject: () async {
-        if (await _requestCloseEditor()) _manager.closeProject();
+        await _manager.homeManager.flushPendingAutoSave();
+        _manager.closeProject();
       },
       onOpenSettings: () async {
-        if (await _requestCloseEditor()) {
-          _manager.selectNode(TreeSelection(type: NodeType.settings));
-        }
+        await _manager.homeManager.flushPendingAutoSave();
+        _manager.selectNode(TreeSelection(type: NodeType.settings));
       },
       child: MacosWindow(
         key: const ValueKey('main_workspace_window'),
-        sidebar: buildWorkspaceSidebar(context, _manager, _requestCloseEditor),
+        sidebar: buildWorkspaceSidebar(context, _manager),
         child: MacosScaffold(
           toolBar: buildWorkspaceToolbar(context, _manager),
           children: [

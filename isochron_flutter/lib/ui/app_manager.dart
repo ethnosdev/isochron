@@ -36,6 +36,7 @@ class AppManager extends ValueNotifier<AppState> {
   int? _resettingToMs;
   Timer? _stopPlaybackTimer;
   Timer? _resettingTimeoutTimer;
+  Timer? _nudgeDebounceTimer;
 
   AppManager() : super(AppState(zoomLevel: UserSettingsService().lastZoom)) {
     _posSub = _audioService.positionStream.listen(handleAudioPosition);
@@ -93,6 +94,8 @@ class AppManager extends ValueNotifier<AppState> {
 
   @override
   void dispose() {
+    _nudgeDebounceTimer?.cancel();
+    _nudgeDebounceTimer = null;
     _cancelFragmentPlayback();
     _posSub?.cancel();
     _stateSub?.cancel();
@@ -102,6 +105,7 @@ class AppManager extends ValueNotifier<AppState> {
   }
 
   Future<void> loadTrack(Track track, Project project) async {
+    await flushPendingAutoSave();
     _cancelFragmentPlayback();
     if (value.isPlaying) {
       await _audioService.pause();
@@ -182,16 +186,32 @@ class AppManager extends ValueNotifier<AppState> {
     }
   }
 
+  void scheduleNudgeAutoSave() {
+    _nudgeDebounceTimer?.cancel();
+    _nudgeDebounceTimer = Timer(const Duration(seconds: 1), () {
+      saveProject();
+    });
+  }
+
+  Future<void> flushPendingAutoSave() async {
+    _nudgeDebounceTimer?.cancel();
+    _nudgeDebounceTimer = null;
+    if (value.hasUnsavedChanges) {
+      await saveProject();
+    }
+  }
+
   Future<void> saveProject() async {
+    _nudgeDebounceTimer?.cancel();
+    _nudgeDebounceTimer = null;
+
     if (value.autoSavePath == null) {
-      return exportJson();
+      return;
     }
 
     if (value.fragments.isEmpty) return;
 
     try {
-      value = value.copyWith(statusMessage: "Saving...");
-
       final jsonList = value.fragments.map((f) => f.toJson()).toList();
       final jsonString = const JsonEncoder.withIndent('  ').convert(jsonList);
 
@@ -199,12 +219,15 @@ class AppManager extends ValueNotifier<AppState> {
       if (!await outFile.parent.exists()) {
         await outFile.parent.create(recursive: true);
       }
-      await outFile.writeAsString(jsonString);
 
-      value = value.copyWith(statusMessage: "Saved.", hasUnsavedChanges: false);
+      final tempFile = File('${value.autoSavePath!}.tmp');
+      await tempFile.writeAsString(jsonString);
+      await tempFile.rename(outFile.path);
+
+      value = value.copyWith(hasUnsavedChanges: false);
       onSaveCallback?.call();
     } catch (e) {
-      value = value.copyWith(statusMessage: "Save Failed: $e");
+      debugPrint('[AUTOSAVE] Save failed: $e');
     }
   }
 
@@ -282,8 +305,9 @@ class AppManager extends ValueNotifier<AppState> {
           statusMessage: "Done.",
           progress: 1.0,
           isProcessing: false,
-          hasUnsavedChanges: true,
+          hasUnsavedChanges: false,
         );
+        await saveProject();
       } else {
         // Track has changed (Background alignment completed). Write results directly to its JSON output.
         if (initiatingSavePath != null) {
@@ -571,6 +595,7 @@ class AppManager extends ValueNotifier<AppState> {
     if (value.isPlaying) {
       _audioService.play();
     }
+    scheduleNudgeAutoSave();
   }
 
   /// Plays only the current fragment (from realStart to realEnd) and then stops,
@@ -638,6 +663,7 @@ class AppManager extends ValueNotifier<AppState> {
     if (nextIndex != null && frags[nextIndex].realStart >= 0) {
       seekTo(Duration(milliseconds: (frags[nextIndex].realStart * 1000).ceil()));
     }
+    saveProject();
   }
 
   /// Jumps to the next verse with diagnostic anomaly flags, wrapping around the track.
@@ -761,6 +787,7 @@ class AppManager extends ValueNotifier<AppState> {
     );
 
     value = value.copyWith(fragments: frags, hasUnsavedChanges: true);
+    saveProject();
   }
 
   void captureFragmentTiming(BuildContext context, [int? specificIndex]) {
@@ -847,5 +874,6 @@ class AppManager extends ValueNotifier<AppState> {
       hasUnsavedChanges: true,
       selectedFragmentIndex: nextIndex,
     );
+    saveProject();
   }
 }

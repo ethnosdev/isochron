@@ -13,7 +13,6 @@ import 'package:isochron_flutter/ui/theme/app_theme.dart';
 Sidebar buildWorkspaceSidebar(
   BuildContext context,
   WorkspaceManager manager,
-  Future<bool> Function() onRequestCloseEditor,
 ) {
   final theme = MacosTheme.of(context);
   final flatNodes = _getFlatNodes(manager);
@@ -62,7 +61,6 @@ Sidebar buildWorkspaceSidebar(
         return _buildTreeRowForNode(
           context,
           manager,
-          onRequestCloseEditor,
           flatNodes[index],
         );
       },
@@ -143,7 +141,6 @@ Color _getTrackColor(BuildContext context, AlignmentStatus status) {
 Widget _buildTreeRowForNode(
   BuildContext context,
   WorkspaceManager manager,
-  Future<bool> Function() onRequestCloseEditor,
   SidebarNode node,
 ) {
   final theme = MacosTheme.of(context);
@@ -180,11 +177,7 @@ Widget _buildTreeRowForNode(
             return;
           }
 
-          if (manager.hasUnsavedChanges &&
-              manager.selectedNode?.type == NodeType.track) {
-            final proceed = await onRequestCloseEditor();
-            if (!proceed) return;
-          }
+          await manager.homeManager.flushPendingAutoSave();
 
           manager.selectNode(
             TreeSelection(type: NodeType.collection, collection: col),
@@ -227,11 +220,7 @@ Widget _buildTreeRowForNode(
             return;
           }
 
-          if (manager.hasUnsavedChanges &&
-              manager.selectedNode?.type == NodeType.track) {
-            final proceed = await onRequestCloseEditor();
-            if (!proceed) return;
-          }
+          await manager.homeManager.flushPendingAutoSave();
 
           manager.selectNode(
             TreeSelection(type: NodeType.track, collection: col, track: track),
@@ -278,11 +267,7 @@ Widget _buildTreeRowForNode(
         depth: 2,
         hasChildren: false,
         onTap: () async {
-          if (manager.hasUnsavedChanges &&
-              manager.selectedNode?.type == NodeType.track) {
-            final proceed = await onRequestCloseEditor();
-            if (!proceed) return;
-          }
+          await manager.homeManager.flushPendingAutoSave();
           manager.selectNode(
             TreeSelection(
               type: isAudio ? NodeType.audio : NodeType.text,

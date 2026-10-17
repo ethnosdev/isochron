@@ -128,17 +128,6 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
       // --- TRACK ACTIONS ---
       if (selectedNode?.type == NodeType.track) ...[
         ToolBarIconButton(
-          label: 'Save',
-          icon: MacosIcon(
-            CupertinoIcons.floppy_disk,
-            color: manager.hasUnsavedChanges
-                ? MacosTheme.of(context).typography.body.color
-                : CupertinoColors.systemGrey.withValues(alpha: 0.5),
-          ),
-          showLabel: true,
-          onPressed: manager.hasUnsavedChanges ? manager.saveProject : null,
-        ),
-        ToolBarIconButton(
           label: 'Auto-Align',
           icon: MacosIcon(
             CupertinoIcons.wand_rays,
@@ -153,6 +142,7 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
                   f.status == FragmentStatus.edited ||
                   f.status == FragmentStatus.reviewed,
             );
+            final hasExistingAlignment = frags.any((f) => f.realStart >= 0);
 
             bool keepEdits = false;
             if (hasUserEdits && context.mounted) {
@@ -186,6 +176,30 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
               );
               if (choice == null || choice == 0) return;
               keepEdits = (choice == 1);
+            } else if (hasExistingAlignment && context.mounted) {
+              final choice = await showCupertinoDialog<bool>(
+                context: context,
+                builder: (dialogCtx) => CupertinoAlertDialog(
+                  title: const Text("Re-align Track?"),
+                  content: const Text(
+                    "This track already has alignment data. Recalculating will overwrite the existing alignment.\n\n"
+                    "A backup (.bak) of the current alignment will be saved.",
+                  ),
+                  actions: [
+                    CupertinoDialogAction(
+                      isDestructiveAction: true,
+                      onPressed: () => Navigator.pop(dialogCtx, true),
+                      child: const Text("Overwrite"),
+                    ),
+                    CupertinoDialogAction(
+                      isDefaultAction: true,
+                      onPressed: () => Navigator.pop(dialogCtx, false),
+                      child: const Text("Cancel"),
+                    ),
+                  ],
+                ),
+              );
+              if (choice != true) return;
             }
 
             try {

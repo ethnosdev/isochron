@@ -1,6 +1,5 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
 import 'package:isochron_flutter/ui/workspace/workspace_manager.dart';
 
 class WorkspaceMenuBar extends StatelessWidget {
@@ -79,18 +78,6 @@ class WorkspaceMenuBar extends StatelessWidget {
                     shift: true,
                   ),
                   onSelected: onImportCollections,
-                ),
-                PlatformMenuItem(
-                  label: 'Save',
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyS,
-                    meta: true,
-                  ),
-                  onSelected:
-                      (manager.selectedNode?.type == NodeType.track &&
-                          !manager.hasUnsavedChanges)
-                      ? null
-                      : manager.saveProject,
                 ),
               ],
             ),
