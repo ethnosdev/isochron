@@ -15,7 +15,7 @@ class ModelPanel extends StatefulWidget {
       builder: (_) => MacosSheet(
         child: SizedBox(
           width: 520,
-          height: 420,
+          height: 360,
           child: ModelPanel(onModelReady: onModelReady),
         ),
       ),
@@ -28,7 +28,6 @@ class ModelPanel extends StatefulWidget {
 
 class _ModelPanelState extends State<ModelPanel> {
   final ModelManager _manager = ModelManager();
-  ModelVariant _selectedVariant = ModelVariant.int8;
   ModelStatus _status = ModelStatus.notDownloaded;
   bool _isLoading = true;
   double _downloadProgress = 0.0;
@@ -44,7 +43,7 @@ class _ModelPanelState extends State<ModelPanel> {
 
   Future<void> _checkStatus({bool verifySha = false}) async {
     setState(() => _isLoading = true);
-    final status = await _manager.checkStatus(_selectedVariant, verifySha: verifySha);
+    final status = await _manager.checkStatus(ModelVariant.int8, verifySha: verifySha);
     if (!mounted) return;
     setState(() {
       _status = status;
@@ -65,7 +64,7 @@ class _ModelPanelState extends State<ModelPanel> {
 
     try {
       await _manager.download(
-        _selectedVariant,
+        ModelVariant.int8,
         onProgress: (pct, rec, total) {
           if (!mounted) return;
           final mbRec = (rec / 1024 / 1024).toStringAsFixed(1);
@@ -101,12 +100,12 @@ class _ModelPanelState extends State<ModelPanel> {
   }
 
   Future<void> _deleteModel() async {
-    await _manager.delete(_selectedVariant);
+    await _manager.delete(ModelVariant.int8);
     await _checkStatus();
   }
 
   void _revealInFinder() {
-    final file = _manager.getFile(_selectedVariant);
+    final file = _manager.getFile(ModelVariant.int8);
     if (file.existsSync()) {
       Process.run('open', ['-R', file.path]);
     } else {
@@ -147,8 +146,7 @@ class _ModelPanelState extends State<ModelPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final file = _manager.getFile(_selectedVariant);
-    final sizeMb = (_selectedVariant.sizeBytes / 1024 / 1024).toStringAsFixed(1);
+    final file = _manager.getFile(ModelVariant.int8);
 
     return Padding(
       padding: const EdgeInsets.all(24.0),
@@ -170,43 +168,10 @@ class _ModelPanelState extends State<ModelPanel> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Meta MMS-300M neural acoustic model required for multilingual forced alignment.',
+            'Meta MMS-300M Quantized INT8 neural acoustic model (~302 MB) required for multilingual forced alignment.',
             style: MacosTheme.of(context).typography.subheadline,
           ),
           const SizedBox(height: 20),
-
-          // Variant Picker
-          Row(
-            children: [
-              const Text('Model Variant:  ', style: TextStyle(fontWeight: FontWeight.w600)),
-              MacosPopupButton<ModelVariant>(
-                value: _selectedVariant,
-                onChanged: _isDownloading
-                    ? null
-                    : (val) {
-                        if (val != null) {
-                          setState(() => _selectedVariant = val);
-                          _checkStatus();
-                        }
-                      },
-                items: const [
-                  MacosPopupMenuItem(
-                    value: ModelVariant.int8,
-                    child: Text('Quantized INT8 (Recommended - 302 MB)'),
-                  ),
-                  MacosPopupMenuItem(
-                    value: ModelVariant.fp16,
-                    child: Text('FP16 (605 MB)'),
-                  ),
-                  MacosPopupMenuItem(
-                    value: ModelVariant.fp32,
-                    child: Text('FP32 Full Precision (1.2 GB)'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
 
           // Status Row
           Container(
@@ -236,7 +201,7 @@ class _ModelPanelState extends State<ModelPanel> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'File: ${_selectedVariant.filename} (~$sizeMb MB)',
+                  'File: ${ModelVariant.int8.filename} (~302 MB)',
                   style: const TextStyle(fontSize: 12),
                 ),
                 Text(
