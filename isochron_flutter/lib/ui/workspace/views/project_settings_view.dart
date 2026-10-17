@@ -21,10 +21,7 @@ class ProjectSettingsView extends StatefulWidget {
 }
 
 class _ProjectSettingsViewState extends State<ProjectSettingsView> {
-  late bool _generateIds;
-  late bool _hasIds;
   late String _prefix;
-
   late TextEditingController _prefixController;
   late TextEditingController _langController;
   late TextEditingController _leadInController;
@@ -33,8 +30,6 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
   @override
   void initState() {
     super.initState();
-    _generateIds = widget.project.defaultGenerateIds;
-    _hasIds = widget.project.defaultHasIds;
     _prefix = widget.project.defaultIdPrefix ?? "";
 
     _prefixController = TextEditingController(text: _prefix);
@@ -58,18 +53,9 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
     super.dispose();
   }
 
-  String get _idPreview {
-    if (_generateIds) {
-      return "Preview: ID [${_prefix}001001] / Text [In the beginning...]";
-    }
-    if (_hasIds) return "Preview: ID [40001001] / Text [In the beginning...]";
-    return "Preview: ID [] / Text [In the beginning...]";
-  }
-
   void _triggerSave() {
-    widget.project.defaultGenerateIds = _generateIds;
-    widget.project.defaultHasIds = _hasIds;
-    widget.project.defaultIdPrefix = _prefix;
+    widget.project.defaultIdPrefix =
+        _prefix.trim().isEmpty ? null : _prefix.trim();
     final lang = _langController.text.trim();
     widget.project.languageCode = lang.isEmpty ? null : lang.toLowerCase();
     final leadIn = int.tryParse(_leadInController.text.trim());
@@ -216,75 +202,34 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                   const Text("Copy imported media into project folder"),
                 ],
               ),
-
-              const SizedBox(height: 32),
-              Container(height: 1, color: theme.dividerColor),
-              const SizedBox(height: 32),
-
-              // --- ID STRATEGY ---
-              Text("Verse ID Strategy", style: theme.typography.headline),
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
               Text(
-                "How should Isochron assign IDs to your text fragments?",
+                "Default ID Prefix (Optional)",
                 style: TextStyle(
-                  color: theme.typography.body.color?.withValues(alpha: 0.7),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: theme.typography.body.color,
                 ),
               ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: 300,
-                child: MacosPopupButton<int>(
-                  value: _generateIds ? 2 : (_hasIds ? 1 : 0),
-                  items: const [
-                    MacosPopupMenuItem<int>(value: 0, child: Text('None')),
-                    MacosPopupMenuItem<int>(
-                      value: 1,
-                      child: Text('IDs are included in text file'),
-                    ),
-                    MacosPopupMenuItem<int>(
-                      value: 2,
-                      child: Text('Auto-Generate (Prefix + Rec + Verse)'),
-                    ),
-                  ],
-                  onChanged: (val) {
-                    setState(() {
-                      if (val == 0) {
-                        _hasIds = false;
-                        _generateIds = false;
-                      } else if (val == 1) {
-                        _hasIds = true;
-                        _generateIds = false;
-                      } else if (val == 2) {
-                        _hasIds = false;
-                        _generateIds = true;
-                      }
-                    });
-                    _triggerSave();
-                  },
-                ),
-              ),
-              if (_generateIds) ...[
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: 300,
-                  child: MacosTextField(
-                    controller: _prefixController,
-                    placeholder: 'Optional ID Prefix (e.g. 40)',
-                    decoration: textFieldDecoration,
-                    onChanged: (val) {
-                      setState(() => _prefix = val);
-                      _triggerSave();
-                    },
-                  ),
-                ),
-              ],
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               Text(
-                _idPreview,
+                "Used to auto-generate sequential IDs when transcript files do not contain embedded IDs.",
                 style: TextStyle(
                   fontSize: 12,
                   color: AppTheme.grey(context),
-                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: 300,
+                child: MacosTextField(
+                  controller: _prefixController,
+                  placeholder: 'e.g. 40, MRK, MAT',
+                  decoration: textFieldDecoration,
+                  onChanged: (val) {
+                    setState(() => _prefix = val);
+                    _triggerSave();
+                  },
                 ),
               ),
 

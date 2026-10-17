@@ -79,4 +79,23 @@ class UserSettingsService {
   Future<void> setCollaboratorName(String name) async {
     await _prefs.setString(_keyCollaboratorName, name.trim());
   }
+
+  // --- Recent Projects ---
+
+  static const String _keyRecentProjects = 'recent_projects';
+
+  List<String> get recentProjectPaths {
+    final list = _prefs.getStringList(_keyRecentProjects) ?? [];
+    return list.where((path) => File(path).existsSync()).toList();
+  }
+
+  Future<void> addRecentProject(String projectJsonPath) async {
+    final current =
+        List<String>.from(_prefs.getStringList(_keyRecentProjects) ?? []);
+    current.remove(projectJsonPath);
+    current.insert(0, projectJsonPath);
+    final filtered =
+        current.where((path) => File(path).existsSync()).take(10).toList();
+    await _prefs.setStringList(_keyRecentProjects, filtered);
+  }
 }

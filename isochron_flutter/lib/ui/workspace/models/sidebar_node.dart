@@ -1,6 +1,6 @@
 import 'package:isochron_flutter/ui/models/project_model.dart';
 
-enum SidebarNodeType { collection, track, audio, text }
+enum SidebarNodeType { collection, track }
 
 class SidebarNode {
   final String id;

@@ -6,6 +6,7 @@ import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/app_manager.dart';
 import 'package:isochron_flutter/ui/editor/studio_editor.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
+import 'package:isochron_flutter/ui/waveform/waveform_view.dart';
 import 'package:just_waveform/just_waveform.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -444,8 +445,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final scrollFinder = find.byType(SingleChildScrollView);
-      final scrollController = tester.widget<SingleChildScrollView>(scrollFinder).controller!;
+      final scrollFinder = find.descendant(
+        of: find.byType(WaveformView),
+        matching: find.byType(SingleChildScrollView),
+      );
+      final scrollController =
+          tester.widget<SingleChildScrollView>(scrollFinder).controller!;
 
       // Position view at offset 20.0 so that fragment 0 (absolutePlayhead ~ 46.0) is visible on-screen (20..820)
       scrollController.jumpTo(20.0);

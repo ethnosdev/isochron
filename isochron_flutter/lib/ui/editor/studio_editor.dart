@@ -1,8 +1,14 @@
+import 'dart:math' as math;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:isochron_cli/isochron_cli.dart';
+import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/app_manager.dart';
 import 'package:isochron_flutter/ui/models/app_state.dart';
+import 'package:isochron_flutter/ui/theme/app_theme.dart';
 import 'package:macos_ui/macos_ui.dart';
+import 'package:path/path.dart' as p;
 
 import '../waveform/waveform_view.dart';
 import 'components/studio_fragment_list.dart';
@@ -87,11 +93,74 @@ class _StudioEditorState extends State<StudioEditor> {
     }
   }
 
+  String _formatTimecode(Duration d) {
+    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    final hundredths =
+        (d.inMilliseconds.remainder(1000) ~/ 10).toString().padLeft(2, '0');
+    return "$minutes:$seconds.$hundredths";
+  }
+
+  Widget _buildFilterPill({
+    required BuildContext context,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    final theme = MacosTheme.of(context);
+    final accent = AppTheme.accent(context);
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? accent.withValues(alpha: 0.18)
+              : theme.canvasColor.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected
+                ? accent.withValues(alpha: 0.4)
+                : theme.dividerColor,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            color: isSelected ? accent : theme.typography.body.color,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = MacosTheme.of(context);
+
     // Wrap the entire editor in a shortcut listener
     return CallbackShortcuts(
       bindings: {
+        // Undo / Redo
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () =>
+            widget.homeManager.undo(),
+        const SingleActivator(
+          LogicalKeyboardKey.keyZ,
+          meta: true,
+          shift: true,
+        ): () => widget.homeManager.redo(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () =>
+            widget.homeManager.undo(),
+        const SingleActivator(
+          LogicalKeyboardKey.keyZ,
+          control: true,
+          shift: true,
+        ): () => widget.homeManager.redo(),
+
         // Play / Pause (Space)
         const SingleActivator(LogicalKeyboardKey.space): () =>
             widget.homeManager.togglePlay(),
@@ -190,9 +259,100 @@ class _StudioEditorState extends State<StudioEditor> {
         child: ValueListenableBuilder<AppState>(
           valueListenable: widget.homeManager,
           builder: (context, state, _) {
-            // Editor State
+            final allCount = state.fragments.length;
+            final unreviewedCount = state.fragments
+                .where((f) => f.status != FragmentStatus.reviewed)
+                .length;
+            final flaggedCount = state.fragments
+                .where((f) => f.flags.isNotEmpty || f.warnings.isNotEmpty)
+                .length;
+
             return Column(
               children: [
+                // --- Missing File Fallback Banner ---
+                if (state.audioPath == null || state.textPath == null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color:
+                          AppTheme.destructive(context).withValues(alpha: 0.12),
+                      border: Border(
+                        bottom: BorderSide(
+                          color: AppTheme.destructive(context).withValues(
+                            alpha: 0.3,
+                          ),
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          CupertinoIcons.exclamationmark_triangle_fill,
+                          size: 16,
+                          color: AppTheme.destructive(context),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            state.audioPath == null && state.textPath == null
+                                ? "Audio and transcript files are missing for this track."
+                                : state.audioPath == null
+                                    ? "Audio file is missing for this track."
+                                    : "Transcript file is missing for this track.",
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        if (state.audioPath == null) ...[
+                          PushButton(
+                            controlSize: ControlSize.small,
+                            onPressed: () async {
+                              final settings = UserSettingsService();
+                              final picked = await FilePicker.pickFiles(
+                                type: FileType.audio,
+                                initialDirectory: settings.lastSourceDir,
+                              );
+                              if (picked != null &&
+                                  picked.files.single.path != null) {
+                                final pth = picked.files.single.path!;
+                                settings.setLastSourceDir(p.dirname(pth));
+                                await widget.homeManager
+                                    .replaceCurrentTrackAudio(pth);
+                              }
+                            },
+                            child: const Text("Attach Audio..."),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                        if (state.textPath == null)
+                          PushButton(
+                            controlSize: ControlSize.small,
+                            onPressed: () async {
+                              final settings = UserSettingsService();
+                              final picked = await FilePicker.pickFiles(
+                                type: FileType.custom,
+                                allowedExtensions: ['txt', 'phrases'],
+                                initialDirectory: settings.lastSourceDir,
+                              );
+                              if (picked != null &&
+                                  picked.files.single.path != null) {
+                                final pth = picked.files.single.path!;
+                                settings.setLastSourceDir(p.dirname(pth));
+                                await widget.homeManager
+                                    .replaceCurrentTrackText(pth);
+                              }
+                            },
+                            child: const Text("Attach Transcript..."),
+                          ),
+                      ],
+                    ),
+                  ),
+
                 // --- Processing Bar ---
                 if (state.isProcessing)
                   Container(
@@ -243,25 +403,242 @@ class _StudioEditorState extends State<StudioEditor> {
                   ),
                 ),
 
-                // --- 3. Fragment List ---
+                // --- 3. Transport & Triage Control Bar (Height 42px) ---
+                Container(
+                  height: 42.0,
+                  padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                  decoration: BoxDecoration(
+                    color: AppTheme.selectionBg(context).withValues(alpha: 0.35),
+                    border: Border(
+                      top: BorderSide(color: theme.dividerColor),
+                      bottom: BorderSide(color: theme.dividerColor),
+                    ),
+                  ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minWidth: math.max(0.0, constraints.maxWidth - 28.0),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              // Left Group (Transport & Timecode)
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  MacosTooltip(
+                                    message: "Play / Pause (Space)",
+                                    child: MacosIconButton(
+                                      icon: MacosIcon(
+                                        state.isPlaying
+                                            ? CupertinoIcons.pause_fill
+                                            : CupertinoIcons.play_arrow_solid,
+                                        color: AppTheme.accent(context),
+                                        size: 16,
+                                      ),
+                                      onPressed: widget.homeManager.togglePlay,
+                                      boxConstraints: const BoxConstraints(
+                                        minHeight: 28,
+                                        minWidth: 28,
+                                      ),
+                                    ),
+                                  ),
+                                  MacosTooltip(
+                                    message: "Play Current Fragment (P)",
+                                    child: MacosIconButton(
+                                      icon: MacosIcon(
+                                        CupertinoIcons.repeat_1,
+                                        color: theme.typography.body.color,
+                                        size: 16,
+                                      ),
+                                      onPressed: widget.homeManager.playCurrentFragment,
+                                      boxConstraints: const BoxConstraints(
+                                        minHeight: 28,
+                                        minWidth: 28,
+                                      ),
+                                    ),
+                                  ),
+                                  MacosTooltip(
+                                    message: "Previous (←)",
+                                    child: MacosIconButton(
+                                      icon: MacosIcon(
+                                        CupertinoIcons.backward_end_fill,
+                                        color: theme.typography.body.color,
+                                        size: 14,
+                                      ),
+                                      onPressed: widget.homeManager.skipToPrevious,
+                                      boxConstraints: const BoxConstraints(
+                                        minHeight: 28,
+                                        minWidth: 28,
+                                      ),
+                                    ),
+                                  ),
+                                  MacosTooltip(
+                                    message: "Next (→)",
+                                    child: MacosIconButton(
+                                      icon: MacosIcon(
+                                        CupertinoIcons.forward_end_fill,
+                                        color: theme.typography.body.color,
+                                        size: 14,
+                                      ),
+                                      onPressed: widget.homeManager.skipToNext,
+                                      boxConstraints: const BoxConstraints(
+                                        minHeight: 28,
+                                        minWidth: 28,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  ValueListenableBuilder<Duration>(
+                                    valueListenable:
+                                        widget.homeManager.playbackPosition,
+                                    builder: (context, pos, _) {
+                                      return Text(
+                                        "${_formatTimecode(pos)} / ${_formatTimecode(state.audioDuration)}",
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: AppTheme.grey(context),
+                                          fontWeight: FontWeight.w500,
+                                          fontFeatures: const [
+                                            FontFeature.tabularFigures(),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
+
+                              const SizedBox(width: 16),
+
+                              // Center Group (Filter Pills & Flag Navigation)
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _buildFilterPill(
+                                    context: context,
+                                    label: "All ($allCount)",
+                                    isSelected: state.filter == FragmentFilter.all,
+                                    onTap: () => widget.homeManager
+                                        .setFilter(FragmentFilter.all),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  _buildFilterPill(
+                                    context: context,
+                                    label: "Unreviewed ($unreviewedCount)",
+                                    isSelected:
+                                        state.filter == FragmentFilter.unreviewed,
+                                    onTap: () => widget.homeManager
+                                        .setFilter(FragmentFilter.unreviewed),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  _buildFilterPill(
+                                    context: context,
+                                    label: "Flagged ($flaggedCount)",
+                                    isSelected:
+                                        state.filter == FragmentFilter.flagged,
+                                    onTap: () => widget.homeManager
+                                        .setFilter(FragmentFilter.flagged),
+                                  ),
+                                  if (flaggedCount > 0) ...[
+                                    const SizedBox(width: 8),
+                                    PushButton(
+                                      controlSize: ControlSize.small,
+                                      secondary: true,
+                                      onPressed:
+                                          widget.homeManager.jumpToNextFlaggedVerse,
+                                      child: const Text("⚠️ Next Flag (F)"),
+                                    ),
+                                  ],
+                                ],
+                              ),
+
+                              const SizedBox(width: 16),
+
+                              // Right Group (Review & Undo/Redo)
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  PushButton(
+                                    controlSize: ControlSize.small,
+                                    secondary: true,
+                                    onPressed:
+                                        widget.homeManager.markReviewedAndAdvance,
+                                    child: const Text("✓ Mark Reviewed (R)"),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  MacosTooltip(
+                                    message: "Undo (⌘Z)",
+                                    child: MacosIconButton(
+                                      icon: MacosIcon(
+                                        CupertinoIcons.arrow_turn_up_left,
+                                        color: widget.homeManager.canUndo
+                                            ? theme.typography.body.color
+                                            : AppTheme.grey(context).withValues(
+                                                alpha: 0.4,
+                                              ),
+                                        size: 15,
+                                      ),
+                                      boxConstraints: const BoxConstraints(
+                                        minHeight: 28,
+                                        minWidth: 28,
+                                      ),
+                                      onPressed: widget.homeManager.canUndo
+                                          ? widget.homeManager.undo
+                                          : null,
+                                    ),
+                                  ),
+                                  MacosTooltip(
+                                    message: "Redo (⇧⌘Z)",
+                                    child: MacosIconButton(
+                                      icon: MacosIcon(
+                                        CupertinoIcons.arrow_turn_up_right,
+                                        color: widget.homeManager.canRedo
+                                            ? theme.typography.body.color
+                                            : AppTheme.grey(context).withValues(
+                                                alpha: 0.4,
+                                              ),
+                                        size: 15,
+                                      ),
+                                      boxConstraints: const BoxConstraints(
+                                        minHeight: 28,
+                                        minWidth: 28,
+                                      ),
+                                      onPressed: widget.homeManager.canRedo
+                                          ? widget.homeManager.redo
+                                          : null,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
+                // --- 4. Fragment List ---
                 Expanded(
                   child: Container(
-                    decoration: BoxDecoration(
-                      border: Border(
-                        top: BorderSide(
-                          color: MacosTheme.of(context).dividerColor,
-                        ),
-                      ),
-                      color: MacosTheme.of(context).canvasColor,
-                    ),
+                    color: MacosTheme.of(context).canvasColor,
                     child: StudioFragmentList(
                       fragments: state.fragments,
                       playbackNotifier: widget.homeManager.playbackPosition,
                       selectedIndex: state.selectedFragmentIndex,
+                      filter: state.filter,
                       onSelect: widget.homeManager.selectFragment,
                       onCapture: (i) =>
                           widget.homeManager.captureFragmentTiming(context, i),
                       onClear: widget.homeManager.clearFragmentTiming,
+                      onToggleReviewed:
+                          widget.homeManager.toggleFragmentReviewed,
+                      onEditText: (i, newText) =>
+                          widget.homeManager.updateFragmentText(i, newText),
                       onJumpTo: (idx) {
                         widget.homeManager.exitFocusMode();
                         final frag = state.fragments[idx];

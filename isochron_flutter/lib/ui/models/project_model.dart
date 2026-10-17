@@ -168,6 +168,8 @@ class Project {
   bool copyMediaIntoProject;
   bool hasPromptedForMediaStorage;
 
+  String get projectFilePath => p.join(directoryPath, 'project.json');
+
   Project({
     required this.id,
     required this.name,

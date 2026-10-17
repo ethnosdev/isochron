@@ -28,6 +28,130 @@ class AppManager extends ValueNotifier<AppState> {
   void Function(String trackId, List<Fragment> fragments)?
   onBackgroundAlignmentComplete;
 
+  Track? currentTrack;
+  Project? currentProject;
+
+  // Undo / Redo Stacks
+  final List<List<Fragment>> _undoStack = [];
+  final List<List<Fragment>> _redoStack = [];
+  static const int _maxHistoryDepth = 30;
+
+  bool get canUndo => _undoStack.isNotEmpty;
+  bool get canRedo => _redoStack.isNotEmpty;
+
+  void _recordUndoSnapshot() {
+    _undoStack.add(value.fragments.map((f) => f.copyWith()).toList());
+    if (_undoStack.length > _maxHistoryDepth) {
+      _undoStack.removeAt(0);
+    }
+    _redoStack.clear();
+    notifyListeners();
+  }
+
+  void beginBoundaryEdit() {
+    _recordUndoSnapshot();
+  }
+
+  void undo() {
+    if (_undoStack.isEmpty) return;
+    _redoStack.add(value.fragments.map((f) => f.copyWith()).toList());
+    final snapshot = _undoStack.removeLast();
+    value = value.copyWith(fragments: snapshot, hasUnsavedChanges: true);
+    scheduleNudgeAutoSave();
+    notifyListeners();
+  }
+
+  void redo() {
+    if (_redoStack.isEmpty) return;
+    _undoStack.add(value.fragments.map((f) => f.copyWith()).toList());
+    final snapshot = _redoStack.removeLast();
+    value = value.copyWith(fragments: snapshot, hasUnsavedChanges: true);
+    scheduleNudgeAutoSave();
+    notifyListeners();
+  }
+
+  void updateFragmentText(int index, String newText) {
+    final trimmed = newText.trim();
+    if (index < 0 || index >= value.fragments.length) return;
+    if (trimmed.isEmpty || trimmed == value.fragments[index].text) return;
+
+    _recordUndoSnapshot();
+    final frags = List<Fragment>.from(value.fragments);
+    frags[index] = frags[index].copyWith(text: trimmed);
+    value = value.copyWith(fragments: frags, hasUnsavedChanges: true);
+    saveProject();
+  }
+
+  void toggleFragmentReviewed(int index) {
+    if (index < 0 || index >= value.fragments.length) return;
+    _recordUndoSnapshot();
+    final frags = List<Fragment>.from(value.fragments);
+    final isReviewed = frags[index].status == FragmentStatus.reviewed;
+    frags[index] = frags[index].copyWith(
+      status: isReviewed ? FragmentStatus.edited : FragmentStatus.reviewed,
+    );
+    value = value.copyWith(fragments: frags, hasUnsavedChanges: true);
+    saveProject();
+  }
+
+  void setFilter(FragmentFilter filter) {
+    value = value.copyWith(filter: filter);
+  }
+
+  Future<void> replaceCurrentTrackAudio(String newSourcePath) async {
+    if (currentTrack == null || currentProject == null) return;
+    final col = currentProject!.collections.firstWhere(
+      (c) => c.id == currentTrack!.collectionId,
+      orElse: () => currentProject!.collections.first,
+    );
+    if (currentProject!.copyMediaIntoProject) {
+      final audioDir = Directory(
+        p.join(
+          currentProject!.directoryPath,
+          'collections',
+          col.folderName,
+          'audio',
+        ),
+      );
+      if (!await audioDir.exists()) await audioDir.create(recursive: true);
+      final newPath = p.join(audioDir.path, p.basename(newSourcePath));
+      await File(newSourcePath).copy(newPath);
+      currentTrack!.audioPath = p.basename(newSourcePath);
+    } else {
+      currentTrack!.audioPath = newSourcePath;
+    }
+    await col.saveTracks(currentProject!.directoryPath);
+    await loadTrack(currentTrack!, currentProject!);
+    onSaveCallback?.call();
+  }
+
+  Future<void> replaceCurrentTrackText(String newSourcePath) async {
+    if (currentTrack == null || currentProject == null) return;
+    final col = currentProject!.collections.firstWhere(
+      (c) => c.id == currentTrack!.collectionId,
+      orElse: () => currentProject!.collections.first,
+    );
+    if (currentProject!.copyMediaIntoProject) {
+      final textDir = Directory(
+        p.join(
+          currentProject!.directoryPath,
+          'collections',
+          col.folderName,
+          'text',
+        ),
+      );
+      if (!await textDir.exists()) await textDir.create(recursive: true);
+      final newPath = p.join(textDir.path, p.basename(newSourcePath));
+      await File(newSourcePath).copy(newPath);
+      currentTrack!.textPath = p.basename(newSourcePath);
+    } else {
+      currentTrack!.textPath = newSourcePath;
+    }
+    await col.saveTracks(currentProject!.directoryPath);
+    await loadTrack(currentTrack!, currentProject!);
+    onSaveCallback?.call();
+  }
+
   final playbackPosition = ValueNotifier(Duration.zero);
   StreamSubscription<Duration>? _posSub;
   StreamSubscription<PlayerState>? _stateSub;
@@ -105,6 +229,11 @@ class AppManager extends ValueNotifier<AppState> {
   }
 
   Future<void> loadTrack(Track track, Project project) async {
+    currentTrack = track;
+    currentProject = project;
+    _undoStack.clear();
+    _redoStack.clear();
+
     await flushPendingAutoSave();
     _cancelFragmentPlayback();
     if (value.isPlaying) {
@@ -127,8 +256,19 @@ class AppManager extends ValueNotifier<AppState> {
       folderName,
     );
 
-    if (resolvedAudio == null || resolvedText == null) {
+    final validAudio = (resolvedAudio != null && File(resolvedAudio).existsSync())
+        ? resolvedAudio
+        : null;
+    final validText = (resolvedText != null && File(resolvedText).existsSync())
+        ? resolvedText
+        : null;
+
+    if (validAudio == null || validText == null) {
       value = value.copyWith(
+        audioPath: validAudio,
+        clearAudioPath: validAudio == null,
+        textPath: validText,
+        clearTextPath: validText == null,
         statusMessage: "Error: Missing Audio or Text file in Track.",
       );
       return;
@@ -139,7 +279,7 @@ class AppManager extends ValueNotifier<AppState> {
       folderName,
     );
 
-    final playbackPath = await _ensureWavForPlayback(resolvedAudio);
+    final playbackPath = await _ensureWavForPlayback(validAudio);
     final duration = await _audioService.load(playbackPath);
 
     List<Fragment> loadedFragments = [];
@@ -155,19 +295,29 @@ class AppManager extends ValueNotifier<AppState> {
       }
     }
 
-    bool effectiveHasIds = project.defaultHasIds;
-    if (!effectiveHasIds && File(resolvedText).existsSync()) {
+    bool effectiveHasIds = false;
+    if (File(validText).existsSync()) {
       try {
-        final sample = File(resolvedText).readAsStringSync();
+        final sample = File(validText).readAsStringSync();
         if (detectTabDelimitedIds(sample)) {
           effectiveHasIds = true;
+        } else {
+          final lines = File(validText).readAsLinesSync();
+          for (final line in lines) {
+            if (line.trim().isEmpty) continue;
+            final parsed = extractIdFromLine(line);
+            if (parsed.hasId) {
+              effectiveHasIds = true;
+              break;
+            }
+          }
         }
       } catch (_) {}
     }
 
     value = value.copyWith(
-      audioPath: resolvedAudio,
-      textPath: resolvedText,
+      audioPath: validAudio,
+      textPath: validText,
       autoSavePath: absJsonPath,
       fragments: loadedFragments,
       hasIds: effectiveHasIds,
@@ -179,7 +329,7 @@ class AppManager extends ValueNotifier<AppState> {
     );
     playbackPosition.value = Duration.zero;
 
-    _generateWaveform(resolvedAudio);
+    _generateWaveform(validAudio);
 
     if (loadedFragments.isEmpty) {
       await initManualAlignment();
@@ -533,6 +683,16 @@ class AppManager extends ValueNotifier<AppState> {
     value = value.copyWith(fragments: frags, hasUnsavedChanges: true);
   }
 
+  void resetToAutoBoundary(int index) {
+    if (index < 0 || index >= value.fragments.length) return;
+    final f = value.fragments[index];
+    if (f.autoStart != null) {
+      beginBoundaryEdit();
+      updateFragment(index, f.autoStart!, f.realEnd);
+      saveProject();
+    }
+  }
+
   int? _latchedNudgeFragmentIndex;
 
   /// Returns true if Cmd (on macOS) or Ctrl (on other platforms) is currently pressed.
@@ -578,6 +738,9 @@ class AppManager extends ValueNotifier<AppState> {
     }
 
     if (idx == null || idx < 0 || idx >= value.fragments.length) return;
+    if (_latchedNudgeFragmentIndex == null) {
+      beginBoundaryEdit();
+    }
     _latchedNudgeFragmentIndex = idx;
 
     final frag = value.fragments[idx];
@@ -650,6 +813,7 @@ class AppManager extends ValueNotifier<AppState> {
     }
 
     if (idx == null || idx < 0 || idx >= value.fragments.length) return;
+    _recordUndoSnapshot();
     final frags = List<Fragment>.from(value.fragments);
     frags[idx] = frags[idx].copyWith(status: FragmentStatus.reviewed);
 
@@ -675,7 +839,7 @@ class AppManager extends ValueNotifier<AppState> {
     for (int offset = 1; offset <= total; offset++) {
       final idx = (currentIdx + offset) % total;
       final frag = value.fragments[idx];
-      if (frag.flags.isNotEmpty) {
+      if (frag.flags.isNotEmpty || frag.warnings.isNotEmpty) {
         selectFragment(idx);
         if (frag.realStart >= 0) {
           seekTo(Duration(milliseconds: (frag.realStart * 1000).toInt()));
@@ -732,15 +896,41 @@ class AppManager extends ValueNotifier<AppState> {
     final frags = <Fragment>[];
     int idx = 0;
 
+    bool hasLeadingIds = false;
+    for (final line in lines) {
+      if (line.trim().isEmpty) continue;
+      final parsed = extractIdFromLine(line);
+      if (parsed.hasId) {
+        hasLeadingIds = true;
+        break;
+      }
+    }
+
+    final prefix = currentProject?.defaultIdPrefix ?? "";
+    String recStr = "001";
+    if (currentTrack != null && currentProject != null) {
+      final col = currentProject!.collections.firstWhere(
+        (c) => c.id == currentTrack!.collectionId,
+        orElse: () => currentProject!.collections.first,
+      );
+      final trackIndex = col.tracks.indexOf(currentTrack!) + 1;
+      if (trackIndex > 0) {
+        recStr = trackIndex.toString().padLeft(3, '0');
+      }
+    }
+
     for (var line in lines) {
       if (line.trim().isEmpty) continue;
       String? id;
       String content = line;
 
-      if (value.hasIds) {
+      if (hasLeadingIds) {
         final parsed = extractIdFromLine(line);
         id = parsed.hasId ? parsed.id : null;
         content = parsed.content;
+      } else if (prefix.isNotEmpty) {
+        final verseStr = (idx + 1).toString().padLeft(3, '0');
+        id = '$prefix$recStr$verseStr';
       }
 
       frags.add(
@@ -757,6 +947,7 @@ class AppManager extends ValueNotifier<AppState> {
   }
 
   void clearFragmentTiming(int index) {
+    _recordUndoSnapshot();
     final frags = List<Fragment>.from(value.fragments);
     final duration = value.audioDuration.inMilliseconds / 1000.0;
 
@@ -846,6 +1037,7 @@ class AppManager extends ValueNotifier<AppState> {
       return;
     }
 
+    _recordUndoSnapshot();
     double endT = nextTimed != null ? nextTimed.realStart : duration;
     final oldFrag = frags[index];
     final autoStart = oldFrag.autoStart ?? (oldFrag.realStart >= 0 ? oldFrag.realStart : null);

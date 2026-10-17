@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/ui/editor/components/studio_fragment_list.dart';
+import 'package:isochron_flutter/ui/theme/app_theme.dart';
 import 'package:macos_ui/macos_ui.dart';
 
 void main() {
@@ -75,14 +76,11 @@ void main() {
       expect(romanizedWidget.style?.fontStyle, isNot(FontStyle.italic));
       // Weight is w500 (distinct and easy to see, not a faint/light font)
       expect(romanizedWidget.style?.fontWeight, FontWeight.w500);
-      final originalWidget = tester.widget<Text>(find.text('Βίβλος γενέσεως Ἰησοῦ Χριστοῦ'));
-      // Text color is the same as the original text
-      expect(romanizedWidget.style?.color, equals(originalWidget.style?.color));
+      // Text color uses AppTheme.lightRomanized
+      expect(romanizedWidget.style?.color, equals(AppTheme.lightRomanized));
       // No maxLines or ellipsis (lines wrap)
       expect(romanizedWidget.maxLines, isNull);
       expect(romanizedWidget.overflow, isNot(TextOverflow.ellipsis));
-      expect(originalWidget.maxLines, isNull);
-      expect(originalWidget.overflow, isNot(TextOverflow.ellipsis));
 
       // Check vertical alignment: original and romanized lines share the exact same X coordinate
       final origPos = tester.getTopLeft(find.text('Βίβλος γενέσεως Ἰησοῦ Χριστοῦ'));
@@ -107,8 +105,9 @@ void main() {
       final romPos = tester.getTopLeft(find.text('Biblos geneseos Iesou Christou'));
       expect(origPos.dx, equals(romPos.dx));
 
+      // ID and badges are on Sub-row A, above original text on Sub-row B
       final idPos = tester.getTopLeft(find.text('MAT.1.1'));
-      expect(origPos.dx, greaterThan(idPos.dx));
+      expect(origPos.dy, greaterThan(idPos.dy));
     });
   });
 

@@ -3,10 +3,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:isochron_flutter/ui/editor/studio_editor.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
-import 'package:isochron_flutter/ui/workspace/views/audio_inspector_view.dart';
 import 'package:isochron_flutter/ui/workspace/views/collection_batch_view.dart';
 import 'package:isochron_flutter/ui/workspace/views/project_settings_view.dart';
-import 'package:isochron_flutter/ui/workspace/views/text_editor_view.dart';
 import 'package:isochron_flutter/ui/workspace/workspace_manager.dart';
 import 'package:macos_ui/macos_ui.dart';
 
@@ -14,39 +12,6 @@ class WorkspaceRouter extends StatelessWidget {
   final WorkspaceManager manager;
 
   const WorkspaceRouter({super.key, required this.manager});
-
-  Future<void> _invalidateAndReplace(
-    BuildContext context,
-    Track track,
-    Future<void> Function() action,
-  ) async {
-    if (track.status != AlignmentStatus.pending) {
-      final bool? confirm = await showCupertinoDialog<bool>(
-        context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: const Text('Invalidate Alignment?'),
-          content: const Text(
-            'Modifying this file will invalidate your existing alignment data. Are you sure?',
-          ),
-          actions: [
-            CupertinoDialogAction(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            CupertinoDialogAction(
-              isDestructiveAction: true,
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Modify'),
-            ),
-          ],
-        ),
-      );
-      if (confirm != true) return;
-    }
-
-    await action();
-    await manager.clearAlignmentData(track);
-  }
 
   Future<void> _handleHealBrokenLinks(
     BuildContext context,
@@ -123,6 +88,9 @@ class WorkspaceRouter extends StatelessWidget {
             manager.project!.save();
             manager.refreshUi();
           },
+          onImportFiles: () => manager.importFilesIntoCollection(
+            manager.selectedNode!.collection!,
+          ),
           onOpenTrack: (track) {
             manager.selectNode(
               TreeSelection(
@@ -142,30 +110,6 @@ class WorkspaceRouter extends StatelessWidget {
       case NodeType.track:
         return StudioEditor(
           homeManager: manager.homeManager,
-        );
-
-      case NodeType.text:
-        return TextEditorView(
-          track: manager.selectedNode!.track!,
-          project: manager.project!,
-          collection: manager.selectedNode!.collection!,
-          onReplaceOrEdit: (action) => _invalidateAndReplace(
-            context,
-            manager.selectedNode!.track!,
-            action,
-          ),
-        );
-
-      case NodeType.audio:
-        return AudioInspectorView(
-          track: manager.selectedNode!.track!,
-          project: manager.project!,
-          collection: manager.selectedNode!.collection!,
-          onReplace: (action) => _invalidateAndReplace(
-            context,
-            manager.selectedNode!.track!,
-            action,
-          ),
         );
 
       case NodeType.settings:

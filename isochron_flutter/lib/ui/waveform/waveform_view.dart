@@ -1,7 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
+import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/ui/app_manager.dart';
+import 'package:isochron_flutter/ui/components/macos_context_menu.dart';
 import 'package:isochron_flutter/ui/models/app_state.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'waveform_painter.dart';
@@ -45,6 +47,9 @@ class _WaveformViewState extends State<WaveformView>
     with TickerProviderStateMixin {
   int? _dragIndex;
   bool _dragStart = true;
+  double? _hoveredBoundaryTime;
+  int? _hoveredFragmentIndex;
+  bool _isRulerScrubbing = false;
   static const double _hPadding = WaveformView.hPadding;
   SystemMouseCursor _cursor = SystemMouseCursors.basic;
   static const double _hoverThresholdPx = 10.0;
@@ -369,22 +374,38 @@ class _WaveformViewState extends State<WaveformView>
                 cursor: _cursor,
                 hitTestBehavior: HitTestBehavior.opaque,
                 onHover: (event) => _handleHover(
-                  event.localPosition.dx,
+                  event.localPosition,
                   contentWidth,
                   totalSec,
                 ),
+                onExit: (_) {
+                  if (_hoveredBoundaryTime != null ||
+                      _hoveredFragmentIndex != null) {
+                    setState(() {
+                      _hoveredBoundaryTime = null;
+                      _hoveredFragmentIndex = null;
+                    });
+                  }
+                  widget.controller.setHoveredFragmentIndex(null);
+                },
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTapUp: (d) =>
-                      _handleTap(d.localPosition.dx, contentWidth, totalSec),
+                      _handleTap(d.localPosition, contentWidth, totalSec),
                   onSecondaryTapDown: (d) => _handleRightClick(
-                    d.localPosition.dx,
+                    d,
                     contentWidth,
                     totalSec,
                   ),
                   onHorizontalDragStart: (d) {
                     if (_isPanZooming) return;
                     _stopFling();
+                    if (d.localPosition.dy <= 22.0) {
+                      _isRulerScrubbing = true;
+                      _handleSeek(d.localPosition.dx, contentWidth, totalSec);
+                      return;
+                    }
+                    _isRulerScrubbing = false;
                     _handleDragStart(
                       d.localPosition.dx,
                       contentWidth,
@@ -393,6 +414,10 @@ class _WaveformViewState extends State<WaveformView>
                   },
                   onHorizontalDragUpdate: (d) {
                     if (_isPanZooming) return;
+                    if (_isRulerScrubbing) {
+                      _handleSeek(d.localPosition.dx, contentWidth, totalSec);
+                      return;
+                    }
                     if (_dragIndex != null) {
                       _handleDragUpdate(
                         d.localPosition.dx,
@@ -405,6 +430,10 @@ class _WaveformViewState extends State<WaveformView>
                   },
                   onHorizontalDragEnd: (d) {
                     if (_isPanZooming) return;
+                    if (_isRulerScrubbing) {
+                      _isRulerScrubbing = false;
+                      return;
+                    }
                     if (_dragIndex != null) {
                       setState(() {
                         _dragIndex = null;
@@ -419,6 +448,7 @@ class _WaveformViewState extends State<WaveformView>
                     }
                   },
                   onHorizontalDragCancel: () {
+                    _isRulerScrubbing = false;
                     if (_dragIndex != null) {
                       setState(() {
                         _dragIndex = null;
@@ -446,6 +476,16 @@ class _WaveformViewState extends State<WaveformView>
                                 alpha: 0.5,
                               ),
                               playheadColor: AppTheme.playhead(context),
+                              reviewedColor: AppTheme.success(context),
+                              warningColor: AppTheme.warning(context),
+                              destructiveColor: AppTheme.destructive(context),
+                              textColor:
+                                  MacosTheme.of(context).typography.body.color ??
+                                      CupertinoColors.black,
+                              selectedFragmentIndex:
+                                  widget.state.selectedFragmentIndex,
+                              hoveredFragmentIndex: _hoveredFragmentIndex,
+                              hoveredBoundaryTime: _hoveredBoundaryTime,
                               contentWidth: contentWidth,
                               padding: _hPadding,
                             ),
@@ -463,15 +503,29 @@ class _WaveformViewState extends State<WaveformView>
     );
   }
 
-  void _handleHover(double x, double contentWidth, double totalSec) {
-    if (_dragIndex != null) {
+  void _handleHover(Offset localPos, double contentWidth, double totalSec) {
+    if (_dragIndex != null || _isRulerScrubbing) {
       if (_cursor != SystemMouseCursors.resizeLeftRight) {
         setState(() => _cursor = SystemMouseCursors.resizeLeftRight);
       }
       return;
     }
 
-    final hoverTime = _pxToSeconds(x, contentWidth, totalSec);
+    if (localPos.dy <= 22.0) {
+      if (_hoveredBoundaryTime != null ||
+          _hoveredFragmentIndex != null ||
+          _cursor != SystemMouseCursors.click) {
+        setState(() {
+          _hoveredBoundaryTime = null;
+          _hoveredFragmentIndex = null;
+          _cursor = SystemMouseCursors.click;
+        });
+      }
+      widget.controller.setHoveredFragmentIndex(null);
+      return;
+    }
+
+    final hoverTime = _pxToSeconds(localPos.dx, contentWidth, totalSec);
     int? hoveredIdx;
 
     for (final f in widget.state.fragments) {
@@ -485,23 +539,35 @@ class _WaveformViewState extends State<WaveformView>
 
     final double thresholdSeconds =
         (_hoverThresholdPx / contentWidth) * totalSec;
-    bool isNearBoundary = false;
+    double? closestBoundary;
+    double minDiff = thresholdSeconds;
 
     for (final f in widget.state.fragments) {
       if (f.realStart < 0) continue;
-      if ((f.realStart - hoverTime).abs() < thresholdSeconds ||
-          (f.realEnd - hoverTime).abs() < thresholdSeconds) {
-        isNearBoundary = true;
-        break;
+      final startDiff = (f.realStart - hoverTime).abs();
+      if (startDiff < minDiff) {
+        minDiff = startDiff;
+        closestBoundary = f.realStart;
+      }
+      final endDiff = (f.realEnd - hoverTime).abs();
+      if (endDiff < minDiff) {
+        minDiff = endDiff;
+        closestBoundary = f.realEnd;
       }
     }
 
-    final newCursor = isNearBoundary
+    final newCursor = closestBoundary != null
         ? SystemMouseCursors.resizeLeftRight
         : SystemMouseCursors.basic;
 
-    if (_cursor != newCursor) {
-      setState(() => _cursor = newCursor);
+    if (_cursor != newCursor ||
+        _hoveredBoundaryTime != closestBoundary ||
+        _hoveredFragmentIndex != hoveredIdx) {
+      setState(() {
+        _cursor = newCursor;
+        _hoveredBoundaryTime = closestBoundary;
+        _hoveredFragmentIndex = hoveredIdx;
+      });
     }
   }
 
@@ -513,21 +579,106 @@ class _WaveformViewState extends State<WaveformView>
     );
   }
 
-  void _handleTap(double x, double contentWidth, double totalSec) =>
-      _handleSeek(x, contentWidth, totalSec);
+  void _handleTap(Offset localPos, double contentWidth, double totalSec) {
+    _handleSeek(localPos.dx, contentWidth, totalSec);
+    if (localPos.dy > 22.0) {
+      final clickedTime = _pxToSeconds(localPos.dx, contentWidth, totalSec);
+      int? clickedIdx;
+      for (final f in widget.state.fragments) {
+        if (f.realStart >= 0 &&
+            clickedTime >= f.realStart &&
+            clickedTime <= f.realEnd) {
+          clickedIdx = f.index;
+          break;
+        }
+      }
+      widget.controller.selectFragment(clickedIdx);
+    }
+  }
 
-  void _handleRightClick(double x, double contentWidth, double totalSec) {
-    final time = _pxToSeconds(x, contentWidth, totalSec);
+  void _handleRightClick(
+    TapDownDetails d,
+    double contentWidth,
+    double totalSec,
+  ) {
+    final time = _pxToSeconds(d.localPosition.dx, contentWidth, totalSec);
     final double thresholdSeconds =
         (_hoverThresholdPx / contentWidth) * totalSec;
 
-    for (var f in widget.state.fragments) {
+    Fragment? targetFrag;
+    // 1. Check if clicking near a fragment boundary
+    for (final f in widget.state.fragments) {
       if (f.realStart < 0) continue;
-      if ((f.realStart - time).abs() < thresholdSeconds) {
-        widget.controller.clearFragmentTiming(f.index);
-        return;
+      if ((f.realStart - time).abs() < thresholdSeconds ||
+          (f.realEnd - time).abs() < thresholdSeconds) {
+        targetFrag = f;
+        break;
       }
     }
+    // 2. Check if inside fragment body
+    if (targetFrag == null) {
+      for (final f in widget.state.fragments) {
+        if (f.realStart < 0) continue;
+        if (time >= f.realStart && time <= f.realEnd) {
+          targetFrag = f;
+          break;
+        }
+      }
+    }
+
+    if (targetFrag == null) return;
+    final f = targetFrag;
+
+    showMacosContextMenu(
+      context: context,
+      position: d.globalPosition,
+      items: [
+        MacosContextMenuItem(
+          title: 'Play Fragment',
+          icon: CupertinoIcons.play_arrow_solid,
+          shortcut: 'P',
+          onTap: () {
+            widget.controller.selectFragment(f.index);
+            widget.controller.playCurrentFragment();
+          },
+        ),
+        MacosContextMenuItem(
+          title: f.status == FragmentStatus.reviewed
+              ? 'Mark Unreviewed'
+              : 'Mark Reviewed',
+          icon: CupertinoIcons.checkmark_circle_fill,
+          shortcut: 'R',
+          onTap: () {
+            widget.controller.toggleFragmentReviewed(f.index);
+          },
+        ),
+        MacosContextMenuItem(
+          title: 'Snap Start to Playhead',
+          icon: CupertinoIcons.arrow_right_to_line,
+          shortcut: 'Enter',
+          onTap: () {
+            widget.controller.captureFragmentTiming(context, f.index);
+          },
+        ),
+        MacosContextMenuItem(
+          title: 'Reset to Auto Boundary',
+          icon: CupertinoIcons.arrow_counterclockwise,
+          enabled: f.autoStart != null,
+          onTap: () {
+            widget.controller.resetToAutoBoundary(f.index);
+          },
+        ),
+        const MacosContextMenuDivider(),
+        MacosContextMenuItem(
+          title: 'Clear Timing',
+          icon: CupertinoIcons.clear_circled_solid,
+          isDestructive: true,
+          onTap: () {
+            widget.controller.clearFragmentTiming(f.index);
+          },
+        ),
+      ],
+    );
   }
 
   void _handleDragStart(double x, double contentWidth, double totalSec) {
@@ -539,6 +690,7 @@ class _WaveformViewState extends State<WaveformView>
       if (f.realStart < 0) continue;
 
       if ((f.realStart - time).abs() < thresholdSec) {
+        widget.controller.beginBoundaryEdit();
         setState(() {
           _dragIndex = f.index;
           _dragStart = true;
@@ -546,6 +698,7 @@ class _WaveformViewState extends State<WaveformView>
         return;
       }
       if ((f.realEnd - time).abs() < thresholdSec) {
+        widget.controller.beginBoundaryEdit();
         setState(() {
           _dragIndex = f.index;
           _dragStart = false;

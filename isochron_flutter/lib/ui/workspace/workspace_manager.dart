@@ -1,17 +1,21 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/services/alignment_service.dart';
-import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
-import 'package:isochron_flutter/utils/id_extraction.dart';
+import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/app_manager.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
+import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
+import 'package:isochron_flutter/utils/id_extraction.dart';
+import 'package:isochron_flutter/utils/natural_sort.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
-import 'package:isochron_cli/isochron_cli.dart';
 
 class ImportResult {
   final int collectionsCount;
@@ -30,7 +34,6 @@ class WorkspaceManager extends ChangeNotifier {
   // Tree State
   TreeSelection? selectedNode;
   final Set<String> expandedNodes = {};
-  String? expandedTrackId;
   String? editingNodeId;
 
   // Batch State
@@ -159,7 +162,6 @@ class WorkspaceManager extends ChangeNotifier {
     project = null;
     selectedNode = null;
     expandedNodes.clear();
-    expandedTrackId = null;
     notifyListeners();
   }
 
@@ -304,6 +306,95 @@ class WorkspaceManager extends ChangeNotifier {
     project!.collections.add(newCol);
     expandedNodes.add(newCol.id);
     project!.save();
+    selectNode(TreeSelection(type: NodeType.collection, collection: newCol));
+    editingNodeId = newCol.id;
+    notifyListeners();
+  }
+
+  Future<void> importFilesIntoCollection(Collection col) async {
+    if (project == null) return;
+    final settings = UserSettingsService();
+    final result = await FilePicker.pickFiles(
+      allowMultiple: true,
+      initialDirectory: settings.lastSourceDir,
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    String? firstValidPath;
+    for (final f in result.files) {
+      if (f.path != null) {
+        firstValidPath = f.path;
+        break;
+      }
+    }
+    if (firstValidPath != null) {
+      settings.setLastSourceDir(p.dirname(firstValidPath));
+    }
+
+    final audioFiles = <String>[];
+    final textFiles = <String>[];
+    for (final f in result.files) {
+      if (f.path == null) continue;
+      final ext = p.extension(f.path!).toLowerCase();
+      if (['.mp3', '.wav', '.m4a'].contains(ext)) {
+        audioFiles.add(f.path!);
+      } else if (['.txt', '.phrases'].contains(ext)) {
+        textFiles.add(f.path!);
+      }
+    }
+
+    naturalSort(audioFiles);
+    naturalSort(textFiles);
+
+    final maxCount = math.max(audioFiles.length, textFiles.length);
+    final projectDir = project!.directoryPath;
+    final copyMedia = project!.copyMediaIntoProject;
+
+    for (int i = 0; i < maxCount; i++) {
+      final audio = i < audioFiles.length ? audioFiles[i] : null;
+      final text = i < textFiles.length ? textFiles[i] : null;
+      final trackName = audio != null
+          ? p.basenameWithoutExtension(audio)
+          : p.basenameWithoutExtension(text!);
+
+      String? finalAudio = audio;
+      String? finalText = text;
+
+      if (copyMedia) {
+        if (audio != null) {
+          final audioDir = Directory(
+            p.join(projectDir, 'collections', col.folderName, 'audio'),
+          );
+          if (!await audioDir.exists()) await audioDir.create(recursive: true);
+          final dest = p.join(audioDir.path, p.basename(audio));
+          await File(audio).copy(dest);
+          finalAudio = p.basename(audio);
+        }
+        if (text != null) {
+          final textDir = Directory(
+            p.join(projectDir, 'collections', col.folderName, 'text'),
+          );
+          if (!await textDir.exists()) await textDir.create(recursive: true);
+          final dest = p.join(textDir.path, p.basename(text));
+          await File(text).copy(dest);
+          finalText = p.basename(text);
+        }
+      }
+
+      final track = Track(
+        id: uuid.v4(),
+        collectionId: col.id,
+        name: trackName,
+        audioPath: finalAudio,
+        textPath: finalText,
+        outputFilename: '${trackName}_timing.json',
+        status: AlignmentStatus.pending,
+      );
+      col.tracks.add(track);
+    }
+
+    await col.saveTracks(projectDir);
+    await project!.save();
     notifyListeners();
   }
 
@@ -326,7 +417,6 @@ class WorkspaceManager extends ChangeNotifier {
 
     collection.tracks.remove(track);
     if (selectedNode?.track == track) {
-      expandedTrackId = null;
       selectedNode = TreeSelection(
         type: NodeType.collection,
         collection: collection,
@@ -417,6 +507,58 @@ class WorkspaceManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> replaceTrackAudio(Track track, Collection col, String newSourcePath) async {
+    if (project == null) return;
+    if (project!.copyMediaIntoProject) {
+      final audioDir = Directory(
+        p.join(
+          project!.directoryPath,
+          'collections',
+          col.folderName,
+          'audio',
+        ),
+      );
+      if (!await audioDir.exists()) await audioDir.create(recursive: true);
+      final newPath = p.join(audioDir.path, p.basename(newSourcePath));
+      await File(newSourcePath).copy(newPath);
+      track.audioPath = p.basename(newSourcePath);
+    } else {
+      track.audioPath = newSourcePath;
+    }
+    await clearAlignmentData(track);
+    await col.saveTracks(project!.directoryPath);
+    if (selectedNode?.track?.id == track.id) {
+      loadTrackInEditor(track);
+    }
+    notifyListeners();
+  }
+
+  Future<void> replaceTrackText(Track track, Collection col, String newSourcePath) async {
+    if (project == null) return;
+    if (project!.copyMediaIntoProject) {
+      final textDir = Directory(
+        p.join(
+          project!.directoryPath,
+          'collections',
+          col.folderName,
+          'text',
+        ),
+      );
+      if (!await textDir.exists()) await textDir.create(recursive: true);
+      final newPath = p.join(textDir.path, p.basename(newSourcePath));
+      await File(newSourcePath).copy(newPath);
+      track.textPath = p.basename(newSourcePath);
+    } else {
+      track.textPath = newSourcePath;
+    }
+    await clearAlignmentData(track);
+    await col.saveTracks(project!.directoryPath);
+    if (selectedNode?.track?.id == track.id) {
+      loadTrackInEditor(track);
+    }
+    notifyListeners();
+  }
+
   // ---------------------------------------------------------------------------
   // BATCH & HEALING
   // ---------------------------------------------------------------------------
@@ -464,15 +606,23 @@ class WorkspaceManager extends ChangeNotifier {
       String actualTextPath = resolvedText;
 
       try {
-        bool shouldExtractIds = project!.defaultHasIds;
-        if (!shouldExtractIds && !project!.defaultGenerateIds) {
-          try {
-            final sample = await File(resolvedText).readAsString();
-            if (detectTabDelimitedIds(sample)) {
-              shouldExtractIds = true;
+        bool shouldExtractIds = false;
+        try {
+          final sample = await File(resolvedText).readAsString();
+          if (detectTabDelimitedIds(sample)) {
+            shouldExtractIds = true;
+          } else {
+            final lines = await File(resolvedText).readAsLines();
+            for (final line in lines) {
+              if (line.trim().isEmpty) continue;
+              final parsed = extractIdFromLine(line);
+              if (parsed.hasId) {
+                shouldExtractIds = true;
+                break;
+              }
             }
-          } catch (_) {}
-        }
+          }
+        } catch (_) {}
 
         if (shouldExtractIds) {
           final lines = await File(resolvedText).readAsLines();
@@ -518,14 +668,13 @@ class WorkspaceManager extends ChangeNotifier {
 
         if (shouldExtractIds && extractedIds.isNotEmpty) {
           for (int i = 0; i < fragments.length; i++) {
-            if (i < extractedIds.length) {
+            if (i < extractedIds.length && extractedIds[i].isNotEmpty) {
               fragments[i] = fragments[i].copyWith(id: extractedIds[i]);
             }
           }
-        }
-
-        if (!project!.defaultHasIds && project!.defaultGenerateIds) {
-          final prefix = project!.defaultIdPrefix ?? "";
+        } else if (project!.defaultIdPrefix != null &&
+            project!.defaultIdPrefix!.isNotEmpty) {
+          final prefix = project!.defaultIdPrefix!;
           int trackIdx = collection.tracks.indexOf(track) + 1;
           final recStr = trackIdx.toString().padLeft(3, '0');
           for (int j = 0; j < fragments.length; j++) {
@@ -541,17 +690,8 @@ class WorkspaceManager extends ChangeNotifier {
         final alignDir = Directory(p.dirname(absPath));
         if (!await alignDir.exists()) await alignDir.create(recursive: true);
 
-        final List<Map<String, dynamic>> jsonList = fragments
-            .map(
-              (f) => {
-                'index': f.index,
-                if (f.id != null) 'id': f.id,
-                'text': f.text,
-                'start': double.parse(f.realStart.toStringAsFixed(3)),
-                'end': double.parse(f.realEnd.toStringAsFixed(3)),
-              },
-            )
-            .toList();
+        final List<Map<String, dynamic>> jsonList =
+            fragments.map((f) => f.toJson()).toList();
 
         await File(
           absPath,
@@ -660,16 +800,9 @@ class WorkspaceManager extends ChangeNotifier {
 
   void selectNode(TreeSelection selection) {
     selectedNode = selection;
-    if (selection.type == NodeType.track && selection.track != null) {
-      expandedTrackId = selection.track!.id;
-    } else if (selection.type == NodeType.collection) {
+    if (selection.type == NodeType.collection && selection.collection != null) {
       expandedNodes.add(selection.collection!.id);
     }
-    notifyListeners();
-  }
-
-  void setExpandedTrack(String? trackId) {
-    expandedTrackId = trackId;
     notifyListeners();
   }
 

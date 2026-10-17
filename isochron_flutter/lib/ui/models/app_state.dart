@@ -1,6 +1,8 @@
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:just_waveform/just_waveform.dart';
 
+enum FragmentFilter { all, unreviewed, flagged }
+
 class AppState {
   final bool isProcessing;
   final String statusMessage;
@@ -17,6 +19,7 @@ class AppState {
   final String? autoSavePath;
   final bool hasUnsavedChanges;
   final int? selectedFragmentIndex;
+  final FragmentFilter filter;
 
   const AppState({
     this.isProcessing = false,
@@ -34,6 +37,7 @@ class AppState {
     this.autoSavePath,
     this.hasUnsavedChanges = false,
     this.selectedFragmentIndex,
+    this.filter = FragmentFilter.all,
   });
 
   AppState copyWith({
@@ -41,7 +45,9 @@ class AppState {
     String? statusMessage,
     double? progress,
     String? audioPath,
+    bool clearAudioPath = false,
     String? textPath,
+    bool clearTextPath = false,
     bool? hasIds,
     List<Fragment>? fragments,
     Waveform? waveform,
@@ -55,13 +61,14 @@ class AppState {
     bool? hasUnsavedChanges,
     int? selectedFragmentIndex,
     bool clearSelection = false,
+    FragmentFilter? filter,
   }) {
     return AppState(
       isProcessing: isProcessing ?? this.isProcessing,
       statusMessage: statusMessage ?? this.statusMessage,
       progress: progress ?? this.progress,
-      audioPath: audioPath ?? this.audioPath,
-      textPath: textPath ?? this.textPath,
+      audioPath: clearAudioPath ? null : (audioPath ?? this.audioPath),
+      textPath: clearTextPath ? null : (textPath ?? this.textPath),
       hasIds: hasIds ?? this.hasIds,
       fragments: fragments ?? this.fragments,
       waveform: clearWaveform ? null : (waveform ?? this.waveform),
@@ -76,6 +83,7 @@ class AppState {
       selectedFragmentIndex: clearSelection
           ? null
           : (selectedFragmentIndex ?? this.selectedFragmentIndex),
+      filter: filter ?? this.filter,
     );
   }
 }

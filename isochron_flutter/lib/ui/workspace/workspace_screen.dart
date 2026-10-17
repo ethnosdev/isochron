@@ -82,6 +82,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
     settings.setLastProjectDir(p.dirname(projectPath));
     await _manager.createProject(projectPath, projectName);
+    if (_manager.project != null) {
+      await settings.addRecentProject(_manager.project!.projectFilePath);
+    }
   }
 
   Future<void> _openProject() async {
@@ -95,9 +98,22 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       );
 
       if (result != null && result.files.single.path != null) {
-        settings.setLastProjectDir(p.dirname(result.files.single.path!));
-        await _manager.openProject(result.files.single.path!);
+        final path = result.files.single.path!;
+        settings.setLastProjectDir(p.dirname(path));
+        await _manager.openProject(path);
+        await settings.addRecentProject(path);
       }
+    } catch (e) {
+      debugPrint("Error: $e");
+    }
+  }
+
+  Future<void> _openRecentProject(String path) async {
+    try {
+      final settings = UserSettingsService();
+      settings.setLastProjectDir(p.dirname(path));
+      await _manager.openProject(path);
+      await settings.addRecentProject(path);
     } catch (e) {
       debugPrint("Error: $e");
     }
@@ -180,6 +196,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         child: WelcomeView(
           onCreateNewProject: _createNewProject,
           onOpenProject: _openProject,
+          onOpenRecentProject: _openRecentProject,
         ),
       );
     }

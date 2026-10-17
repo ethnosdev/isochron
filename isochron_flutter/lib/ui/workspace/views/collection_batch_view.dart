@@ -1,28 +1,9 @@
 import 'dart:io';
-import 'dart:math' as math;
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
-import 'package:isochron_cli/isochron_cli.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:path/path.dart' as p;
-import 'package:uuid/uuid.dart';
-
-class _SortPart {
-  final String value;
-  final int? number;
-
-  const _SortPart(this.value, this.number);
-}
-
-class _SortWrapper {
-  final String originalPath;
-  final List<_SortPart> parts;
-
-  const _SortWrapper(this.originalPath, this.parts);
-}
 
 class CollectionBatchView extends StatefulWidget {
   final Collection collection;
@@ -33,6 +14,7 @@ class CollectionBatchView extends StatefulWidget {
   final VoidCallback onRunBatch;
   final VoidCallback onStopBatch;
   final VoidCallback onChanged;
+  final VoidCallback onImportFiles;
   final void Function(Track track) onOpenTrack;
   final VoidCallback onHealBrokenLinks;
 
@@ -46,6 +28,7 @@ class CollectionBatchView extends StatefulWidget {
     required this.onRunBatch,
     required this.onStopBatch,
     required this.onChanged,
+    required this.onImportFiles,
     required this.onOpenTrack,
     required this.onHealBrokenLinks,
   });
@@ -55,774 +38,86 @@ class CollectionBatchView extends StatefulWidget {
 }
 
 class _CollectionBatchViewState extends State<CollectionBatchView> {
-  // Wizard State
-  bool _showWizard = false;
-  int _currentStep = 0;
 
-  // Step 0 Fields
-  late TextEditingController _nameController;
-  late bool _copyMedia;
+  Widget _buildEmptyState(BuildContext context) {
+    final theme = MacosTheme.of(context);
 
-  // Step 1 Fields
-  final List<String> _audioFiles = [];
-  final List<String> _textFiles = [];
-  final List<({String? audio, String? text, String trackName})> _pairedItems =
-      [];
-
-  // Step 2 Fields
-  late bool _hasIds;
-  late bool _generateIds;
-  late TextEditingController _prefixController;
-
-  int get _totalSteps => 3;
-
-  @override
-  void initState() {
-    super.initState();
-    _initWizardState();
-  }
-
-  void _initWizardState() {
-    _nameController = TextEditingController(text: widget.collection.name);
-    _prefixController = TextEditingController(
-      text: widget.project.defaultIdPrefix ?? "",
-    );
-    _copyMedia = widget.project.copyMediaIntoProject;
-    _hasIds = widget.project.defaultHasIds;
-    _generateIds = widget.project.defaultGenerateIds;
-    _audioFiles.clear();
-    _textFiles.clear();
-    _pairedItems.clear();
-  }
-
-  @override
-  void didUpdateWidget(CollectionBatchView oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.collection.id != widget.collection.id) {
-      _initWizardState();
-      _showWizard = false;
-      _currentStep = 0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _prefixController.dispose();
-    super.dispose();
-  }
-
-  List<_SortPart> _getSortParts(String filename) {
-    final regex = RegExp(r'\d+|\D+');
-    return regex.allMatches(filename).map((m) {
-      final val = m.group(0)!;
-      return _SortPart(val, int.tryParse(val));
-    }).toList();
-  }
-
-  int _compareWrappers(_SortWrapper a, _SortWrapper b) {
-    final len = a.parts.length < b.parts.length
-        ? a.parts.length
-        : b.parts.length;
-    for (int i = 0; i < len; i++) {
-      final pA = a.parts[i];
-      final pB = b.parts[i];
-
-      if (pA.number != null && pB.number != null) {
-        final cmp = pA.number!.compareTo(pB.number!);
-        if (cmp != 0) return cmp;
-      } else {
-        final cmp = pA.value.compareTo(pB.value);
-        if (cmp != 0) return cmp;
-      }
-    }
-    return a.parts.length.compareTo(b.parts.length);
-  }
-
-  void _naturalSort(List<String> paths) {
-    final wrappers = paths.map((path) {
-      final filename = p.basenameWithoutExtension(path);
-      return _SortWrapper(path, _getSortParts(filename));
-    }).toList();
-
-    wrappers.sort(_compareWrappers);
-
-    for (int i = 0; i < paths.length; i++) {
-      paths[i] = wrappers[i].originalPath;
-    }
-  }
-
-  void _updatePairing() {
-    _naturalSort(_audioFiles);
-    _naturalSort(_textFiles);
-
-    _pairedItems.clear();
-
-    final maxCount = math.max(_audioFiles.length, _textFiles.length);
-    for (int i = 0; i < maxCount; i++) {
-      final audio = i < _audioFiles.length ? _audioFiles[i] : null;
-      final text = i < _textFiles.length ? _textFiles[i] : null;
-
-      final name = audio != null
-          ? p.basenameWithoutExtension(audio)
-          : p.basenameWithoutExtension(text!);
-
-      _pairedItems.add((audio: audio, text: text, trackName: name));
-    }
-  }
-
-  Future<void> _pickWizardFiles() async {
-    final settings = UserSettingsService();
-    final result = await FilePicker.pickFiles(
-      allowMultiple: true,
-      initialDirectory: settings.lastSourceDir,
-    );
-    if (result == null || result.files.isEmpty) return;
-
-    settings.setLastSourceDir(p.dirname(result.files.first.path!));
-
-    final List<String> audio = [];
-    final List<String> text = [];
-
-    for (var file in result.files) {
-      if (file.path == null) continue;
-      final ext = p.extension(file.path!).toLowerCase();
-      if (['.mp3', '.wav', '.m4a'].contains(ext)) {
-        audio.add(file.path!);
-      } else if (['.txt', '.phrases'].contains(ext)) {
-        text.add(file.path!);
-      }
-    }
-
-    bool detectedTabIds = false;
-    if (!_hasIds && !_generateIds) {
-      for (final textPath in text) {
-        try {
-          final sample = await File(textPath).readAsString();
-          if (detectTabDelimitedIds(sample)) {
-            detectedTabIds = true;
-            break;
-          }
-        } catch (_) {}
-      }
-    }
-
-    setState(() {
-      _audioFiles.addAll(audio);
-      _textFiles.addAll(text);
-      if (detectedTabIds) {
-        _hasIds = true;
-      }
-      _updatePairing();
-    });
-  }
-
-  bool _isStepValid() {
-    if (_currentStep == 0) {
-      return _nameController.text.trim().isNotEmpty;
-    }
-    if (_currentStep == 1) {
-      return _pairedItems.isNotEmpty;
-    }
-    return true;
-  }
-
-  Future<void> _finishWizard() async {
-    // 1. Commit and save global settings configurations
-    widget.collection.name = _nameController.text.trim();
-    widget.project.copyMediaIntoProject = _copyMedia;
-    widget.project.hasPromptedForMediaStorage = true;
-    widget.project.defaultHasIds = _hasIds;
-    widget.project.defaultGenerateIds = _generateIds;
-    widget.project.defaultIdPrefix = _prefixController.text.trim();
-
-    Future<String> processFile(
-      String originalPath,
-      String subfolderName,
-    ) async {
-      if (!_copyMedia) {
-        return originalPath;
-      }
-
-      final dir = Directory(
-        p.join(
-          widget.project.directoryPath,
-          'collections',
-          widget.collection.folderName,
-          subfolderName,
-        ),
-      );
-      if (!await dir.exists()) {
-        await dir.create(recursive: true);
-      }
-
-      final newPath = p.join(dir.path, p.basename(originalPath));
-      await File(originalPath).copy(newPath);
-      return p.basename(originalPath);
-    }
-
-    // 2. Generate and write physical folder and file tracks
-    for (final item in _pairedItems) {
-      String? finalAudio;
-      String? finalText;
-
-      if (item.audio != null) {
-        finalAudio = await processFile(item.audio!, 'audio');
-      }
-      if (item.text != null) {
-        finalText = await processFile(item.text!, 'text');
-      }
-
-      widget.collection.tracks.add(
-        Track(
-          id: const Uuid().v4(),
-          collectionId: widget.collection.id,
-          name: item.trackName,
-          audioPath: finalAudio,
-          textPath: finalText,
-          outputFilename: '${item.trackName}_timing.json',
-        ),
-      );
-    }
-
-    widget.onChanged();
-  }
-
-  // UI Building Methods
-
-  Widget _buildStep0(
-    BuildContext context,
-    MacosThemeData theme,
-    BoxDecoration textFieldDecoration,
-  ) {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text("Collection Identity", style: theme.typography.title2),
-          const SizedBox(height: 8),
-          Text(
-            "Configure collection names and asset localization behavior.",
-            style: TextStyle(
-              color: theme.typography.body.color?.withValues(alpha: 0.7),
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            "Collection Name",
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          MacosTextField(
-            controller: _nameController,
-            placeholder: 'e.g. Volume 1',
-            decoration: textFieldDecoration,
-          ),
-          const SizedBox(height: 32),
-          const Text(
-            "File Storage Behavior",
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              MacosCheckbox(
-                value: _copyMedia,
-                activeColor: AppTheme.accent(context),
-                onChanged: (val) {
-                  setState(() => _copyMedia = val);
-                },
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("Copy imported media files into project"),
-                    const SizedBox(height: 4),
-                    Text(
-                      "Copying files keeps projects self-contained and portable. Leaving this off will reference hard drive locations directly.",
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: theme.typography.body.color?.withValues(
-                          alpha: 0.6,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStep1(BuildContext context, MacosThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text("Import Source Files", style: theme.typography.title2),
-        const SizedBox(height: 8),
-        Text(
-          "Import audio and text transcript files to establish tracks. Files are naturally sorted and paired.",
-          style: TextStyle(
-            color: theme.typography.body.color?.withValues(alpha: 0.7),
+    return Center(
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 520),
+        margin: const EdgeInsets.all(32.0),
+        padding: const EdgeInsets.symmetric(horizontal: 40.0, vertical: 48.0),
+        decoration: BoxDecoration(
+          color: theme.canvasColor,
+          borderRadius: BorderRadius.circular(12.0),
+          border: Border.all(
+            color: theme.dividerColor,
+            width: 1.5,
           ),
         ),
-        const SizedBox(height: 16),
-        PushButton(
-          controlSize: ControlSize.large,
-          onPressed: _pickWizardFiles,
-          child: const Text("Select Files..."),
-        ),
-        if (_pairedItems.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          Text(
-            "Auto-Pairing Verification (Detected ${_pairedItems.length} Tracks):",
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: theme.dividerColor),
-                borderRadius: BorderRadius.circular(6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            MacosIcon(
+              CupertinoIcons.tray_arrow_down,
+              size: 56,
+              color: AppTheme.accent(context),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              "Import Audio & Transcript Files",
+              style: theme.typography.title2.copyWith(
+                fontWeight: FontWeight.bold,
               ),
-              child: ListView.builder(
-                itemCount: _pairedItems.length,
-                itemExtent: 36,
-                itemBuilder: (context, i) {
-                  final item = _pairedItems[i];
-                  final hasAudio = item.audio != null;
-                  final hasText = item.text != null;
-
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(color: theme.dividerColor),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            item.trackName,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Expanded(
-                          flex: 3,
-                          child: Row(
-                            children: [
-                              Icon(
-                                hasAudio
-                                    ? CupertinoIcons.music_note
-                                    : CupertinoIcons.clear_circled,
-                                size: 14,
-                                color: hasAudio
-                                    ? AppTheme.success(context)
-                                    : AppTheme.destructive(context),
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  hasAudio
-                                      ? p.basename(item.audio!)
-                                      : "Missing Audio",
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: hasAudio
-                                        ? theme.typography.body.color
-                                        : AppTheme.destructive(context),
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Expanded(
-                          flex: 3,
-                          child: Row(
-                            children: [
-                              Icon(
-                                hasText
-                                    ? CupertinoIcons.doc_text
-                                    : CupertinoIcons.clear_circled,
-                                size: 14,
-                                color: hasText
-                                    ? AppTheme.success(context)
-                                    : AppTheme.destructive(context),
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  hasText
-                                      ? p.basename(item.text!)
-                                      : "Missing Text",
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: hasText
-                                        ? theme.typography.body.color
-                                        : AppTheme.destructive(context),
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              "Select or drop audio (.mp3, .wav, .m4a) and transcript (.txt) files. Files will be naturally sorted and paired automatically.",
+              style: TextStyle(
+                color: AppTheme.grey(context),
+                fontSize: 13,
+                height: 1.4,
               ),
+              textAlign: TextAlign.center,
             ),
-          ),
-        ] else ...[
-          const Spacer(),
-          Center(
-            child: Column(
-              children: [
-                Icon(
-                  CupertinoIcons.folder_badge_plus,
-                  size: 48,
-                  color: AppTheme.grey(context),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "Please select your transcripts and audio files.",
-                  style: TextStyle(color: AppTheme.grey(context)),
-                ),
-              ],
-            ),
-          ),
-          const Spacer(),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildStep2(
-    BuildContext context,
-    MacosThemeData theme,
-    BoxDecoration textFieldDecoration,
-  ) {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text("Verse ID Strategy", style: theme.typography.title2),
-          const SizedBox(height: 8),
-          Text(
-            "Determine how IDs should be assigned to text lines.",
-            style: TextStyle(
-              color: theme.typography.body.color?.withValues(alpha: 0.7),
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            "Select Assignment Mode",
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: 300,
-            child: MacosPopupButton<int>(
-              value: _generateIds ? 2 : (_hasIds ? 1 : 0),
-              items: const [
-                MacosPopupMenuItem<int>(
-                  value: 0,
-                  child: Text('None (Raw text lines only)'),
-                ),
-                MacosPopupMenuItem<int>(
-                  value: 1,
-                  child: Text('IDs are already included in files'),
-                ),
-                MacosPopupMenuItem<int>(
-                  value: 2,
-                  child: Text('Auto-Generate (Prefix + Rec + Verse)'),
-                ),
-              ],
-              onChanged: (val) {
-                if (val == null) return;
-                setState(() {
-                  if (val == 0) {
-                    _hasIds = false;
-                    _generateIds = false;
-                  } else if (val == 1) {
-                    _hasIds = true;
-                    _generateIds = false;
-                  } else if (val == 2) {
-                    _hasIds = false;
-                    _generateIds = true;
-                  }
-                });
-              },
-            ),
-          ),
-          if (_generateIds) ...[
-            const SizedBox(height: 24),
-            const Text(
-              "Optional ID Prefix",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: 300,
-              child: MacosTextField(
-                controller: _prefixController,
-                placeholder: 'e.g. 40',
-                decoration: textFieldDecoration,
+            const SizedBox(height: 28),
+            PushButton(
+              controlSize: ControlSize.large,
+              onPressed: widget.onImportFiles,
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  MacosIcon(CupertinoIcons.plus_circle, size: 16),
+                  SizedBox(width: 8),
+                  Text("Select Audio & Text Files..."),
+                ],
               ),
             ),
           ],
-          const SizedBox(height: 32),
-          Text(
-            _generateIds
-                ? "Preview: ID [${_prefixController.text}001001] / Text [In the beginning...]"
-                : (_hasIds
-                      ? "Preview: ID [40001001] / Text [In the beginning...]"
-                      : "Preview: ID [] / Text [In the beginning...]"),
-            style: TextStyle(
-              fontSize: 12,
-              color: AppTheme.grey(context),
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWizardSidebar(BuildContext context) {
-    final theme = MacosTheme.of(context);
-    final activeColor = AppTheme.accent(context);
-    final inactiveColor = AppTheme.grey(context);
-
-    final stepLabels = [
-      'Identity & Storage',
-      'Import Files',
-      'ID Strategy',
-    ];
-
-    return Container(
-      width: 200,
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: theme.brightness == Brightness.dark
-            ? AppTheme.darkSurfaceContainerLow
-            : AppTheme.lightSurfaceContainerLow,
-        border: Border(right: BorderSide(color: theme.dividerColor)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "New Collection",
-            style: theme.typography.headline.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 24),
-          ...List.generate(stepLabels.length, (index) {
-            final isActive = _currentStep == index;
-            final isCompleted = _currentStep > index;
-
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: Row(
-                children: [
-                  Icon(
-                    isCompleted
-                        ? CupertinoIcons.checkmark_circle_fill
-                        : (isActive
-                              ? CupertinoIcons.circle_fill
-                              : CupertinoIcons.circle),
-                    size: 14,
-                    color: isCompleted
-                        ? AppTheme.success(context)
-                        : (isActive ? activeColor : inactiveColor),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      stepLabels[index],
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: isActive
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                        color: isActive
-                            ? theme.typography.body.color
-                            : inactiveColor,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStepContent(
-    BuildContext context,
-    MacosThemeData theme,
-    BoxDecoration textFieldDecoration,
-  ) {
-    switch (_currentStep) {
-      case 0:
-        return _buildStep0(context, theme, textFieldDecoration);
-      case 1:
-        return _buildStep1(context, theme);
-      case 2:
-        return _buildStep2(context, theme, textFieldDecoration);
-      default:
-        return const SizedBox();
-    }
-  }
-
-  Widget _buildWizardNavigation(BuildContext context) {
-    final isLastStep = _currentStep == (_totalSteps - 1);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: MacosTheme.of(context).dividerColor),
         ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          PushButton(
-            controlSize: ControlSize.regular,
-            secondary: true,
-            onPressed: () {
-              setState(() {
-                _showWizard = false;
-                _initWizardState();
-              });
-            },
-            child: const Text("Cancel"),
-          ),
-          const Spacer(),
-          if (_currentStep > 0)
-            PushButton(
-              controlSize: ControlSize.regular,
-              secondary: true,
-              onPressed: () {
-                setState(() => _currentStep--);
-              },
-              child: const Text("Back"),
-            ),
-          const SizedBox(width: 8),
-          PushButton(
-            controlSize: ControlSize.regular,
-            onPressed: !_isStepValid()
-                ? null
-                : () async {
-                    if (isLastStep) {
-                      await _finishWizard();
-                    } else {
-                      setState(() => _currentStep++);
-                    }
-                  },
-            child: Text(isLastStep ? "Finish" : "Next"),
-          ),
-        ],
-      ),
     );
   }
 
-  Widget _buildWizardView(BuildContext context) {
+  Widget _buildTriageDashboard(BuildContext context) {
     final theme = MacosTheme.of(context);
-    final textFieldDecoration = BoxDecoration(
-      color: theme.brightness == Brightness.dark
-          ? const Color(0xFF2A2A2A)
-          : const Color(0xFFFFFFFF),
-      border: Border.all(color: theme.dividerColor),
-      borderRadius: BorderRadius.circular(5.0),
-    );
+    final tracks = widget.collection.tracks;
 
-    return Row(
-      children: [
-        _buildWizardSidebar(context),
-        Expanded(
-          child: Column(
-            children: [
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(32.0),
-                  child: _buildStepContent(context, theme, textFieldDecoration),
-                ),
-              ),
-              _buildWizardNavigation(context),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+    final totalTracks = tracks.length;
+    final reviewedCount =
+        tracks.where((t) => t.status == AlignmentStatus.reviewed).length;
+    final doneCount =
+        tracks.where((t) => t.status == AlignmentStatus.done).length;
+    final errorCount =
+        tracks.where((t) => t.status == AlignmentStatus.error).length;
+    final pendingCount =
+        tracks.where((t) => t.status == AlignmentStatus.pending).length;
+    final processingCount =
+        tracks.where((t) => t.status == AlignmentStatus.processing).length;
 
-  Widget _buildWelcomeView(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          MacosIcon(
-            CupertinoIcons.tray_arrow_down,
-            size: 64,
-            color: AppTheme.grey(context),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            "Empty Collection",
-            style: MacosTheme.of(context).typography.title1,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "Configure collection details and import resource files.",
-            style: TextStyle(color: AppTheme.grey(context)),
-          ),
-          const SizedBox(height: 24),
-          PushButton(
-            controlSize: ControlSize.large,
-            onPressed: () {
-              setState(() {
-                _showWizard = true;
-                _currentStep = 0;
-              });
-            },
-            child: const Text("Start Setup Wizard..."),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.collection.tracks.isEmpty) {
-      if (_showWizard) {
-        return _buildWizardView(context);
-      }
-      return _buildWelcomeView(context);
-    }
-
-    final List<Track> brokenTracks = widget.collection.tracks.where((t) {
+    // Detect broken files
+    final List<Track> brokenTracks = tracks.where((t) {
       if (t.audioPath != null) {
         final p = t.getResolvedAudioPath(
           widget.project.directoryPath,
@@ -840,13 +135,13 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
       return false;
     }).toList();
 
-    final bool hasBroken = brokenTracks.isNotEmpty;
-
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (hasBroken)
+        // Broken links warning banner
+        if (brokenTracks.isNotEmpty)
           Container(
-            margin: const EdgeInsets.all(16.0),
+            margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             padding: const EdgeInsets.all(12.0),
             decoration: BoxDecoration(
               color: AppTheme.destructive(context).withValues(alpha: 0.1),
@@ -860,6 +155,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                 Icon(
                   CupertinoIcons.exclamationmark_triangle_fill,
                   color: AppTheme.destructive(context),
+                  size: 18,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -877,130 +173,310 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
               ],
             ),
           ),
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Row(
+
+        // Summary Header Bar & Action Row
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+          decoration: BoxDecoration(
+            color: theme.canvasColor,
+            border: Border(
+              bottom: BorderSide(color: theme.dividerColor),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              PushButton(
-                controlSize: ControlSize.large,
-                secondary: widget.isRunning,
-                onPressed: widget.isRunning
-                    ? widget.onStopBatch
-                    : widget.onRunBatch,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    MacosIcon(
-                      widget.isRunning
-                          ? CupertinoIcons.stop_fill
-                          : CupertinoIcons.play_arrow_solid,
-                      size: 14,
-                      color: widget.isRunning
-                          ? AppTheme.destructive(context)
-                          : CupertinoColors.white,
+              Row(
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.collection.name,
+                        style: theme.typography.title1.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        "$totalTracks tracks • $reviewedCount reviewed, $doneCount done, $pendingCount pending${errorCount > 0 ? ', $errorCount errors' : ''}",
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: AppTheme.grey(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  PushButton(
+                    controlSize: ControlSize.large,
+                    secondary: widget.isRunning,
+                    onPressed: widget.isRunning
+                        ? widget.onStopBatch
+                        : widget.onRunBatch,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        MacosIcon(
+                          widget.isRunning
+                              ? CupertinoIcons.stop_fill
+                              : CupertinoIcons.play_arrow_solid,
+                          size: 14,
+                          color: widget.isRunning
+                              ? AppTheme.destructive(context)
+                              : CupertinoColors.white,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          widget.isRunning
+                              ? "Stop Batch"
+                              : "Run Alignment on All",
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
+                  ),
+                  const SizedBox(width: 12),
+                  PushButton(
+                    controlSize: ControlSize.large,
+                    secondary: true,
+                    onPressed: widget.onImportFiles,
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        MacosIcon(CupertinoIcons.add, size: 14),
+                        SizedBox(width: 6),
+                        Text("Import More Files..."),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // Segmented visual progress bar
+              if (totalTracks > 0)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4.0),
+                  child: Container(
+                    height: 8.0,
+                    color: AppTheme.grey(context).withValues(alpha: 0.2),
+                    child: Row(
+                      children: [
+                        if (reviewedCount > 0)
+                          Expanded(
+                            flex: reviewedCount,
+                            child: Container(color: AppTheme.success(context)),
+                          ),
+                        if (doneCount > 0)
+                          Expanded(
+                            flex: doneCount,
+                            child: Container(color: AppTheme.accent(context)),
+                          ),
+                        if (processingCount > 0)
+                          Expanded(
+                            flex: processingCount,
+                            child: Container(color: AppTheme.warning(context)),
+                          ),
+                        if (errorCount > 0)
+                          Expanded(
+                            flex: errorCount,
+                            child:
+                                Container(color: AppTheme.destructive(context)),
+                          ),
+                        if (pendingCount > 0)
+                          Expanded(
+                            flex: pendingCount,
+                            child: Container(
+                              color:
+                                  AppTheme.grey(context).withValues(alpha: 0.35),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+
+              if (widget.isRunning) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
                     Text(
-                      widget.isRunning ? "Stop Batch" : "Run Alignment on All",
+                      widget.status,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ProgressBar(value: widget.progress * 100),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 16),
-              PushButton(
-                controlSize: ControlSize.regular,
-                secondary: true,
-                onPressed: () {
-                  setState(() {
-                    _initWizardState();
-                    _showWizard = true;
-                    _currentStep = 1; // Jump straight to file import selection
-                  });
-                },
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    MacosIcon(CupertinoIcons.add, size: 12),
-                    SizedBox(width: 4),
-                    Text("Import Files"),
-                  ],
-                ),
-              ),
+              ],
             ],
           ),
         ),
-        if (widget.isRunning)
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16.0,
-              vertical: 8.0,
-            ),
-            child: ProgressBar(value: widget.progress * 100),
-          ),
-        Container(height: 1, color: MacosTheme.of(context).dividerColor),
+
+        // Richer Track Rows
         Expanded(
           child: ListView.builder(
-            itemCount: widget.collection.tracks.length,
-            itemExtent: 56,
+            itemCount: tracks.length,
             itemBuilder: (ctx, i) {
-              final t = widget.collection.tracks[i];
-              return MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => widget.onOpenTrack(t),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: MacosTheme.of(context).dividerColor,
-                        ),
+              final track = tracks[i];
+
+              final resolvedAudio = track.getResolvedAudioPath(
+                widget.project.directoryPath,
+                widget.collection.folderName,
+              );
+              final resolvedText = track.getResolvedTextPath(
+                widget.project.directoryPath,
+                widget.collection.folderName,
+              );
+
+              final bool audioMissing =
+                  resolvedAudio == null || !File(resolvedAudio).existsSync();
+              final bool textMissing =
+                  resolvedText == null || !File(resolvedText).existsSync();
+
+              // Status Icon
+              Widget statusIcon;
+              if (track.status == AlignmentStatus.processing) {
+                statusIcon = const ProgressCircle();
+              } else if (track.status == AlignmentStatus.reviewed) {
+                statusIcon = Icon(
+                  CupertinoIcons.checkmark_seal_fill,
+                  size: 18,
+                  color: AppTheme.success(context),
+                );
+              } else if (track.status == AlignmentStatus.done) {
+                statusIcon = Icon(
+                  CupertinoIcons.checkmark_circle,
+                  size: 18,
+                  color: AppTheme.accent(context),
+                );
+              } else if (track.status == AlignmentStatus.error) {
+                statusIcon = Icon(
+                  CupertinoIcons.exclamationmark_circle,
+                  size: 18,
+                  color: AppTheme.destructive(context),
+                );
+              } else {
+                statusIcon = Icon(
+                  CupertinoIcons.clock,
+                  size: 18,
+                  color: AppTheme.warning(context),
+                );
+              }
+
+              // Status Badge Pill Color
+              Color badgeColor;
+              switch (track.status) {
+                case AlignmentStatus.reviewed:
+                case AlignmentStatus.done:
+                  badgeColor = AppTheme.success(context);
+                  break;
+                case AlignmentStatus.processing:
+                  badgeColor = AppTheme.accent(context);
+                  break;
+                case AlignmentStatus.error:
+                  badgeColor = AppTheme.destructive(context);
+                  break;
+                case AlignmentStatus.pending:
+                  badgeColor = AppTheme.warning(context);
+                  break;
+              }
+
+              return Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: theme.dividerColor),
+                  ),
+                ),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => widget.onOpenTrack(track),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20.0,
+                        vertical: 10.0,
                       ),
-                    ),
-                    child: Row(
-                      children: [
-                        if (t.status == AlignmentStatus.processing)
-                          const ProgressCircle()
-                        else
-                          MacosIcon(
-                            CupertinoIcons.waveform_path,
-                            color: AppTheme.grey(context),
-                          ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                t.name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              if (t.audioPath == null || t.textPath == null)
+                      child: Row(
+                        children: [
+                          statusIcon,
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                                 Text(
-                                  t.audioPath == null
-                                      ? "Missing Audio"
-                                      : "Missing Text",
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: AppTheme.destructive(context),
+                                  track.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13.5,
                                   ),
                                 ),
-                            ],
+                                const SizedBox(height: 3),
+                                if (audioMissing || textMissing)
+                                  Text(
+                                    audioMissing && textMissing
+                                        ? "Missing audio and transcript files"
+                                        : audioMissing
+                                            ? "Missing audio file"
+                                            : "Missing transcript file",
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      color: AppTheme.destructive(context),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  )
+                                else
+                                  Text(
+                                    "${p.basename(resolvedAudio)}  •  ${p.basename(resolvedText)}",
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      color: AppTheme.grey(context),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
-                        ),
-                        Text(
-                          t.status.name.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.grey(context),
+                          const SizedBox(width: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: badgeColor.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              track.status.name.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.bold,
+                                color: badgeColor,
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 8),
+                          MacosIconButton(
+                            icon: MacosIcon(
+                              CupertinoIcons.chevron_right,
+                              size: 14,
+                              color: AppTheme.grey(context),
+                            ),
+                            onPressed: () => widget.onOpenTrack(track),
+                            boxConstraints: const BoxConstraints(
+                              minHeight: 28,
+                              minWidth: 28,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1010,5 +486,13 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
         ),
       ],
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.collection.tracks.isEmpty) {
+      return _buildEmptyState(context);
+    }
+    return _buildTriageDashboard(context);
   }
 }

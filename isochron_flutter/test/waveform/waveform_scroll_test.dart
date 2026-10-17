@@ -447,9 +447,13 @@ void main() {
       await tester.pumpAndSettle();
 
       // Find the SingleChildScrollView of the waveform
-      final waveformScrollFinder = find.byType(SingleChildScrollView);
+      final waveformScrollFinder = find.descendant(
+        of: find.byType(WaveformView),
+        matching: find.byType(SingleChildScrollView),
+      );
       expect(waveformScrollFinder, findsOneWidget);
-      final singleScrollView = tester.widget<SingleChildScrollView>(waveformScrollFinder);
+      final singleScrollView =
+          tester.widget<SingleChildScrollView>(waveformScrollFinder);
       final waveScrollController = singleScrollView.controller!;
 
       // Click on 'Third verse text' list tile item

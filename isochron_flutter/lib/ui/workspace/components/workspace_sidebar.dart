@@ -1,14 +1,18 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:isochron_flutter/services/user_settings_service.dart';
+import 'package:isochron_flutter/ui/components/macos_context_menu.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
+import 'package:isochron_flutter/ui/settings/model_panel.dart';
+import 'package:isochron_flutter/ui/theme/app_theme.dart';
 import 'package:isochron_flutter/ui/workspace/components/inline_text_editor.dart';
 import 'package:isochron_flutter/ui/workspace/models/sidebar_node.dart';
 import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
 import 'package:isochron_flutter/ui/workspace/workspace_manager.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:path/path.dart' as p;
-import 'package:isochron_flutter/ui/theme/app_theme.dart';
 
 Sidebar buildWorkspaceSidebar(
   BuildContext context,
@@ -32,7 +36,7 @@ Sidebar buildWorkspaceSidebar(
         children: [
           Expanded(
             child: Text(
-              manager.project!.name,
+              manager.project?.name ?? '',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -48,6 +52,45 @@ Sidebar buildWorkspaceSidebar(
               ),
               onPressed: manager.addCollection,
               boxConstraints: const BoxConstraints(minHeight: 28, minWidth: 28),
+            ),
+          ),
+        ],
+      ),
+    ),
+    bottom: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: theme.dividerColor),
+        ),
+      ),
+      child: Row(
+        children: [
+          MacosTooltip(
+            message: "Project Settings",
+            child: MacosIconButton(
+              icon: MacosIcon(
+                CupertinoIcons.gear_alt,
+                size: 16,
+                color: theme.typography.body.color,
+              ),
+              boxConstraints: const BoxConstraints(minHeight: 28, minWidth: 28),
+              onPressed: () {
+                manager.selectNode(TreeSelection(type: NodeType.settings));
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          MacosTooltip(
+            message: "Acoustic Model",
+            child: MacosIconButton(
+              icon: MacosIcon(
+                CupertinoIcons.waveform_circle,
+                size: 16,
+                color: theme.typography.body.color,
+              ),
+              boxConstraints: const BoxConstraints(minHeight: 28, minWidth: 28),
+              onPressed: () => ModelPanel.show(context),
             ),
           ),
         ],
@@ -97,27 +140,6 @@ List<SidebarNode> _getFlatNodes(WorkspaceManager manager) {
             depth: 1,
           ),
         );
-
-        if (manager.expandedTrackId == track.id) {
-          nodes.add(
-            SidebarNode(
-              id: '${track.id}_audio',
-              type: SidebarNodeType.audio,
-              collection: col,
-              track: track,
-              depth: 2,
-            ),
-          );
-          nodes.add(
-            SidebarNode(
-              id: '${track.id}_text',
-              type: SidebarNodeType.text,
-              collection: col,
-              track: track,
-              depth: 2,
-            ),
-          );
-        }
       }
     }
   }
@@ -137,6 +159,20 @@ Color _getTrackColor(BuildContext context, AlignmentStatus status) {
       return AppTheme.warning(context);
   }
 }
+
+void _revealInFinder(String path) {
+  final target = File(path).existsSync()
+      ? path
+      : (Directory(path).existsSync() ? path : p.dirname(path));
+  if (Platform.isMacOS) {
+    Process.run('open', ['-R', target]);
+  } else if (Platform.isWindows) {
+    Process.run('explorer.exe', ['/select,', target]);
+  } else {
+    Process.run('xdg-open', [p.dirname(target)]);
+  }
+}
+
 
 Widget _buildTreeRowForNode(
   BuildContext context,
@@ -164,16 +200,53 @@ Widget _buildTreeRowForNode(
         depth: 0,
         hasChildren: true,
         isEditing: manager.editingNodeId == col.id,
-        onDoubleTap: () => manager.setEditingNode(col.id),
+        onToggleExpand: () => manager.toggleExpandedNode(col.id),
+        onDoubleTap: () => manager.toggleExpandedNode(col.id),
         onEditComplete: (newName) => manager.renameCollection(col, newName),
+        onSecondaryTapDown: (details) {
+          final colDir = p.join(
+            manager.project!.directoryPath,
+            'collections',
+            col.folderName,
+          );
+          showMacosContextMenu(
+            context: context,
+            position: details.globalPosition,
+            items: [
+              MacosContextMenuItem(
+                title: "Rename",
+                icon: CupertinoIcons.pencil,
+                onTap: () => manager.setEditingNode(col.id),
+              ),
+              MacosContextMenuItem(
+                title: "Import Files...",
+                icon: CupertinoIcons.arrow_down_doc,
+                onTap: () => manager.importFilesIntoCollection(col),
+              ),
+              MacosContextMenuItem(
+                title: "Run Alignment on All",
+                icon: CupertinoIcons.play_arrow_solid,
+                onTap: () => manager.runBatch(col),
+              ),
+              const MacosContextMenuDivider(),
+              MacosContextMenuItem(
+                title: "Reveal in Finder",
+                icon: CupertinoIcons.folder,
+                onTap: () => _revealInFinder(colDir),
+              ),
+              const MacosContextMenuDivider(),
+              MacosContextMenuItem(
+                title: "Delete Collection",
+                icon: CupertinoIcons.trash,
+                isDestructive: true,
+                onTap: () => manager.deleteCollection(col),
+              ),
+            ],
+          );
+        },
         onTap: () async {
           if (manager.editingNodeId != null) {
             manager.setEditingNode(null);
-            return;
-          }
-
-          if (isColSelected) {
-            manager.toggleExpandedNode(col.id);
             return;
           }
 
@@ -192,7 +265,36 @@ Widget _buildTreeRowForNode(
           manager.selectedNode?.track == track &&
           manager.selectedNode?.type == NodeType.track;
 
+      final resolvedAudio = track.getResolvedAudioPath(
+        manager.project!.directoryPath,
+        col.folderName,
+      );
+      final resolvedText = track.getResolvedTextPath(
+        manager.project!.directoryPath,
+        col.folderName,
+      );
+
+      final bool audioMissing =
+          resolvedAudio == null || !File(resolvedAudio).existsSync();
+      final bool textMissing =
+          resolvedText == null || !File(resolvedText).existsSync();
+      final bool isMissing = audioMissing || textMissing;
+
       Widget? trailingWidget;
+      if (isMissing) {
+        trailingWidget = MacosTooltip(
+          message: audioMissing && textMissing
+              ? "Missing audio and transcript files"
+              : audioMissing
+                  ? "Missing audio file"
+                  : "Missing transcript file",
+          child: Icon(
+            CupertinoIcons.exclamationmark_triangle_fill,
+            size: 14,
+            color: AppTheme.destructive(context),
+          ),
+        );
+      }
 
       return _buildTreeRow(
         context: context,
@@ -200,23 +302,99 @@ Widget _buildTreeRowForNode(
         icon: CupertinoIcons.waveform_path,
         iconColor: _getTrackColor(context, track.status),
         isSelected: isTrackSelected,
-        isExpanded: manager.expandedTrackId == track.id,
+        isExpanded: false,
         depth: 1,
-        hasChildren: true,
+        hasChildren: false,
         isEditing: manager.editingNodeId == track.id,
         trailing: trailingWidget,
         onDoubleTap: () => manager.setEditingNode(track.id),
         onEditComplete: (newName) => manager.renameTrack(track, col, newName),
+        onSecondaryTapDown: (details) {
+          final targetPath = resolvedAudio ?? resolvedText ?? p.join(
+            manager.project!.directoryPath,
+            'collections',
+            col.folderName,
+          );
+          showMacosContextMenu(
+            context: context,
+            position: details.globalPosition,
+            items: [
+              MacosContextMenuItem(
+                title: "Rename",
+                icon: CupertinoIcons.pencil,
+                onTap: () => manager.setEditingNode(track.id),
+              ),
+              MacosContextMenuItem(
+                title: "Run Auto-Align",
+                icon: CupertinoIcons.play_arrow_solid,
+                onTap: () {
+                  manager.selectNode(
+                    TreeSelection(
+                      type: NodeType.track,
+                      collection: col,
+                      track: track,
+                    ),
+                  );
+                  manager.loadTrackInEditor(track);
+                  manager.homeManager.runAlignment(
+                    trackId: track.id,
+                    languageCode: manager.project?.languageCode,
+                  );
+                },
+              ),
+              const MacosContextMenuDivider(),
+              MacosContextMenuItem(
+                title: "Replace Audio File...",
+                icon: CupertinoIcons.speaker_2_fill,
+                onTap: () async {
+                  final settings = UserSettingsService();
+                  final picked = await FilePicker.pickFiles(
+                    type: FileType.audio,
+                    initialDirectory: settings.lastSourceDir,
+                  );
+                  if (picked != null && picked.files.single.path != null) {
+                    final pickedPath = picked.files.single.path!;
+                    settings.setLastSourceDir(p.dirname(pickedPath));
+                    await manager.replaceTrackAudio(track, col, pickedPath);
+                  }
+                },
+              ),
+              MacosContextMenuItem(
+                title: "Replace Transcript File...",
+                icon: CupertinoIcons.doc_text_fill,
+                onTap: () async {
+                  final settings = UserSettingsService();
+                  final picked = await FilePicker.pickFiles(
+                    type: FileType.custom,
+                    allowedExtensions: ['txt', 'phrases'],
+                    initialDirectory: settings.lastSourceDir,
+                  );
+                  if (picked != null && picked.files.single.path != null) {
+                    final pickedPath = picked.files.single.path!;
+                    settings.setLastSourceDir(p.dirname(pickedPath));
+                    await manager.replaceTrackText(track, col, pickedPath);
+                  }
+                },
+              ),
+              const MacosContextMenuDivider(),
+              MacosContextMenuItem(
+                title: "Reveal in Finder",
+                icon: CupertinoIcons.folder,
+                onTap: () => _revealInFinder(targetPath),
+              ),
+              const MacosContextMenuDivider(),
+              MacosContextMenuItem(
+                title: "Delete Track",
+                icon: CupertinoIcons.trash,
+                isDestructive: true,
+                onTap: () => manager.deleteTrack(track, col),
+              ),
+            ],
+          );
+        },
         onTap: () async {
           if (manager.editingNodeId != null) {
             manager.setEditingNode(null);
-            return;
-          }
-
-          if (isTrackSelected) {
-            manager.setExpandedTrack(
-              manager.expandedTrackId == track.id ? null : track.id,
-            );
             return;
           }
 
@@ -226,55 +404,6 @@ Widget _buildTreeRowForNode(
             TreeSelection(type: NodeType.track, collection: col, track: track),
           );
           manager.loadTrackInEditor(track);
-        },
-      );
-
-    case SidebarNodeType.audio:
-    case SidebarNodeType.text:
-      final isAudio = node.type == SidebarNodeType.audio;
-      final track = node.track!;
-      final col = node.collection!;
-
-      final resolved = isAudio
-          ? track.getResolvedAudioPath(
-              manager.project!.directoryPath,
-              col.folderName,
-            )
-          : track.getResolvedTextPath(
-              manager.project!.directoryPath,
-              col.folderName,
-            );
-
-      final fileExists = resolved != null && File(resolved).existsSync();
-      final isNodeSelected =
-          manager.selectedNode?.track == track &&
-          manager.selectedNode?.type ==
-              (isAudio ? NodeType.audio : NodeType.text);
-
-      return _buildTreeRow(
-        context: context,
-        label: resolved != null
-            ? p.basename(resolved)
-            : (isAudio ? '[⚠️ Missing Audio]' : '[⚠️ Missing Text]'),
-        icon: isAudio
-            ? CupertinoIcons.speaker_2_fill
-            : CupertinoIcons.doc_text_fill,
-        iconColor: fileExists
-            ? AppTheme.grey(context)
-            : AppTheme.destructive(context),
-        isSelected: isNodeSelected,
-        isExpanded: false,
-        depth: 2,
-        hasChildren: false,
-        onTap: () async {
-          await manager.homeManager.flushPendingAutoSave();
-          manager.selectNode(
-            TreeSelection(
-              type: isAudio ? NodeType.audio : NodeType.text,
-              collection: col,
-              track: track,
-            ),
-          );
         },
       );
   }
@@ -290,7 +419,9 @@ Widget _buildTreeRow({
   required int depth,
   required bool hasChildren,
   required VoidCallback onTap,
+  VoidCallback? onToggleExpand,
   VoidCallback? onDoubleTap,
+  void Function(TapDownDetails)? onSecondaryTapDown,
   bool isEditing = false,
   ValueChanged<String>? onEditComplete,
   Widget? trailing,
@@ -301,6 +432,7 @@ Widget _buildTreeRow({
   return GestureDetector(
     onTap: onTap,
     onDoubleTap: onDoubleTap,
+    onSecondaryTapDown: onSecondaryTapDown,
     behavior: HitTestBehavior.opaque,
     child: Container(
       height: 28,
@@ -313,17 +445,24 @@ Widget _buildTreeRow({
       child: Row(
         children: [
           if (hasChildren)
-            Icon(
-              isExpanded
-                  ? CupertinoIcons.chevron_down
-                  : CupertinoIcons.chevron_right,
-              size: 12,
-              color: isSelected
-                  ? AppTheme.selectionText(context)
-                  : CupertinoColors.systemGrey,
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onToggleExpand,
+              child: Padding(
+                padding: const EdgeInsets.all(2.0),
+                child: Icon(
+                  isExpanded
+                      ? CupertinoIcons.chevron_down
+                      : CupertinoIcons.chevron_right,
+                  size: 12,
+                  color: isSelected
+                      ? AppTheme.selectionText(context)
+                      : CupertinoColors.systemGrey,
+                ),
+              ),
             )
           else
-            const SizedBox(width: 12),
+            const SizedBox(width: 16),
           const SizedBox(width: 4),
           Icon(
             icon,
@@ -343,9 +482,8 @@ Widget _buildTreeRow({
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 13,
-                      fontWeight: isSelected
-                          ? FontWeight.w600
-                          : FontWeight.normal,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.normal,
                       color: isSelected
                           ? AppTheme.selectionText(context)
                           : theme.typography.body.color,
