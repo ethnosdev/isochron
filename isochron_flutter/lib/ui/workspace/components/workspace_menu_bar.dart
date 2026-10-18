@@ -8,6 +8,8 @@ class WorkspaceMenuBar extends StatelessWidget {
   final VoidCallback onCreateNewProject;
   final VoidCallback onOpenProject;
   final VoidCallback onImportCollections;
+  final VoidCallback? onExportCollectionTimings;
+  final VoidCallback? onExportProjectTimings;
   final VoidCallback onCloseProject;
   final VoidCallback onOpenSettings;
 
@@ -18,6 +20,8 @@ class WorkspaceMenuBar extends StatelessWidget {
     required this.onCreateNewProject,
     required this.onOpenProject,
     required this.onImportCollections,
+    this.onExportCollectionTimings,
+    this.onExportProjectTimings,
     required this.onCloseProject,
     required this.onOpenSettings,
   });
@@ -78,6 +82,18 @@ class WorkspaceMenuBar extends StatelessWidget {
                     shift: true,
                   ),
                   onSelected: onImportCollections,
+                ),
+                PlatformMenuItem(
+                  label: 'Export Collection Timings...',
+                  onSelected: onExportCollectionTimings,
+                ),
+                PlatformMenuItem(
+                  label: 'Export Project Timings...',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.keyE,
+                    meta: true,
+                  ),
+                  onSelected: onExportProjectTimings,
                 ),
               ],
             ),

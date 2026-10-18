@@ -438,5 +438,141 @@ is1\tIntroductory section
         throwsA(isA<MissingPhraseIdException>()),
       );
     });
+
+    test('buildSingleChapterPayload combines all exportable tracks under a single chapter header', () async {
+      final doneTrack2 = Track(
+        id: 'track_done_2',
+        collectionId: 'col_1',
+        name: 'Done Track 2',
+        audioPath: '/audio/rec02.wav',
+        textPath: '/text/TH-01-GEN-02.txt',
+        outputFilename: 'done2.json',
+        status: AlignmentStatus.done,
+      );
+      collection.tracks.add(doneTrack2);
+      await writeTrackOutput(doneTrack2, [
+        {'index': 0, 'id': '2_s1', 'start': 0.0, 'end': 3.5},
+        {'index': 1, 'id': '2_s2', 'start': 3.5, 'end': 7.2},
+      ]);
+
+      final payload = await ExportService.buildSingleChapterPayload(
+        project,
+        collection.tracks,
+        chapterId: '1',
+      );
+
+      expect(payload, isNotNull);
+      final lines = payload!.trim().split('\n');
+      expect(lines[0], '\\id GEN');
+      expect(lines[1], '\\c 1');
+      expect(lines[2], '\\level phrase');
+      // Should contain verses from track 1
+      expect(lines[3], '2.132\t10.657\ts1');
+      expect(lines[4], '10.657\t11.545\t1a');
+      // Should contain verses from track 2 with restarted timings at 0.0
+      expect(lines[5], '0\t3.5\t2_s1');
+      expect(lines[6], '3.5\t7.2\t2_s2');
+      // Should skip pendingTrack
+      expect(payload, isNot(contains('p1')));
+    });
+
+    test('buildDividedChaptersSingleFilePayload creates multiple chapter sections in one file', () async {
+      final doneTrack2 = Track(
+        id: 'track_done_2',
+        collectionId: 'col_1',
+        name: 'Done Track 2',
+        audioPath: '/audio/rec02.wav',
+        textPath: '/text/TH-01-GEN-02.txt',
+        outputFilename: 'done2.json',
+        status: AlignmentStatus.reviewed,
+      );
+      collection.tracks.add(doneTrack2);
+      await writeTrackOutput(doneTrack2, [
+        {'index': 0, 'id': '2a', 'start': 0.0, 'end': 4.0},
+      ]);
+
+      final payload = await ExportService.buildDividedChaptersSingleFilePayload(
+        project,
+        collection.tracks,
+      );
+
+      expect(payload, isNotNull);
+      // Contains both \c 01 and \c 02
+      expect(payload, contains('\\id GEN\n\\c 01\n\\level phrase'));
+      expect(payload, contains('\\id GEN\n\\c 02\n\\level phrase'));
+      expect(payload, contains('2.132\t10.657\ts1'));
+      expect(payload, contains('0\t4\t2a'));
+    });
+
+    test('exportDividedChaptersToDirectory writes separate files into destination folder', () async {
+      final doneTrack2 = Track(
+        id: 'track_done_2',
+        collectionId: 'col_1',
+        name: 'Done Track 2',
+        audioPath: '/audio/rec02.wav',
+        textPath: '/text/TH-01-GEN-02.txt',
+        outputFilename: 'done2.json',
+        status: AlignmentStatus.done,
+      );
+      collection.tracks.add(doneTrack2);
+      await writeTrackOutput(doneTrack2, [
+        {'index': 0, 'id': '2a', 'start': 0.0, 'end': 4.0},
+      ]);
+
+      final exportDir = Directory('${tempDir.path}/export_folder');
+      final count = await ExportService.exportDividedChaptersToDirectory(
+        project,
+        collection.tracks,
+        exportDir.path,
+      );
+
+      expect(count, 2);
+      final file1 = File('${exportDir.path}/TH-01-GEN-01-timing.txt');
+      final file2 = File('${exportDir.path}/TH-01-GEN-02-timing.txt');
+      expect(await file1.exists(), isTrue);
+      expect(await file2.exists(), isTrue);
+
+      final content1 = await file1.readAsString();
+      expect(content1, contains('\\c 01'));
+      final content2 = await file2.readAsString();
+      expect(content2, contains('\\c 02'));
+    });
+
+    test('exportProjectDividedChaptersToDirectory writes to collection subfolders for multi-collection project', () async {
+      final col2 = Collection(
+        id: 'col_2',
+        name: 'Exodus',
+      );
+      final exoTrack = Track(
+        id: 'exo_t1',
+        collectionId: 'col_2',
+        name: 'Exodus 1',
+        audioPath: '/audio/exo1.wav',
+        textPath: '/text/TH-02-EXO-01.txt',
+        outputFilename: 'exo1.json',
+        status: AlignmentStatus.done,
+      );
+      col2.tracks.add(exoTrack);
+      project.collections.add(col2);
+
+      // Write output for exoTrack
+      final exoAbs = exoTrack.getAbsoluteOutputPath(project.directoryPath, col2.folderName);
+      await File(exoAbs).create(recursive: true);
+      await File(exoAbs).writeAsString(jsonEncode([
+        {'index': 0, 'id': '1a', 'start': 0.0, 'end': 5.0},
+      ]));
+
+      final exportDir = Directory('${tempDir.path}/project_export');
+      final totalCount = await ExportService.exportProjectDividedChaptersToDirectory(
+        project,
+        exportDir.path,
+      );
+
+      expect(totalCount, 2);
+      final col1File = File('${exportDir.path}/${collection.folderName}/TH-01-GEN-01-timing.txt');
+      final col2File = File('${exportDir.path}/${col2.folderName}/TH-02-EXO-01-timing.txt');
+      expect(await col1File.exists(), isTrue);
+      expect(await col2File.exists(), isTrue);
+    });
   });
 }

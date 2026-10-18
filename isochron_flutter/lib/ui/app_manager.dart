@@ -17,6 +17,7 @@ import 'package:path/path.dart' as p;
 import 'models/app_state.dart';
 import '../services/alignment_service.dart';
 import '../services/audio_service.dart';
+import '../utils/file_sync_tracker.dart';
 
 class AppManager extends ValueNotifier<AppState> {
   final AudioService _audioService = AudioService();
@@ -370,6 +371,7 @@ class AppManager extends ValueNotifier<AppState> {
         await outFile.parent.create(recursive: true);
       }
 
+      FileSyncTracker.markLocallyWritten(outFile.path);
       final tempFile = File('${value.autoSavePath!}.tmp');
       await tempFile.writeAsString(jsonString);
       await tempFile.rename(outFile.path);
@@ -467,6 +469,7 @@ class AppManager extends ValueNotifier<AppState> {
           if (!await outFile.parent.exists()) {
             await outFile.parent.create(recursive: true);
           }
+          FileSyncTracker.markLocallyWritten(outFile.path);
           await outFile.writeAsString(jsonString);
           debugPrint(
             "[ALIGN] Background alignment completed and saved directly for: $initiatingSavePath",

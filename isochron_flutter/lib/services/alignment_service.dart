@@ -1,12 +1,16 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
+import 'package:flutter/foundation.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 
 class AlignmentService {
   static AlignmentService? _instance;
   factory AlignmentService() => _instance ??= AlignmentService._();
   AlignmentService._();
+
+  @visibleForTesting
+  AlignmentService.forTesting();
 
   Isolate? _workerIsolate;
   SendPort? _workerSendPort;

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
+import 'package:isochron_flutter/ui/workspace/components/group_export_dialog.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:path/path.dart' as p;
 
@@ -246,6 +247,24 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                         MacosIcon(CupertinoIcons.add, size: 14),
                         SizedBox(width: 6),
                         Text("Import More Files..."),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  PushButton(
+                    controlSize: ControlSize.large,
+                    secondary: true,
+                    onPressed: () => GroupExportDialog.show(
+                      context,
+                      project: widget.project,
+                      collection: widget.collection,
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        MacosIcon(CupertinoIcons.square_arrow_down, size: 14),
+                        SizedBox(width: 6),
+                        Text("Export Timings..."),
                       ],
                     ),
                   ),

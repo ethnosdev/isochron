@@ -14,6 +14,7 @@ import 'components/workspace_sidebar.dart';
 import 'components/workspace_router.dart';
 import 'components/workspace_toolbar.dart';
 import 'components/workspace_menu_bar.dart';
+import 'components/group_export_dialog.dart';
 
 class WorkspaceScreen extends StatefulWidget {
   const WorkspaceScreen({super.key});
@@ -207,6 +208,17 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       onCreateNewProject: _createNewProject,
       onOpenProject: _openProject,
       onImportCollections: _importCollectionsFromProject,
+      onExportCollectionTimings: _manager.selectedNode?.collection != null
+          ? () => GroupExportDialog.show(
+                context,
+                project: _manager.project!,
+                collection: _manager.selectedNode!.collection!,
+              )
+          : null,
+      onExportProjectTimings: () => GroupExportDialog.show(
+        context,
+        project: _manager.project!,
+      ),
       onCloseProject: () async {
         await _manager.homeManager.flushPendingAutoSave();
         _manager.closeProject();

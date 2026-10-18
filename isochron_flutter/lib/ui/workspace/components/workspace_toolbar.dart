@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:isochron_flutter/services/export_service.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
+import 'package:isochron_flutter/ui/workspace/components/group_export_dialog.dart';
 import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
 import 'package:isochron_flutter/ui/workspace/workspace_manager.dart';
 import 'package:isochron_cli/isochron_cli.dart';
@@ -282,6 +283,20 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
       ]
       // --- COLLECTION ACTIONS ---
       else if (selectedNode?.type == NodeType.collection) ...[
+        ToolBarIconButton(
+          label: 'Export Timings',
+          icon: MacosIcon(
+            CupertinoIcons.square_arrow_down,
+            color: MacosTheme.of(context).typography.body.color,
+          ),
+          showLabel: true,
+          tooltipMessage: 'Export Collection Timings',
+          onPressed: () => GroupExportDialog.show(
+            context,
+            project: manager.project!,
+            collection: selectedNode!.collection!,
+          ),
+        ),
         const ToolBarSpacer(),
         ToolBarIconButton(
           label: 'Delete Collection',

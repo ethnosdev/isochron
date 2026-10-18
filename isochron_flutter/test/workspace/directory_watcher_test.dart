@@ -88,6 +88,87 @@ void main() {
       expect(col.tracks[1].id, 't2');
       expect(col.tracks[1].status, AlignmentStatus.done);
     });
+
+    test('preserves track object reference and processing status when reloading collection', () async {
+      final project = Project(
+        id: 'p2',
+        name: 'Preserve Status Project',
+        directoryPath: tempDir.path,
+      );
+
+      final col = Collection(id: 'c2', name: 'Exodus');
+      final originalTrack1 = Track(
+        id: 't_active',
+        collectionId: 'c2',
+        name: 'Chapter 01',
+        outputFilename: 'EXO_01_timing.json',
+        status: AlignmentStatus.processing,
+      );
+      col.tracks.add(originalTrack1);
+      project.collections.add(col);
+
+      await project.save();
+
+      final colFile = File(
+        p.join(tempDir.path, 'collections', col.folderName, 'collection.json'),
+      );
+
+      // Simulate external write saving track as pending
+      final updatedJson = {
+        'id': 'c2',
+        'name': 'Exodus',
+        'tracks': [
+          {
+            'id': 't_active',
+            'name': 'Chapter 01 Renamed',
+            'outputFilename': 'EXO_01_timing.json',
+            'status': 'pending',
+          },
+        ],
+      };
+      await colFile.writeAsString(jsonEncode(updatedJson));
+
+      await project.reloadCollection(col);
+
+      // Must preserve the identical in-memory instance
+      expect(identical(col.tracks.first, originalTrack1), isTrue);
+      // Must preserve processing status
+      expect(col.tracks.first.status, AlignmentStatus.processing);
+      // Must update other fields
+      expect(col.tracks.first.name, 'Chapter 01 Renamed');
+    });
+
+    test('auto-heals pending track to done if alignment file exists', () async {
+      final project = Project(
+        id: 'p3',
+        name: 'Auto-Heal Project',
+        directoryPath: tempDir.path,
+      );
+
+      final col = Collection(id: 'c3', name: 'Leviticus');
+      final track = Track(
+        id: 't_heal',
+        collectionId: 'c3',
+        name: 'Chapter 01',
+        outputFilename: 'LEV_01_timing.json',
+        status: AlignmentStatus.pending,
+      );
+      col.tracks.add(track);
+      project.collections.add(col);
+
+      await project.save();
+
+      // Create alignment file on disk
+      final alignFile = File(
+        p.join(tempDir.path, 'collections', col.folderName, 'alignments', 'LEV_01_timing.json'),
+      );
+      await alignFile.parent.create(recursive: true);
+      await alignFile.writeAsString('[]');
+
+      await project.reloadCollection(col);
+
+      expect(track.status, AlignmentStatus.done);
+    });
   });
 
   group('WorkspaceManager Watcher Lifecycle', () {

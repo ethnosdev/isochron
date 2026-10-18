@@ -14,8 +14,8 @@ import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
 import 'package:isochron_flutter/utils/id_extraction.dart';
 import 'package:isochron_flutter/utils/natural_sort.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
+import '../../utils/file_sync_tracker.dart';
 
 class ImportResult {
   final int collectionsCount;
@@ -26,7 +26,7 @@ class ImportResult {
 class WorkspaceManager extends ChangeNotifier {
   Project? project;
   late final AppManager homeManager;
-  final AlignmentService alignmentService = AlignmentService();
+  final AlignmentService alignmentService;
   final Uuid uuid = const Uuid();
 
   bool hasUnsavedChanges = false;
@@ -52,8 +52,11 @@ class WorkspaceManager extends ChangeNotifier {
   @visibleForTesting
   bool get isWatcherActive => _watcherSubscription != null;
 
-  WorkspaceManager() {
-    homeManager = AppManager();
+  WorkspaceManager({
+    AppManager? customHomeManager,
+    AlignmentService? customAlignmentService,
+  })  : homeManager = customHomeManager ?? AppManager(),
+        alignmentService = customAlignmentService ?? AlignmentService() {
     homeManager.onSaveCallback = () {
       if (selectedNode?.track != null && project != null) {
         final track = selectedNode!.track!;
@@ -582,23 +585,31 @@ class WorkspaceManager extends ChangeNotifier {
     for (var track in pendingTracks) {
       if (!isBatchRunning) break;
 
-      final resolvedAudio = track.getResolvedAudioPath(
+      final canonicalTrack = collection.tracks.firstWhere(
+        (t) => t.id == track.id,
+        orElse: () => track,
+      );
+
+      final resolvedAudio = canonicalTrack.getResolvedAudioPath(
         project!.directoryPath,
         collection.folderName,
       );
-      final resolvedText = track.getResolvedTextPath(
+      final resolvedText = canonicalTrack.getResolvedTextPath(
         project!.directoryPath,
         collection.folderName,
       );
 
       if (resolvedAudio == null || resolvedText == null) {
         track.status = AlignmentStatus.error;
+        canonicalTrack.status = AlignmentStatus.error;
         notifyListeners();
         continue;
       }
 
       track.status = AlignmentStatus.processing;
-      batchStatus = "Processing ${track.name}...";
+      canonicalTrack.status = AlignmentStatus.processing;
+      batchStatus = "Processing ${canonicalTrack.name}...";
+      batchProgress = 0.0;
       notifyListeners();
 
       File? tempCleanTextFile;
@@ -638,7 +649,7 @@ class WorkspaceManager extends ChangeNotifier {
               cleanLines.add(line);
             }
           }
-          final tempDir = await getTemporaryDirectory();
+          final tempDir = Directory.systemTemp;
           tempCleanTextFile = File(
             p.join(tempDir.path, 'clean_${uuid.v4()}.txt'),
           );
@@ -662,6 +673,7 @@ class WorkspaceManager extends ChangeNotifier {
 
         if (!isBatchRunning) {
           track.status = AlignmentStatus.pending;
+          canonicalTrack.status = AlignmentStatus.pending;
           notifyListeners();
           break;
         }
@@ -675,7 +687,8 @@ class WorkspaceManager extends ChangeNotifier {
         } else if (project!.defaultIdPrefix != null &&
             project!.defaultIdPrefix!.isNotEmpty) {
           final prefix = project!.defaultIdPrefix!;
-          int trackIdx = collection.tracks.indexOf(track) + 1;
+          int trackIdx = collection.tracks.indexOf(canonicalTrack) + 1;
+          if (trackIdx <= 0) trackIdx = collection.tracks.indexOf(track) + 1;
           final recStr = trackIdx.toString().padLeft(3, '0');
           for (int j = 0; j < fragments.length; j++) {
             final verseStr = (j + 1).toString().padLeft(3, '0');
@@ -683,7 +696,7 @@ class WorkspaceManager extends ChangeNotifier {
           }
         }
 
-        final absPath = track.getAbsoluteOutputPath(
+        final absPath = canonicalTrack.getAbsoluteOutputPath(
           project!.directoryPath,
           collection.folderName,
         );
@@ -693,16 +706,20 @@ class WorkspaceManager extends ChangeNotifier {
         final List<Map<String, dynamic>> jsonList =
             fragments.map((f) => f.toJson()).toList();
 
+        FileSyncTracker.markLocallyWritten(absPath);
         await File(
           absPath,
         ).writeAsString(const JsonEncoder.withIndent('  ').convert(jsonList));
         track.status = AlignmentStatus.done;
+        canonicalTrack.status = AlignmentStatus.done;
       } catch (e) {
         if (!isBatchRunning) {
           track.status = AlignmentStatus.pending;
+          canonicalTrack.status = AlignmentStatus.pending;
           break;
         } else {
           track.status = AlignmentStatus.error;
+          canonicalTrack.status = AlignmentStatus.error;
         }
       } finally {
         if (tempCleanTextFile != null && await tempCleanTextFile.exists()) {
@@ -710,6 +727,13 @@ class WorkspaceManager extends ChangeNotifier {
         }
       }
 
+      final colFile = p.join(
+        project!.directoryPath,
+        'collections',
+        collection.folderName,
+        'collection.json',
+      );
+      FileSyncTracker.markLocallyWritten(colFile);
       await collection.saveTracks(project!.directoryPath);
       notifyListeners();
     }
@@ -718,6 +742,12 @@ class WorkspaceManager extends ChangeNotifier {
     batchStatus = "Batch Complete";
     batchProgress = 1.0;
     notifyListeners();
+
+    if (_pendingChangedPaths.isNotEmpty) {
+      _watcherDebounceTimer = Timer(watcherDebounceDuration, () {
+        _handleRemoteSyncBatch();
+      });
+    }
   }
 
   void stopBatch() {
@@ -856,6 +886,7 @@ class WorkspaceManager extends ChangeNotifier {
 
   void _onFileSystemEvent(FileSystemEvent event) {
     if (!event.path.endsWith('.json')) return;
+    if (FileSyncTracker.isLocallyWritten(event.path)) return;
     _pendingChangedPaths.add(event.path);
     _watcherDebounceTimer?.cancel();
     _watcherDebounceTimer = Timer(watcherDebounceDuration, () {
@@ -864,7 +895,7 @@ class WorkspaceManager extends ChangeNotifier {
   }
 
   Future<void> _handleRemoteSyncBatch([Set<String>? testPaths]) async {
-    if (project == null) return;
+    if (project == null || (isBatchRunning && testPaths == null)) return;
     final pathsToProcess = testPaths ?? Set<String>.from(_pendingChangedPaths);
     _pendingChangedPaths.clear();
 

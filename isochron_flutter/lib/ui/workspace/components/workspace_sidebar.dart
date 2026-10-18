@@ -2,11 +2,13 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:isochron_flutter/services/export_service.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/components/macos_context_menu.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/settings/model_panel.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
+import 'package:isochron_flutter/ui/workspace/components/group_export_dialog.dart';
 import 'package:isochron_flutter/ui/workspace/components/inline_text_editor.dart';
 import 'package:isochron_flutter/ui/workspace/models/sidebar_node.dart';
 import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
@@ -173,6 +175,54 @@ void _revealInFinder(String path) {
   }
 }
 
+Future<void> _handleExportPhraseTimingForTrack(
+  BuildContext context,
+  WorkspaceManager manager,
+  Track track,
+) async {
+  if (manager.project == null || !ExportService.canExportPhraseTiming(track)) {
+    return;
+  }
+
+  final defaultName = ExportService.defaultPhraseTimingFilenameForTrack(track);
+  final outputFile = await FilePicker.saveFile(
+    dialogTitle: 'Export Phrase Timing',
+    fileName: defaultName,
+    type: FileType.custom,
+    allowedExtensions: ['txt'],
+    initialDirectory: manager.project!.directoryPath,
+  );
+
+  if (outputFile == null) return;
+
+  try {
+    final payload = await ExportService.buildPhraseTiming(
+      manager.project!,
+      track,
+    );
+    if (payload != null && payload.isNotEmpty) {
+      await File(outputFile).writeAsString(payload);
+    }
+  } catch (e) {
+    if (context.mounted) {
+      showCupertinoDialog(
+        context: context,
+        builder: (_) => CupertinoAlertDialog(
+          title: const Text("Export Error"),
+          content: Text(e.toString()),
+          actions: [
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              child: const Text("OK"),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+}
+
 
 Widget _buildTreeRowForNode(
   BuildContext context,
@@ -227,6 +277,15 @@ Widget _buildTreeRowForNode(
                 title: "Run Alignment on All",
                 icon: CupertinoIcons.play_arrow_solid,
                 onTap: () => manager.runBatch(col),
+              ),
+              MacosContextMenuItem(
+                title: "Export Timings...",
+                icon: CupertinoIcons.square_arrow_down,
+                onTap: () => GroupExportDialog.show(
+                  context,
+                  project: manager.project!,
+                  collection: col,
+                ),
               ),
               const MacosContextMenuDivider(),
               MacosContextMenuItem(
@@ -341,6 +400,16 @@ Widget _buildTreeRowForNode(
                     languageCode: manager.project?.languageCode,
                   );
                 },
+              ),
+              MacosContextMenuItem(
+                title: "Export Timing...",
+                icon: CupertinoIcons.square_arrow_down,
+                enabled: ExportService.canExportPhraseTiming(track),
+                onTap: () => _handleExportPhraseTimingForTrack(
+                  context,
+                  manager,
+                  track,
+                ),
               ),
               const MacosContextMenuDivider(),
               MacosContextMenuItem(

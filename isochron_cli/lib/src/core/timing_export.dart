@@ -206,9 +206,11 @@ class TimingExport {
     return '${index + 1}';
   }
 
-  static String _formatSeconds(double value) {
+  static String formatSeconds(double value) {
     return value.toStringAsFixed(3).replaceFirst(RegExp(r'\.?0+$'), '');
   }
+
+  static String _formatSeconds(double value) => formatSeconds(value);
 
   static String _detectFilenameSeparator(String value) {
     final dashCount = '-'.allMatches(value).length;

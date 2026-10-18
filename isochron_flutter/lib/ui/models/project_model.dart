@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
+import '../../utils/file_sync_tracker.dart';
 
 enum AlignmentStatus { pending, processing, done, reviewed, error }
 
@@ -135,6 +136,7 @@ class Collection {
     if (!await file.parent.exists()) {
       await file.parent.create(recursive: true);
     }
+    FileSyncTracker.markLocallyWritten(file.path);
     final jsonString = const JsonEncoder.withIndent('  ').convert(toJson());
     await file.writeAsString(jsonString);
   }
@@ -374,6 +376,14 @@ class Project {
                   .map((i) {
                     final t = Track.fromJson(i);
                     t.collectionId = col.id;
+                    final outPath = t.getAbsoluteOutputPath(
+                      project.directoryPath,
+                      col.folderName,
+                    );
+                    if (t.status == AlignmentStatus.pending &&
+                        File(outPath).existsSync()) {
+                      t.status = AlignmentStatus.done;
+                    }
                     return t;
                   })
                   .toList() ??
@@ -437,16 +447,50 @@ class Project {
     try {
       final content = await file.readAsString();
       final Map<String, dynamic> colJson = jsonDecode(content);
-      col.tracks =
-          (colJson['tracks'] as List?)
-              ?.whereType<Map<String, dynamic>>()
-              .map((i) {
-                final t = Track.fromJson(i);
-                t.collectionId = col.id;
-                return t;
-              })
-              .toList() ??
-          col.tracks;
+      final rawTracks = (colJson['tracks'] as List?)
+          ?.whereType<Map<String, dynamic>>()
+          .toList();
+      if (rawTracks == null) return;
+
+      final existingMap = {for (var t in col.tracks) t.id: t};
+      final updatedTracks = <Track>[];
+
+      for (final raw in rawTracks) {
+        final id = raw['id']?.toString();
+        if (id != null && existingMap.containsKey(id)) {
+          final existing = existingMap[id]!;
+          existing.name = raw['name']?.toString() ?? existing.name;
+          existing.audioPath = raw['audioPath']?.toString();
+          existing.textPath = raw['textPath']?.toString();
+          existing.outputFilename =
+              raw['outputFilename']?.toString() ?? existing.outputFilename;
+          if (existing.status != AlignmentStatus.processing) {
+            existing.status = Track.fromJson(raw).status;
+          }
+          final outputPath = existing.getAbsoluteOutputPath(
+            directoryPath,
+            col.folderName,
+          );
+          if (existing.status == AlignmentStatus.pending &&
+              File(outputPath).existsSync()) {
+            existing.status = AlignmentStatus.done;
+          }
+          updatedTracks.add(existing);
+        } else {
+          final t = Track.fromJson(raw);
+          t.collectionId = col.id;
+          final outputPath = t.getAbsoluteOutputPath(
+            directoryPath,
+            col.folderName,
+          );
+          if (t.status == AlignmentStatus.pending &&
+              File(outputPath).existsSync()) {
+            t.status = AlignmentStatus.done;
+          }
+          updatedTracks.add(t);
+        }
+      }
+      col.tracks = updatedTracks;
     } catch (e) {
       debugPrint('[SYNC] Failed to reload collection ${col.name}: $e');
     }
@@ -455,6 +499,7 @@ class Project {
   /// Persists project configurations and distributed collections asynchronously
   Future<void> save() async {
     final file = File(p.join(directoryPath, 'project.json'));
+    FileSyncTracker.markLocallyWritten(file.path);
     const encoder = JsonEncoder.withIndent('  ');
     await file.writeAsString(encoder.convert(toJson()));
 
