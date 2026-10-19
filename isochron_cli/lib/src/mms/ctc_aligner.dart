@@ -45,6 +45,7 @@ class CtcAligner {
     required EmissionsOutput emissions,
     required List<int> targetTokenIds,
     required List<String> targetTokenChars,
+    double? leadStarScore = 0.0,
   }) {
     final tFrames = emissions.totalFrames;
     final lTokens = targetTokenIds.length;
@@ -52,6 +53,8 @@ class CtcAligner {
     if (tFrames == 0 || lTokens == 0) {
       return const AlignmentResult(tokenTimings: [], totalLogProb: 0.0);
     }
+
+    final hasLeadStar = targetTokenIds.isNotEmpty && targetTokenIds[0] == 31;
 
     // Interleave with blank (id 0) -> S = 2L + 1 states
     final numStates = 2 * lTokens + 1;
@@ -81,7 +84,9 @@ class CtcAligner {
     // Can start at blank (state 0) or first token (state 1)
     prevRow[0] = emissions.getLogProb(0, 0);
     if (numStates > 1) {
-      prevRow[1] = emissions.getLogProb(0, stateTokenIds[1]);
+      prevRow[1] = (hasLeadStar && leadStarScore != null)
+          ? leadStarScore
+          : emissions.getLogProb(0, stateTokenIds[1]);
     }
 
     // Backpointers: 0 = stay (s), 1 = advance (s - 1), 2 = skip-blank (s - 2)
@@ -99,7 +104,9 @@ class CtcAligner {
 
       // State 1: first token (can stay from state 1, or advance from state 0)
       if (numStates > 1) {
-        final emit1 = emissions.getLogProb(t, stateTokenIds[1]);
+        final emit1 = (hasLeadStar && leadStarScore != null)
+            ? leadStarScore
+            : emissions.getLogProb(t, stateTokenIds[1]);
         final stayScore = prevRow[1];
         final advanceScore = prevRow[0];
         if (stayScore >= advanceScore) {
@@ -180,7 +187,10 @@ class CtcAligner {
         if (statePath[t] == targetState) {
           if (firstFrame == -1) firstFrame = t;
           lastFrame = t;
-          sumLogProb += emissions.getLogProb(t, targetTokenIds[k]);
+          final emit = (k == 0 && hasLeadStar && leadStarScore != null)
+              ? leadStarScore
+              : emissions.getLogProb(t, targetTokenIds[k]);
+          sumLogProb += emit;
           frameCount++;
         }
       }

@@ -21,6 +21,7 @@ class MmsPipelineOptions {
   final String? languageCode;
   final double leadInSeconds;
   final double starScore;
+  final double leadStarScore;
   final StarPlacement starPlacement;
   final double windowSeconds;
   final double contextSeconds;
@@ -38,6 +39,7 @@ class MmsPipelineOptions {
     this.languageCode,
     this.leadInSeconds = 0.19,
     this.starScore = -2.0,
+    this.leadStarScore = 0.0,
     this.starPlacement = StarPlacement.segment,
     this.windowSeconds = 30.0,
     this.contextSeconds = 2.0,
@@ -56,6 +58,7 @@ class MmsPipelineOptions {
     String? languageCode,
     double? leadInSeconds,
     double? starScore,
+    double? leadStarScore,
     StarPlacement? starPlacement,
     double? windowSeconds,
     double? contextSeconds,
@@ -73,6 +76,7 @@ class MmsPipelineOptions {
       languageCode: languageCode ?? this.languageCode,
       leadInSeconds: leadInSeconds ?? this.leadInSeconds,
       starScore: starScore ?? this.starScore,
+      leadStarScore: leadStarScore ?? this.leadStarScore,
       starPlacement: starPlacement ?? this.starPlacement,
       windowSeconds: windowSeconds ?? this.windowSeconds,
       contextSeconds: contextSeconds ?? this.contextSeconds,
@@ -260,6 +264,7 @@ class MmsPipeline {
           emissions: emissions,
           targetTokenIds: tokenOutput.tokenIds,
           targetTokenChars: tokenOutput.tokenChars,
+          leadStarScore: options.leadStarScore,
         );
         tokenTimings = alignmentResult.tokenTimings;
         stageTimes['ctc_viterbi'] = sw.elapsedMilliseconds;

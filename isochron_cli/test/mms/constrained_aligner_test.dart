@@ -33,7 +33,21 @@ void main() {
       // 500 frames * 32 = 16000 values (~10 seconds at 20ms/frame)
       final dummyData = Float32List(500 * 32);
       for (int i = 0; i < dummyData.length; i++) {
-        dummyData[i] = -2.0;
+        dummyData[i] = -10.0;
+      }
+      // Blank (silence) default across all frames
+      for (int t = 0; t < 500; t++) {
+        dummyData[t * 32 + 0] = 0.0;
+      }
+      // Populate speech token emissions for 'First verse' in early frames of span 0
+      final tokenOutput = tokenizer.tokenizeVerses(['First verse']);
+      for (int i = 0; i < tokenOutput.tokenIds.length; i++) {
+        final id = tokenOutput.tokenIds[i];
+        final frame = i + 2;
+        if (frame < 500) {
+          dummyData[frame * 32 + 0] = -5.0; // low blank during speech
+          dummyData[frame * 32 + id] = 0.0;  // strong token emission
+        }
       }
       final emissions = EmissionsOutput(data: dummyData, totalFrames: 500);
 

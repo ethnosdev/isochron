@@ -107,6 +107,9 @@ class ConstrainedAligner {
             emissions: subEmissions,
             targetTokenIds: tokenOutput.tokenIds,
             targetTokenChars: tokenOutput.tokenChars,
+            leadStarScore: span.startFragIndex == 0
+                ? options.leadStarScore
+                : options.starScore,
           );
 
           spanBoundaries = BoundaryPlacer.placeBoundaries(
