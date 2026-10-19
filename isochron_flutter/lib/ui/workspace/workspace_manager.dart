@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -114,7 +113,11 @@ class WorkspaceManager extends ChangeNotifier {
   // PROJECT LIFECYCLE
   // ---------------------------------------------------------------------------
 
-  Future<void> createProject(String projectPath, String projectName) async {
+  Future<void> createProject(
+    String projectPath,
+    String projectName, {
+    String firstCollectionName = "Main",
+  }) async {
     final projectDir = Directory(projectPath);
     await projectDir.create(recursive: true);
     await Directory(p.join(projectDir.path, 'collections')).create();
@@ -127,7 +130,7 @@ class WorkspaceManager extends ChangeNotifier {
 
     final defaultCollection = Collection(
       id: uuid.v4(),
-      name: "First Collection",
+      name: firstCollectionName.trim().isEmpty ? "Main" : firstCollectionName.trim(),
     );
     newProject.collections.add(defaultCollection);
 
@@ -143,12 +146,67 @@ class WorkspaceManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> renameProject(String newName) async {
+    final clean = newName.trim();
+    if (project != null && clean.isNotEmpty && clean != project!.name) {
+      project!.name = clean;
+      await project!.save();
+      notifyListeners();
+    }
+  }
+
+  /// Reconciles unpaired tracks in a collection that have matching stems/names
+  /// (where one track has audio and the other has text). Merges them into single tracks.
+  int reconcileUnpairedTracks(Collection col) {
+    final audioOnly = <String, Track>{};
+    final toRemove = <Track>[];
+    int reconciled = 0;
+
+    for (final t in col.tracks) {
+      if (t.audioPath != null && t.textPath == null) {
+        final key = t.name.toLowerCase().trim();
+        audioOnly[key] = t;
+      }
+    }
+
+    for (final t in col.tracks) {
+      if (t.textPath != null && t.audioPath == null) {
+        final key = t.name.toLowerCase().trim();
+        if (audioOnly.containsKey(key)) {
+          final audioTrack = audioOnly[key]!;
+          audioTrack.textPath = t.textPath;
+          toRemove.add(t);
+          audioOnly.remove(key);
+          reconciled++;
+        }
+      }
+    }
+
+    if (reconciled > 0) {
+      col.tracks.removeWhere((t) => toRemove.contains(t));
+    }
+    return reconciled;
+  }
+
   Future<void> openProject(String path) async {
     final content = await File(path).readAsString();
     final parsed = jsonDecode(content) as Map<String, dynamic>;
     parsed['directoryPath'] = p.dirname(path);
 
     project = Project.fromJson(parsed);
+
+    // Auto-reconcile any split audio/text tracks in the collections
+    bool reconciledAny = false;
+    for (final col in project!.collections) {
+      if (reconcileUnpairedTracks(col) > 0) {
+        reconciledAny = true;
+        await col.saveTracks(project!.directoryPath);
+      }
+    }
+    if (reconciledAny) {
+      await project!.save();
+    }
+
     if (project!.collections.isNotEmpty) {
       expandedNodes.add(project!.collections.first.id);
       selectedNode = TreeSelection(
@@ -349,40 +407,115 @@ class WorkspaceManager extends ChangeNotifier {
     naturalSort(audioFiles);
     naturalSort(textFiles);
 
-    final maxCount = math.max(audioFiles.length, textFiles.length);
     final projectDir = project!.directoryPath;
     final copyMedia = project!.copyMediaIntoProject;
 
-    for (int i = 0; i < maxCount; i++) {
-      final audio = i < audioFiles.length ? audioFiles[i] : null;
-      final text = i < textFiles.length ? textFiles[i] : null;
-      final trackName = audio != null
-          ? p.basenameWithoutExtension(audio)
-          : p.basenameWithoutExtension(text!);
+    Future<String?> processAudio(String audioPath) async {
+      if (!copyMedia) return audioPath;
+      final audioDir = Directory(
+        p.join(projectDir, 'collections', col.folderName, 'audio'),
+      );
+      if (!await audioDir.exists()) await audioDir.create(recursive: true);
+      final dest = p.join(audioDir.path, p.basename(audioPath));
+      await File(audioPath).copy(dest);
+      return p.basename(audioPath);
+    }
 
-      String? finalAudio = audio;
-      String? finalText = text;
+    Future<String?> processText(String textPath) async {
+      if (!copyMedia) return textPath;
+      final textDir = Directory(
+        p.join(projectDir, 'collections', col.folderName, 'text'),
+      );
+      if (!await textDir.exists()) await textDir.create(recursive: true);
+      final dest = p.join(textDir.path, p.basename(textPath));
+      await File(textPath).copy(dest);
+      return p.basename(textPath);
+    }
 
-      if (copyMedia) {
-        if (audio != null) {
-          final audioDir = Directory(
-            p.join(projectDir, 'collections', col.folderName, 'audio'),
-          );
-          if (!await audioDir.exists()) await audioDir.create(recursive: true);
-          final dest = p.join(audioDir.path, p.basename(audio));
-          await File(audio).copy(dest);
-          finalAudio = p.basename(audio);
-        }
-        if (text != null) {
-          final textDir = Directory(
-            p.join(projectDir, 'collections', col.folderName, 'text'),
-          );
-          if (!await textDir.exists()) await textDir.create(recursive: true);
-          final dest = p.join(textDir.path, p.basename(text));
-          await File(text).copy(dest);
-          finalText = p.basename(text);
-        }
+    // 1. Try to pair newly imported audio files with existing text-only tracks in col.tracks
+    final remainingAudio = <String>[];
+    for (final audioPath in audioFiles) {
+      final stem = p.basenameWithoutExtension(audioPath).toLowerCase().trim();
+      final existingTrack = col.tracks.cast<Track?>().firstWhere(
+        (t) {
+          if (t == null || t.audioPath != null) return false;
+          final tName = t.name.toLowerCase().trim();
+          final tStem = t.textPath != null
+              ? p.basenameWithoutExtension(t.textPath!).toLowerCase().trim()
+              : tName;
+          return tName == stem || tStem == stem;
+        },
+        orElse: () => null,
+      );
+      if (existingTrack != null) {
+        existingTrack.audioPath = await processAudio(audioPath);
+      } else {
+        remainingAudio.add(audioPath);
       }
+    }
+
+    // 2. Try to pair newly imported text files with existing audio-only tracks in col.tracks
+    final remainingText = <String>[];
+    for (final textPath in textFiles) {
+      final stem = p.basenameWithoutExtension(textPath).toLowerCase().trim();
+      final existingTrack = col.tracks.cast<Track?>().firstWhere(
+        (t) {
+          if (t == null || t.textPath != null) return false;
+          final tName = t.name.toLowerCase().trim();
+          final tStem = t.audioPath != null
+              ? p.basenameWithoutExtension(t.audioPath!).toLowerCase().trim()
+              : tName;
+          return tName == stem || tStem == stem;
+        },
+        orElse: () => null,
+      );
+      if (existingTrack != null) {
+        existingTrack.textPath = await processText(textPath);
+      } else {
+        remainingText.add(textPath);
+      }
+    }
+
+    // 3. For remaining audio and text files, pair them together by stem
+    final pairedMap = <String, ({String? audio, String? text, String name})>{};
+    for (final audio in remainingAudio) {
+      final stem = p.basenameWithoutExtension(audio).toLowerCase().trim();
+      pairedMap[stem] = (
+        audio: audio,
+        text: null,
+        name: p.basenameWithoutExtension(audio),
+      );
+    }
+
+    for (final text in remainingText) {
+      final stem = p.basenameWithoutExtension(text).toLowerCase().trim();
+      if (pairedMap.containsKey(stem)) {
+        final current = pairedMap[stem]!;
+        pairedMap[stem] = (
+          audio: current.audio,
+          text: text,
+          name: current.name,
+        );
+      } else {
+        pairedMap[stem] = (
+          audio: null,
+          text: text,
+          name: p.basenameWithoutExtension(text),
+        );
+      }
+    }
+
+    // 4. Create new tracks for all remaining entries, sorted naturally
+    final sortedStems = pairedMap.keys.toList();
+    naturalSort(sortedStems);
+
+    for (final stem in sortedStems) {
+      final entry = pairedMap[stem]!;
+      final finalAudio =
+          entry.audio != null ? await processAudio(entry.audio!) : null;
+      final finalText =
+          entry.text != null ? await processText(entry.text!) : null;
+      final trackName = entry.name;
 
       final track = Track(
         id: uuid.v4(),
@@ -395,6 +528,9 @@ class WorkspaceManager extends ChangeNotifier {
       );
       col.tracks.add(track);
     }
+
+    // Also run reconciliation in case any other tracks can be merged
+    reconcileUnpairedTracks(col);
 
     await col.saveTracks(projectDir);
     await project!.save();

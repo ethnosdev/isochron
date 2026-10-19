@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/cupertino.dart';
+import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
 import 'package:isochron_flutter/ui/workspace/components/group_export_dialog.dart';
@@ -18,6 +19,7 @@ class CollectionBatchView extends StatefulWidget {
   final VoidCallback onImportFiles;
   final void Function(Track track) onOpenTrack;
   final VoidCallback onHealBrokenLinks;
+  final ValueChanged<String>? onRenameCollection;
 
   const CollectionBatchView({
     super.key,
@@ -32,6 +34,7 @@ class CollectionBatchView extends StatefulWidget {
     required this.onImportFiles,
     required this.onOpenTrack,
     required this.onHealBrokenLinks,
+    this.onRenameCollection,
   });
 
   @override
@@ -39,6 +42,44 @@ class CollectionBatchView extends StatefulWidget {
 }
 
 class _CollectionBatchViewState extends State<CollectionBatchView> {
+  void _promptRenameCollection() {
+    final controller = TextEditingController(text: widget.collection.name);
+    showAppAlertDialog(
+      context: context,
+      builder: (ctx) => MacosAlertDialog(
+        appIcon: const MacosIcon(CupertinoIcons.pencil_circle),
+        title: const Text('Rename Collection'),
+        message: Column(
+          children: [
+            const Text('Enter a new name for this collection:'),
+            const SizedBox(height: 12),
+            MacosTextField(
+              controller: controller,
+              autofocus: true,
+              onSubmitted: (val) {
+                Navigator.of(ctx).pop(val);
+              },
+            ),
+          ],
+        ),
+        primaryButton: PushButton(
+          controlSize: ControlSize.large,
+          onPressed: () => Navigator.of(ctx).pop(controller.text),
+          child: const Text('Rename'),
+        ),
+        secondaryButton: PushButton(
+          controlSize: ControlSize.large,
+          secondary: true,
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Cancel'),
+        ),
+      ),
+    ).then((newName) {
+      if (newName != null && newName is String && newName.trim().isNotEmpty) {
+        widget.onRenameCollection?.call(newName.trim());
+      }
+    });
+  }
 
   Widget _buildEmptyState(BuildContext context) {
     final theme = MacosTheme.of(context);
@@ -192,11 +233,31 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        widget.collection.name,
-                        style: theme.typography.title1.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            widget.collection.name,
+                            style: theme.typography.title1.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          MacosTooltip(
+                            message: "Rename Collection",
+                            child: MacosIconButton(
+                              icon: MacosIcon(
+                                CupertinoIcons.pencil,
+                                size: 16,
+                                color: AppTheme.grey(context),
+                              ),
+                              boxConstraints: const BoxConstraints(
+                                minHeight: 24,
+                                minWidth: 24,
+                              ),
+                              onPressed: _promptRenameCollection,
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 4),
                       Text(

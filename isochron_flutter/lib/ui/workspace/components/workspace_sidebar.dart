@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:isochron_flutter/services/export_service.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/components/macos_context_menu.dart';
+import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/settings/model_panel.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
@@ -37,11 +38,67 @@ Sidebar buildWorkspaceSidebar(
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              manager.project?.name ?? '',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onSecondaryTapDown: (details) {
+                if (manager.project == null) return;
+                showMacosContextMenu(
+                  context: context,
+                  position: details.globalPosition,
+                  items: [
+                    MacosContextMenuItem(
+                      title: "Rename Project...",
+                      icon: CupertinoIcons.pencil,
+                      onTap: () => _promptRenameProject(context, manager),
+                    ),
+                    MacosContextMenuItem(
+                      title: "Reveal in Finder",
+                      icon: CupertinoIcons.folder,
+                      onTap: () =>
+                          _revealInFinder(manager.project!.directoryPath),
+                    ),
+                    MacosContextMenuItem(
+                      title: "Project Settings",
+                      icon: CupertinoIcons.gear_alt,
+                      onTap: () => manager.selectNode(
+                        TreeSelection(type: NodeType.settings),
+                      ),
+                    ),
+                  ],
+                );
+              },
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      manager.project?.name ?? '',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  MacosTooltip(
+                    message: "Rename Project",
+                    child: MacosIconButton(
+                      icon: MacosIcon(
+                        CupertinoIcons.pencil,
+                        size: 13,
+                        color: AppTheme.grey(context),
+                      ),
+                      boxConstraints: const BoxConstraints(
+                        minHeight: 20,
+                        minWidth: 20,
+                      ),
+                      padding: const EdgeInsets.all(2),
+                      onPressed: () => _promptRenameProject(context, manager),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           MacosTooltip(
@@ -567,4 +624,44 @@ Widget _buildTreeRow({
       ),
     ),
   );
+}
+
+void _promptRenameProject(BuildContext context, WorkspaceManager manager) {
+  if (manager.project == null) return;
+  final controller = TextEditingController(text: manager.project!.name);
+  showAppAlertDialog(
+    context: context,
+    builder: (ctx) => MacosAlertDialog(
+      appIcon: const MacosIcon(CupertinoIcons.pencil_circle),
+      title: const Text('Rename Project'),
+      message: Column(
+        children: [
+          const Text('Enter a new name for this project:'),
+          const SizedBox(height: 12),
+          MacosTextField(
+            controller: controller,
+            autofocus: true,
+            onSubmitted: (val) {
+              Navigator.of(ctx).pop(val);
+            },
+          ),
+        ],
+      ),
+      primaryButton: PushButton(
+        controlSize: ControlSize.large,
+        onPressed: () => Navigator.of(ctx).pop(controller.text),
+        child: const Text('Rename'),
+      ),
+      secondaryButton: PushButton(
+        controlSize: ControlSize.large,
+        secondary: true,
+        onPressed: () => Navigator.of(ctx).pop(),
+        child: const Text('Cancel'),
+      ),
+    ),
+  ).then((newName) {
+    if (newName != null && newName is String && newName.trim().isNotEmpty) {
+      manager.renameProject(newName.trim());
+    }
+  });
 }

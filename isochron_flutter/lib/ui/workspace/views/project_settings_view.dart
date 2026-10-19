@@ -22,6 +22,7 @@ class ProjectSettingsView extends StatefulWidget {
 
 class _ProjectSettingsViewState extends State<ProjectSettingsView> {
   late String _prefix;
+  late TextEditingController _projectNameController;
   late TextEditingController _prefixController;
   late TextEditingController _langController;
   late TextEditingController _leadInController;
@@ -32,6 +33,7 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
     super.initState();
     _prefix = widget.project.defaultIdPrefix ?? "";
 
+    _projectNameController = TextEditingController(text: widget.project.name);
     _prefixController = TextEditingController(text: _prefix);
     _langController = TextEditingController(
       text: widget.project.languageCode ?? '',
@@ -46,6 +48,7 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
 
   @override
   void dispose() {
+    _projectNameController.dispose();
     _prefixController.dispose();
     _langController.dispose();
     _leadInController.dispose();
@@ -54,6 +57,10 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
   }
 
   void _triggerSave() {
+    final newName = _projectNameController.text.trim();
+    if (newName.isNotEmpty) {
+      widget.project.name = newName;
+    }
     widget.project.defaultIdPrefix =
         _prefix.trim().isEmpty ? null : _prefix.trim();
     final lang = _langController.text.trim();
@@ -91,6 +98,51 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+              const SizedBox(height: 32),
+
+              // --- PROJECT INFORMATION ---
+              Text("Project Information", style: theme.typography.headline),
+              const SizedBox(height: 8),
+              Text(
+                "Project name and location on disk.",
+                style: TextStyle(
+                  color: theme.typography.body.color?.withValues(alpha: 0.7),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    "Project Name:",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: theme.typography.body.color,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  SizedBox(
+                    width: 280,
+                    child: MacosTextField(
+                      controller: _projectNameController,
+                      placeholder: 'e.g. BSB',
+                      decoration: textFieldDecoration,
+                      onChanged: (_) => _triggerSave(),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Folder: ${widget.project.directoryPath}",
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: AppTheme.grey(context),
+                ),
+              ),
+
+              const SizedBox(height: 32),
+              Container(height: 1, color: theme.dividerColor),
               const SizedBox(height: 32),
 
               // --- APP PREFERENCES ---

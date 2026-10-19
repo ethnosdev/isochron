@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
@@ -16,6 +15,7 @@ import 'components/workspace_router.dart';
 import 'components/workspace_toolbar.dart';
 import 'components/workspace_menu_bar.dart';
 import 'components/group_export_dialog.dart';
+import 'components/new_project_dialog.dart';
 
 class WorkspaceScreen extends StatefulWidget {
   const WorkspaceScreen({super.key});
@@ -46,44 +46,17 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   // ---------------------------------------------------------------------------
 
   Future<void> _createNewProject() async {
+    final result = await NewProjectDialog.show(context);
+    if (result == null) return;
+
     final settings = UserSettingsService();
+    settings.setLastProjectDir(p.dirname(result.projectPath));
 
-    final String? projectPath = await FilePicker.saveFile(
-      dialogTitle: 'Create New Project',
-      fileName: 'Untitled Project',
-      initialDirectory: settings.lastProjectDir,
-      lockParentWindow: true,
+    await _manager.createProject(
+      result.projectPath,
+      result.projectName,
+      firstCollectionName: result.collectionName,
     );
-
-    if (projectPath == null) return;
-
-    final projectDir = Directory(projectPath);
-    final projectName = p.basename(projectPath);
-
-    if (await projectDir.exists()) {
-      if (mounted) {
-        showAppAlertDialog(
-          context: context,
-          builder: (context) => MacosAlertDialog(
-            appIcon: const MacosIcon(CupertinoIcons.folder_badge_minus),
-            title: const Text('Folder Already Exists'),
-            message: Text(
-              'A project or folder named "$projectName" already exists in this location.\n\nPlease choose a different name or location.',
-              textAlign: TextAlign.center,
-            ),
-            primaryButton: PushButton(
-              controlSize: ControlSize.large,
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ),
-        );
-      }
-      return;
-    }
-
-    settings.setLastProjectDir(p.dirname(projectPath));
-    await _manager.createProject(projectPath, projectName);
     if (_manager.project != null) {
       await settings.addRecentProject(_manager.project!.projectFilePath);
     }

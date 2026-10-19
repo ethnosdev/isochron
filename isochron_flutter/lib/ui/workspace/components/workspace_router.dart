@@ -106,6 +106,10 @@ class WorkspaceRouter extends StatelessWidget {
             context,
             manager.selectedNode!.collection!,
           ),
+          onRenameCollection: (newName) => manager.renameCollection(
+            manager.selectedNode!.collection!,
+            newName,
+          ),
         );
 
       case NodeType.track:
