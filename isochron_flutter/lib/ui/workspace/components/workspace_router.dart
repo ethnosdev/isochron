@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/editor/studio_editor.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
@@ -29,7 +30,7 @@ class WorkspaceRouter extends StatelessWidget {
 
     if (context.mounted) {
       if (healedCount > 0) {
-        showMacosAlertDialog(
+        showAppAlertDialog(
           context: context,
           builder: (context) => MacosAlertDialog(
             appIcon: const MacosIcon(CupertinoIcons.checkmark_seal_fill),
@@ -46,7 +47,7 @@ class WorkspaceRouter extends StatelessWidget {
           ),
         );
       } else {
-        showMacosAlertDialog(
+        showAppAlertDialog(
           context: context,
           builder: (context) => MacosAlertDialog(
             appIcon: const MacosIcon(

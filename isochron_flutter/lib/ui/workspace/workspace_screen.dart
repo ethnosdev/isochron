@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
+import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
 import 'package:isochron_flutter/ui/workspace/views/welcome_view.dart';
 import 'package:macos_ui/macos_ui.dart';
@@ -61,7 +62,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
     if (await projectDir.exists()) {
       if (mounted) {
-        showMacosAlertDialog(
+        showAppAlertDialog(
           context: context,
           builder: (context) => MacosAlertDialog(
             appIcon: const MacosIcon(CupertinoIcons.folder_badge_minus),
@@ -138,7 +139,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         );
 
         if (mounted) {
-          showMacosAlertDialog(
+          showAppAlertDialog(
             context: context,
             builder: (context) => MacosAlertDialog(
               appIcon: const MacosIcon(CupertinoIcons.check_mark_circled),
@@ -158,7 +159,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       } catch (e) {
         debugPrint("Error importing collections: $e");
         if (mounted) {
-          showMacosAlertDialog(
+          showAppAlertDialog(
             context: context,
             builder: (context) => MacosAlertDialog(
               appIcon: const MacosIcon(CupertinoIcons.exclamationmark_triangle),

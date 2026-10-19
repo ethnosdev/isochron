@@ -14,6 +14,7 @@ import 'package:macos_ui/macos_ui.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
+import 'components/macos_dialogs.dart';
 import 'models/app_state.dart';
 import '../services/alignment_service.dart';
 import '../services/audio_service.dart';
@@ -1008,7 +1009,7 @@ class AppManager extends ValueNotifier<AppState> {
     }
 
     if (prevTimed != null && t <= prevTimed.realStart) {
-      showMacosAlertDialog(
+      showAppAlertDialog(
         context: context,
         builder: (_) => MacosAlertDialog(
           appIcon: const MacosIcon(CupertinoIcons.exclamationmark_triangle),
@@ -1024,7 +1025,7 @@ class AppManager extends ValueNotifier<AppState> {
       return;
     }
     if (nextTimed != null && t >= nextTimed.realStart) {
-      showMacosAlertDialog(
+      showAppAlertDialog(
         context: context,
         builder: (_) => MacosAlertDialog(
           appIcon: const MacosIcon(CupertinoIcons.exclamationmark_triangle),

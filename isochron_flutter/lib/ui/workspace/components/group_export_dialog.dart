@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:isochron_flutter/services/export_service.dart';
+import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
 import 'package:macos_ui/macos_ui.dart';
@@ -49,7 +50,7 @@ class GroupExportDialog extends StatefulWidget {
     DirectoryPickerFn? directoryPicker,
     FileSaverFn? fileSaver,
   }) async {
-    final result = await showMacosSheet<GroupExportResult>(
+    final result = await showAppSheet<GroupExportResult>(
       context: context,
       barrierDismissible: true,
       builder: (_) => MacosSheet(
@@ -67,7 +68,7 @@ class GroupExportDialog extends StatefulWidget {
 
     if (result != null && context.mounted) {
       if (result.success) {
-        showMacosAlertDialog(
+        showAppAlertDialog(
           context: context,
           barrierLabel: 'Dismiss',
           builder: (ctx) => MacosAlertDialog(
@@ -82,7 +83,7 @@ class GroupExportDialog extends StatefulWidget {
           ),
         );
       } else {
-        showMacosAlertDialog(
+        showAppAlertDialog(
           context: context,
           barrierLabel: 'Dismiss',
           builder: (ctx) => MacosAlertDialog(
@@ -106,7 +107,7 @@ class GroupExportDialog extends StatefulWidget {
 }
 
 class _GroupExportDialogState extends State<GroupExportDialog> {
-  GroupExportMode _selectedMode = GroupExportMode.dividedByChapterFiles;
+  GroupExportMode _selectedMode = GroupExportMode.separateFiles;
   bool _isExporting = false;
 
   List<Track> get _allTracks => widget.collection != null
@@ -119,7 +120,7 @@ class _GroupExportDialogState extends State<GroupExportDialog> {
   Future<void> _handleExport() async {
     setState(() => _isExporting = true);
     try {
-      if (_selectedMode == GroupExportMode.dividedByChapterFiles) {
+      if (_selectedMode == GroupExportMode.separateFiles) {
         final picker = widget.directoryPicker ?? FilePicker.getDirectoryPath;
         final selectedDir = await picker(
           dialogTitle: 'Select Destination Folder for Export',
@@ -153,50 +154,13 @@ class _GroupExportDialogState extends State<GroupExportDialog> {
             ),
           );
         }
-      } else if (_selectedMode == GroupExportMode.singleChapterSingleFile) {
-        final saver = widget.fileSaver ?? FilePicker.saveFile;
-        final defaultName = widget.collection != null
-            ? '${widget.collection!.folderName}-single-chapter-timing.txt'
-            : '${widget.project.name}-single-chapter-timing.txt';
-        final outputFile = await saver(
-          dialogTitle: 'Save Single Chapter Timing File',
-          fileName: defaultName,
-          type: FileType.custom,
-          allowedExtensions: ['txt'],
-          initialDirectory: widget.project.directoryPath,
-        );
-        if (outputFile == null) {
-          if (mounted) setState(() => _isExporting = false);
-          return;
-        }
-
-        final targetPath =
-            outputFile.endsWith('.txt') ? outputFile : '$outputFile.txt';
-        final payload = await ExportService.buildSingleChapterPayload(
-          widget.project,
-          _readyTracks,
-        );
-
-        if (payload != null) {
-          await File(targetPath).writeAsString(payload);
-        }
-
-        if (mounted) {
-          Navigator.of(context).pop(
-            GroupExportResult(
-              success: true,
-              message:
-                  'Successfully exported timing file to:\n${p.basename(targetPath)}',
-            ),
-          );
-        }
-      } else if (_selectedMode == GroupExportMode.dividedByChapterSingleFile) {
+      } else if (_selectedMode == GroupExportMode.singleFile) {
         final saver = widget.fileSaver ?? FilePicker.saveFile;
         final defaultName = widget.collection != null
             ? '${widget.collection!.folderName}-timing.txt'
             : '${widget.project.name}-timing.txt';
         final outputFile = await saver(
-          dialogTitle: 'Save Combined Timing File',
+          dialogTitle: 'Save Timing File',
           fileName: defaultName,
           type: FileType.custom,
           allowedExtensions: ['txt'],
@@ -224,7 +188,7 @@ class _GroupExportDialogState extends State<GroupExportDialog> {
             GroupExportResult(
               success: true,
               message:
-                  'Successfully exported combined timing file to:\n${p.basename(targetPath)}',
+                  'Successfully exported timing file to:\n${p.basename(targetPath)}',
             ),
           );
         }
@@ -251,7 +215,18 @@ class _GroupExportDialogState extends State<GroupExportDialog> {
     required String title,
     required String subtitle,
   }) {
+    final theme = MacosTheme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final isSelected = _selectedMode == mode;
+
+    final unselectedBg =
+        isDark ? const Color(0xFF2A2A2A) : const Color(0xFFFFFFFF);
+    final selectedBg = isDark
+        ? theme.primaryColor.withValues(alpha: 0.20)
+        : theme.primaryColor.withValues(alpha: 0.08);
+
+    final borderColor = isSelected ? theme.primaryColor : theme.dividerColor;
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {
@@ -263,14 +238,10 @@ class _GroupExportDialogState extends State<GroupExportDialog> {
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected
-              ? MacosTheme.of(context).primaryColor.withValues(alpha: 0.08)
-              : MacosColors.controlBackgroundColor,
+          color: isSelected ? selectedBg : unselectedBg,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected
-                ? MacosTheme.of(context).primaryColor
-                : MacosColors.separatorColor,
+            color: borderColor,
             width: isSelected ? 1.5 : 1.0,
           ),
         ),
@@ -296,9 +267,12 @@ class _GroupExportDialogState extends State<GroupExportDialog> {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
+                      color: isSelected
+                          ? (isDark ? AppTheme.darkAccent : theme.primaryColor)
+                          : theme.typography.body.color,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -321,6 +295,7 @@ class _GroupExportDialogState extends State<GroupExportDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = MacosTheme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final isProject = widget.collection == null;
     final totalCount = _allTracks.length;
     final readyCount = _readyTracks.length;
@@ -377,9 +352,11 @@ class _GroupExportDialogState extends State<GroupExportDialog> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: MacosColors.controlBackgroundColor,
+                color: isDark
+                    ? const Color(0xFF2A2A2A)
+                    : const Color(0xFFFFFFFF),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: MacosColors.separatorColor),
+                border: Border.all(color: theme.dividerColor),
               ),
               child: Row(
                 children: [
@@ -417,23 +394,16 @@ class _GroupExportDialogState extends State<GroupExportDialog> {
 
             _buildModeOption(
               context: context,
-              mode: GroupExportMode.dividedByChapterFiles,
-              title: 'Divided by chapter into separate files',
+              mode: GroupExportMode.separateFiles,
+              title: 'Separate files',
               subtitle: isProject && widget.project.collections.length > 1
                   ? 'Exports each track as its own .txt file into collection subfolders in a selected directory.'
                   : 'Exports each track as its own .txt file into a selected directory.',
             ),
             _buildModeOption(
               context: context,
-              mode: GroupExportMode.singleChapterSingleFile,
-              title: 'All included in a single chapter',
-              subtitle:
-                  'Combines all tracks into one .txt file under chapter 1, with each track starting at 0.0s.',
-            ),
-            _buildModeOption(
-              context: context,
-              mode: GroupExportMode.dividedByChapterSingleFile,
-              title: 'Divided by chapter in a single file',
+              mode: GroupExportMode.singleFile,
+              title: 'Single file',
               subtitle:
                   'Combines all tracks into one .txt file with separate chapter headers (\\c 1, \\c 2, ...).',
             ),

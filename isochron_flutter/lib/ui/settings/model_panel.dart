@@ -3,13 +3,15 @@ import 'package:flutter/cupertino.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:macos_ui/macos_ui.dart';
 
+import '../components/macos_dialogs.dart';
+
 class ModelPanel extends StatefulWidget {
   final VoidCallback? onModelReady;
 
   const ModelPanel({super.key, this.onModelReady});
 
   static Future<void> show(BuildContext context, {VoidCallback? onModelReady}) {
-    return showMacosSheet(
+    return showAppSheet(
       context: context,
       barrierDismissible: true,
       builder: (_) => MacosSheet(
@@ -146,6 +148,8 @@ class _ModelPanelState extends State<ModelPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = MacosTheme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final file = _manager.getFile(ModelVariant.int8);
 
     return Padding(
@@ -158,7 +162,7 @@ class _ModelPanelState extends State<ModelPanel> {
             children: [
               Text(
                 'MMS Acoustic Model',
-                style: MacosTheme.of(context).typography.headline,
+                style: theme.typography.headline,
               ),
               MacosIconButton(
                 icon: const MacosIcon(CupertinoIcons.xmark_circle),
@@ -169,7 +173,7 @@ class _ModelPanelState extends State<ModelPanel> {
           const SizedBox(height: 8),
           Text(
             'Meta MMS-300M Quantized INT8 neural acoustic model (~302 MB) required for multilingual forced alignment.',
-            style: MacosTheme.of(context).typography.subheadline,
+            style: theme.typography.subheadline,
           ),
           const SizedBox(height: 20),
 
@@ -177,9 +181,9 @@ class _ModelPanelState extends State<ModelPanel> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: MacosColors.controlBackgroundColor,
+              color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFFFFFFF),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: MacosColors.separatorColor),
+              border: Border.all(color: theme.dividerColor),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

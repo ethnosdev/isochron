@@ -165,13 +165,9 @@ void main() {
       findsOneWidget,
     );
 
-    // Verify all 3 mode options are present
-    expect(
-      find.text('Divided by chapter into separate files'),
-      findsOneWidget,
-    );
-    expect(find.text('All included in a single chapter'), findsOneWidget);
-    expect(find.text('Divided by chapter in a single file'), findsOneWidget);
+    // Verify both mode options are present
+    expect(find.text('Separate files'), findsOneWidget);
+    expect(find.text('Single file'), findsOneWidget);
 
     // Verify buttons
     expect(find.text('Cancel'), findsOneWidget);
@@ -230,8 +226,8 @@ void main() {
     await tester.tap(find.text('Open Export Sheet'));
     await tester.pumpAndSettle();
 
-    final singleChapterFinder = find.text('All included in a single chapter');
-    await tester.tap(singleChapterFinder);
+    final singleFileFinder = find.text('Single file');
+    await tester.tap(singleFileFinder);
     await tester.pumpAndSettle();
 
     // Verify radio button update
@@ -239,11 +235,11 @@ void main() {
       find.byType(MacosRadioButton<GroupExportMode>),
     );
     for (final radio in radioButtons) {
-      expect(radio.groupValue, GroupExportMode.singleChapterSingleFile);
+      expect(radio.groupValue, GroupExportMode.singleFile);
     }
   });
 
-  testWidgets('executes dividedByChapterFiles export and shows success alert', (
+  testWidgets('executes separateFiles export and shows success alert', (
     tester,
   ) async {
     final exportDir =
@@ -293,58 +289,7 @@ void main() {
     expect(find.text('Export Complete'), findsNothing);
   });
 
-  testWidgets('executes singleChapterSingleFile export and shows success alert', (
-    tester,
-  ) async {
-    final saveFileTarget = p.join(tempDir.path, 'output-single.txt');
-    String? capturedFileName;
-
-    await tester.pumpWidget(
-      buildLauncherWidget(tester, 
-        targetCollection: collection,
-        fileSaver: ({
-          allowedExtensions,
-          dialogTitle,
-          fileName,
-          initialDirectory,
-          type = FileType.any,
-        }) async {
-          capturedFileName = fileName;
-          return saveFileTarget;
-        },
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Open Export Sheet'));
-    await tester.pumpAndSettle();
-
-    // Select single chapter mode
-    await tester.tap(find.text('All included in a single chapter'));
-    await tester.pumpAndSettle();
-
-    // Tap Export...
-    await tester.runAsync(() async {
-      await tester.tap(find.widgetWithText(PushButton, 'Export...'));
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    });
-    await tester.pumpAndSettle();
-
-    expect(capturedFileName, 'Genesis_Collection-single-chapter-timing.txt');
-
-    final exportedFile = File(saveFileTarget);
-    expect(exportedFile.existsSync(), isTrue);
-    final content = exportedFile.readAsStringSync();
-    expect(content, startsWith('\\id GEN\n\\c 1\n\\level phrase\n'));
-    expect(content, contains('0\t3.5\t1:1'));
-    expect(content, contains('0\t4.2\t2:1')); // Timings restarted at 0.0s
-
-    expect(find.text('Export Complete'), findsOneWidget);
-    await tester.tap(find.widgetWithText(PushButton, 'OK'));
-    await tester.pumpAndSettle();
-  });
-
-  testWidgets('executes dividedByChapterSingleFile export and shows success alert', (
+  testWidgets('executes singleFile export and shows success alert', (
     tester,
   ) async {
     final saveFileTarget = p.join(tempDir.path, 'output-divided.txt');
@@ -370,8 +315,8 @@ void main() {
     await tester.tap(find.text('Open Export Sheet'));
     await tester.pumpAndSettle();
 
-    // Select divided single file mode
-    await tester.tap(find.text('Divided by chapter in a single file'));
+    // Select single file mode
+    await tester.tap(find.text('Single file'));
     await tester.pumpAndSettle();
 
     // Tap Export...

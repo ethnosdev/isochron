@@ -6,9 +6,8 @@ import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:path/path.dart' as p;
 
 enum GroupExportMode {
-  dividedByChapterFiles,
-  singleChapterSingleFile,
-  dividedByChapterSingleFile,
+  separateFiles,
+  singleFile,
 }
 
 class ExportService {
