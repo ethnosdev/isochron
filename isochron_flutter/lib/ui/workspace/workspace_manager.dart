@@ -3,14 +3,16 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/services/alignment_service.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/app_manager.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
+import 'package:isochron_flutter/ui/workspace/components/track_pairing_wizard.dart';
 import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
 import 'package:isochron_flutter/utils/id_extraction.dart';
+import 'package:isochron_flutter/utils/media_pairing_engine.dart';
 import 'package:isochron_flutter/utils/natural_sort.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
@@ -117,6 +119,7 @@ class WorkspaceManager extends ChangeNotifier {
     String projectPath,
     String projectName, {
     String firstCollectionName = "Main",
+    List<PairedRow>? initialTracks,
   }) async {
     final projectDir = Directory(projectPath);
     await projectDir.create(recursive: true);
@@ -137,6 +140,11 @@ class WorkspaceManager extends ChangeNotifier {
     await newProject.save();
 
     project = newProject;
+
+    if (initialTracks != null && initialTracks.isNotEmpty) {
+      await importPairedRowsIntoCollection(defaultCollection, initialTracks);
+    }
+
     expandedNodes.add(defaultCollection.id);
     selectedNode = TreeSelection(
       type: NodeType.collection,
@@ -369,6 +377,83 @@ class WorkspaceManager extends ChangeNotifier {
     project!.save();
     selectNode(TreeSelection(type: NodeType.collection, collection: newCol));
     editingNodeId = newCol.id;
+    notifyListeners();
+  }
+
+  /// Opens the interactive Track Pairing Wizard to select, auto-match, and adjust
+  /// audio recordings and transcripts into collection tracks.
+  Future<void> openTrackPairingWizard(
+    BuildContext context,
+    Collection col,
+  ) async {
+    final result = await TrackPairingWizard.show(
+      context,
+      collectionName: col.name,
+    );
+    if (result != null && result.rows.isNotEmpty) {
+      await importPairedRowsIntoCollection(col, result.rows);
+    }
+  }
+
+  /// Imports a list of paired rows into the given collection, processing
+  /// audio and text files according to the project's copyMedia settings.
+  Future<void> importPairedRowsIntoCollection(
+    Collection col,
+    List<PairedRow> rows,
+  ) async {
+    if (project == null || rows.isEmpty) return;
+
+    final projectDir = project!.directoryPath;
+    final copyMedia = project!.copyMediaIntoProject;
+
+    Future<String?> processAudio(String audioPath) async {
+      if (!copyMedia) return audioPath;
+      final audioDir = Directory(
+        p.join(projectDir, 'collections', col.folderName, 'audio'),
+      );
+      if (!await audioDir.exists()) await audioDir.create(recursive: true);
+      final dest = p.join(audioDir.path, p.basename(audioPath));
+      await File(audioPath).copy(dest);
+      return p.basename(audioPath);
+    }
+
+    Future<String?> processText(String textPath) async {
+      if (!copyMedia) return textPath;
+      final textDir = Directory(
+        p.join(projectDir, 'collections', col.folderName, 'text'),
+      );
+      if (!await textDir.exists()) await textDir.create(recursive: true);
+      final dest = p.join(textDir.path, p.basename(textPath));
+      await File(textPath).copy(dest);
+      return p.basename(textPath);
+    }
+
+    for (final row in rows) {
+      final finalAudio =
+          row.audioPath != null ? await processAudio(row.audioPath!) : null;
+      final finalText =
+          row.textPath != null ? await processText(row.textPath!) : null;
+      final trackName = row.name.isNotEmpty
+          ? row.name
+          : MediaPairingEngine.deriveTrackName(
+              audioPath: row.audioPath,
+              textPath: row.textPath,
+            );
+
+      final track = Track(
+        id: uuid.v4(),
+        collectionId: col.id,
+        name: trackName,
+        audioPath: finalAudio,
+        textPath: finalText,
+        outputFilename: '${trackName}_timing.json',
+        status: AlignmentStatus.pending,
+      );
+      col.tracks.add(track);
+    }
+
+    await col.saveTracks(projectDir);
+    await project!.save();
     notifyListeners();
   }
 

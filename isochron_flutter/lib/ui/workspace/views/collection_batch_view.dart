@@ -132,7 +132,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                 children: [
                   MacosIcon(CupertinoIcons.plus_circle, size: 16),
                   SizedBox(width: 8),
-                  Text("Select Audio & Text Files..."),
+                  Text("Add & Pair Tracks..."),
                 ],
               ),
             ),
@@ -307,7 +307,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                       children: [
                         MacosIcon(CupertinoIcons.add, size: 14),
                         SizedBox(width: 6),
-                        Text("Import More Files..."),
+                        Text("Add & Pair Tracks..."),
                       ],
                     ),
                   ),

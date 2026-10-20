@@ -326,9 +326,9 @@ Widget _buildTreeRowForNode(
                 onTap: () => manager.setEditingNode(col.id),
               ),
               MacosContextMenuItem(
-                title: "Import Files...",
+                title: "Add & Pair Media...",
                 icon: CupertinoIcons.arrow_down_doc,
-                onTap: () => manager.importFilesIntoCollection(col),
+                onTap: () => manager.openTrackPairingWizard(context, col),
               ),
               MacosContextMenuItem(
                 title: "Run Alignment on All",

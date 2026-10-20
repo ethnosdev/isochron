@@ -5,6 +5,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
+import 'package:isochron_flutter/ui/workspace/components/track_pairing_wizard.dart';
+import 'package:isochron_flutter/utils/media_pairing_engine.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -13,11 +15,13 @@ class NewProjectResult {
   final String projectPath;
   final String projectName;
   final String collectionName;
+  final List<PairedRow>? initialTracks;
 
   const NewProjectResult({
     required this.projectPath,
     required this.projectName,
     required this.collectionName,
+    this.initialTracks,
   });
 }
 
@@ -49,6 +53,7 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
 
   String _parentDirectory = '';
   bool _isLoadingDir = true;
+  List<PairedRow>? _stagedTracks;
 
   @override
   void initState() {
@@ -118,8 +123,33 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
         projectPath: _targetProjectPath,
         projectName: _projectName,
         collectionName: _collectionName,
+        initialTracks: _stagedTracks,
       ),
     );
+  }
+
+  Future<void> _handleNextAddTracks() async {
+    if (!_canCreate) return;
+    final result = await TrackPairingWizard.show(
+      context,
+      collectionName: _collectionName,
+      initialAudioFiles: _stagedTracks
+          ?.where((r) => r.audioPath != null)
+          .map((r) => r.audioPath!)
+          .toList(),
+      initialTextFiles: _stagedTracks
+          ?.where((r) => r.textPath != null)
+          .map((r) => r.textPath!)
+          .toList(),
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _stagedTracks = result.rows;
+      });
+      // Automatically proceed to create project with these staged tracks
+      _handleCreate();
+    }
   }
 
   @override
@@ -270,7 +300,14 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('Cancel'),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
+                PushButton(
+                  controlSize: ControlSize.large,
+                  secondary: true,
+                  onPressed: _canCreate ? _handleNextAddTracks : null,
+                  child: const Text('Next: Add Tracks...'),
+                ),
+                const SizedBox(width: 10),
                 PushButton(
                   controlSize: ControlSize.large,
                   onPressed: _canCreate ? _handleCreate : null,

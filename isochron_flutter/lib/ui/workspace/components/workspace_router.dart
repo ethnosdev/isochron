@@ -89,7 +89,8 @@ class WorkspaceRouter extends StatelessWidget {
             manager.project!.save();
             manager.refreshUi();
           },
-          onImportFiles: () => manager.importFilesIntoCollection(
+          onImportFiles: () => manager.openTrackPairingWizard(
+            context,
             manager.selectedNode!.collection!,
           ),
           onOpenTrack: (track) {
