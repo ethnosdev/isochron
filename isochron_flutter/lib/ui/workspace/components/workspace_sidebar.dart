@@ -326,10 +326,20 @@ Widget _buildTreeRowForNode(
                 onTap: () => manager.setEditingNode(col.id),
               ),
               MacosContextMenuItem(
-                title: "Add & Pair Media...",
-                icon: CupertinoIcons.arrow_down_doc,
+                title: col.tracks.isEmpty
+                    ? "Add & Pair Media..."
+                    : "Manage Track Pairings...",
+                icon: col.tracks.isEmpty
+                    ? CupertinoIcons.arrow_down_doc
+                    : CupertinoIcons.slider_horizontal_3,
                 onTap: () => manager.openTrackPairingWizard(context, col),
               ),
+              if (col.tracks.isNotEmpty)
+                MacosContextMenuItem(
+                  title: "Clear All Tracks...",
+                  icon: CupertinoIcons.trash,
+                  onTap: () => manager.clearAllTracksInCollection(context, col),
+                ),
               MacosContextMenuItem(
                 title: "Run Alignment on All",
                 icon: CupertinoIcons.play_arrow_solid,

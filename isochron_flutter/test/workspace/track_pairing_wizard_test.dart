@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isochron_flutter/ui/workspace/components/track_pairing_wizard.dart';
+import 'package:isochron_flutter/utils/media_pairing_engine.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:path/path.dart' as p;
 
@@ -178,6 +179,65 @@ And Judas begat Phares and Zara of Thamar.
         find.text('Preview for first track: 40001001, 40001002, 40001003'),
         findsOneWidget,
       );
+    });
+
+    testWidgets(
+        'renders Manage Track Pairings for existing collection and allows clearing transcripts',
+        (tester) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final rows = [
+        PairedRow(
+          name: 'Track 1',
+          audioPath: '/test/audio1.mp3',
+          textPath: '/test/text1.txt',
+        ),
+        PairedRow(
+          name: 'Track 2',
+          audioPath: '/test/audio2.mp3',
+          textPath: '/test/text2.txt',
+        ),
+      ];
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          TrackPairingWizard(
+            collectionName: 'NT',
+            initialRows: rows,
+            isExistingCollection: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Manage Track Pairings — NT'), findsOneWidget);
+      expect(find.text('2 files in collection'), findsNWidgets(2));
+      expect(find.text('2 Paired'), findsOneWidget);
+      expect(find.text('Update Collection'), findsOneWidget);
+
+      // Find trash icons (one on Audio card, one on Transcripts card)
+      final trashIcons = find.byWidgetPredicate(
+        (w) => w is MacosIcon && w.icon == CupertinoIcons.trash,
+      );
+      expect(trashIcons, findsNWidgets(2));
+
+      // Tap trash icon on Transcripts (the second one)
+      await tester.tap(trashIcons.at(1));
+      await tester.pumpAndSettle();
+
+      expect(find.text('2 Missing Transcript'), findsOneWidget);
+      expect(find.text('Update Collection'), findsOneWidget);
+
+      // Now tap trash icon on Audio (the first one)
+      final audioTrash = find.byWidgetPredicate(
+        (w) => w is MacosIcon && w.icon == CupertinoIcons.trash,
+      );
+      await tester.tap(audioTrash.first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Clear All Tracks'), findsOneWidget);
     });
   });
 }

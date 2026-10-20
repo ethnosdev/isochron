@@ -17,6 +17,7 @@ class CollectionBatchView extends StatefulWidget {
   final VoidCallback onStopBatch;
   final VoidCallback onChanged;
   final VoidCallback onImportFiles;
+  final VoidCallback? onClearTracks;
   final void Function(Track track) onOpenTrack;
   final VoidCallback onHealBrokenLinks;
   final ValueChanged<String>? onRenameCollection;
@@ -32,6 +33,7 @@ class CollectionBatchView extends StatefulWidget {
     required this.onStopBatch,
     required this.onChanged,
     required this.onImportFiles,
+    this.onClearTracks,
     required this.onOpenTrack,
     required this.onHealBrokenLinks,
     this.onRenameCollection,
@@ -305,12 +307,28 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        MacosIcon(CupertinoIcons.add, size: 14),
+                        MacosIcon(CupertinoIcons.slider_horizontal_3, size: 14),
                         SizedBox(width: 6),
-                        Text("Add & Pair Tracks..."),
+                        Text("Manage Track Pairings..."),
                       ],
                     ),
                   ),
+                  if (widget.onClearTracks != null) ...[
+                    const SizedBox(width: 12),
+                    PushButton(
+                      controlSize: ControlSize.large,
+                      secondary: true,
+                      onPressed: widget.onClearTracks,
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          MacosIcon(CupertinoIcons.trash, size: 14),
+                          SizedBox(width: 6),
+                          Text("Clear All Tracks..."),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(width: 12),
                   PushButton(
                     controlSize: ControlSize.large,

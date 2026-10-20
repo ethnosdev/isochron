@@ -22,8 +22,8 @@ import '../utils/file_sync_tracker.dart';
 import '../utils/id_generator.dart';
 
 class AppManager extends ValueNotifier<AppState> {
-  final AudioService _audioService = AudioService();
-  final AlignmentService _alignmentService = AlignmentService();
+  final AudioService _audioService;
+  final AlignmentService _alignmentService;
   final _settings = UserSettingsService();
   VoidCallback? onSaveCallback;
 
@@ -165,7 +165,12 @@ class AppManager extends ValueNotifier<AppState> {
   Timer? _resettingTimeoutTimer;
   Timer? _nudgeDebounceTimer;
 
-  AppManager() : super(AppState(zoomLevel: UserSettingsService().lastZoom)) {
+  AppManager({
+    AudioService? audioService,
+    AlignmentService? alignmentService,
+  })  : _audioService = audioService ?? AudioService(),
+        _alignmentService = alignmentService ?? AlignmentService(),
+        super(AppState(zoomLevel: UserSettingsService().lastZoom)) {
     _posSub = _audioService.positionStream.listen(handleAudioPosition);
     _stateSub = _audioService.stateStream.listen((s) {
       value = value.copyWith(isPlaying: s.playing);
@@ -298,6 +303,32 @@ class AppManager extends ValueNotifier<AppState> {
       }
     }
 
+    if (loadedFragments.isNotEmpty) {
+      final trackName = track.name;
+      final idStyle = project.defaultIdStyle;
+      final prefix = project.defaultIdPrefix;
+      bool neededIds = false;
+      for (int i = 0; i < loadedFragments.length; i++) {
+        if (loadedFragments[i].id == null || loadedFragments[i].id!.isEmpty) {
+          final genId = IdGenerator.generateId(
+            style: idStyle,
+            trackName: trackName,
+            lineIndex: i,
+            customPrefix: prefix,
+          );
+          loadedFragments[i] = loadedFragments[i].copyWith(id: genId);
+          neededIds = true;
+        }
+      }
+      if (neededIds) {
+        final jsonList = loadedFragments.map((f) => f.toJson()).toList();
+        final jsonString = const JsonEncoder.withIndent('  ').convert(jsonList);
+        final file = File(absJsonPath);
+        FileSyncTracker.markLocallyWritten(file.path);
+        file.writeAsStringSync(jsonString);
+      }
+    }
+
     bool effectiveHasIds = false;
     if (File(validText).existsSync()) {
       try {
@@ -419,6 +450,8 @@ class AppManager extends ValueNotifier<AppState> {
       statusMessage: "Starting MMS neural aligner...",
     );
 
+    final existingFrags = List<Fragment>.from(value.fragments);
+
     try {
       final fragments = await _alignmentService.align(
         textPath: initiatingTextPath,
@@ -434,6 +467,29 @@ class AppManager extends ValueNotifier<AppState> {
           }
         },
       );
+
+      final trackName = currentTrack?.name ?? 'Track';
+      final idStyle = currentProject?.defaultIdStyle ??
+          IdGenerator.detectDefaultStyle(trackName);
+      final prefix = currentProject?.defaultIdPrefix;
+
+      for (int i = 0; i < fragments.length; i++) {
+        if (fragments[i].id == null || fragments[i].id!.isEmpty) {
+          if (i < existingFrags.length &&
+              existingFrags[i].id != null &&
+              existingFrags[i].id!.isNotEmpty) {
+            fragments[i] = fragments[i].copyWith(id: existingFrags[i].id);
+          } else {
+            final genId = IdGenerator.generateId(
+              style: idStyle,
+              trackName: trackName,
+              lineIndex: i,
+              customPrefix: prefix,
+            );
+            fragments[i] = fragments[i].copyWith(id: genId);
+          }
+        }
+      }
 
       final bool isStillActive = (value.autoSavePath == initiatingSavePath);
 

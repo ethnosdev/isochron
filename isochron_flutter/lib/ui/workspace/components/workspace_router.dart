@@ -93,6 +93,10 @@ class WorkspaceRouter extends StatelessWidget {
             context,
             manager.selectedNode!.collection!,
           ),
+          onClearTracks: () => manager.clearAllTracksInCollection(
+            context,
+            manager.selectedNode!.collection!,
+          ),
           onOpenTrack: (track) {
             manager.selectNode(
               TreeSelection(

@@ -26,12 +26,16 @@ class TrackPairingWizard extends StatefulWidget {
   final String collectionName;
   final List<String>? initialAudioFiles;
   final List<String>? initialTextFiles;
+  final List<PairedRow>? initialRows;
+  final bool isExistingCollection;
 
   const TrackPairingWizard({
     super.key,
     required this.collectionName,
     this.initialAudioFiles,
     this.initialTextFiles,
+    this.initialRows,
+    this.isExistingCollection = false,
   });
 
   static Future<TrackPairingResult?> show(
@@ -39,6 +43,8 @@ class TrackPairingWizard extends StatefulWidget {
     required String collectionName,
     List<String>? initialAudioFiles,
     List<String>? initialTextFiles,
+    List<PairedRow>? initialRows,
+    bool isExistingCollection = false,
   }) {
     return showAppSheet<TrackPairingResult>(
       context: context,
@@ -51,6 +57,8 @@ class TrackPairingWizard extends StatefulWidget {
             collectionName: collectionName,
             initialAudioFiles: initialAudioFiles,
             initialTextFiles: initialTextFiles,
+            initialRows: initialRows,
+            isExistingCollection: isExistingCollection,
           ),
         ),
       ),
@@ -78,15 +86,34 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
   @override
   void initState() {
     super.initState();
-    if (widget.initialAudioFiles != null) {
-      _audioFiles.addAll(widget.initialAudioFiles!);
-    }
-    if (widget.initialTextFiles != null) {
-      _textFiles.addAll(widget.initialTextFiles!);
-    }
-    if (_audioFiles.isNotEmpty || _textFiles.isNotEmpty) {
-      _recomputePairings();
+    if (widget.initialRows != null && widget.initialRows!.isNotEmpty) {
+      _rows.addAll(widget.initialRows!);
+      for (final r in _rows) {
+        if (r.audioPath != null && !_audioFiles.contains(r.audioPath!)) {
+          _audioFiles.add(r.audioPath!);
+        }
+        if (r.textPath != null && !_textFiles.contains(r.textPath!)) {
+          _textFiles.add(r.textPath!);
+        }
+      }
+      if (_audioFiles.isNotEmpty) {
+        _audioSourceLabel = '${_audioFiles.length} files in collection';
+      }
+      if (_textFiles.isNotEmpty) {
+        _textSourceLabel = '${_textFiles.length} files in collection';
+      }
       _checkTextIds();
+    } else {
+      if (widget.initialAudioFiles != null) {
+        _audioFiles.addAll(widget.initialAudioFiles!);
+      }
+      if (widget.initialTextFiles != null) {
+        _textFiles.addAll(widget.initialTextFiles!);
+      }
+      if (_audioFiles.isNotEmpty || _textFiles.isNotEmpty) {
+        _recomputePairings();
+        _checkTextIds();
+      }
     }
   }
 
@@ -265,7 +292,7 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
   int get _missingAudioCount => _rows.where((r) => r.isTextOnly).length;
 
   void _handleImport() {
-    if (_rows.isEmpty) return;
+    if (_rows.isEmpty && !widget.isExistingCollection) return;
     Navigator.of(context).pop(
       TrackPairingResult(
         rows: _rows,
@@ -292,12 +319,16 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Add & Pair Media — ${widget.collectionName}',
+                    widget.isExistingCollection
+                        ? 'Manage Track Pairings — ${widget.collectionName}'
+                        : 'Add & Pair Media — ${widget.collectionName}',
                     style: theme.typography.headline,
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Select audio recordings and transcripts to pair them into collection tracks.',
+                    widget.isExistingCollection
+                        ? 'Review, pair, replace, or reorder audio recordings and transcripts for this collection.'
+                        : 'Select audio recordings and transcripts to pair them into collection tracks.',
                     style: theme.typography.subheadline,
                   ),
                 ],
@@ -328,8 +359,14 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
                           setState(() {
                             _audioFiles.clear();
                             _audioSourceLabel = null;
+                            if (_textFiles.isEmpty) {
+                              _rows.clear();
+                            } else {
+                              for (final r in _rows) {
+                                r.audioPath = null;
+                              }
+                            }
                           });
-                          _recomputePairings();
                         },
                 ),
               ),
@@ -349,8 +386,15 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
                           setState(() {
                             _textFiles.clear();
                             _textSourceLabel = null;
+                            if (_audioFiles.isEmpty) {
+                              _rows.clear();
+                            } else {
+                              for (final r in _rows) {
+                                r.textPath = null;
+                              }
+                            }
+                            _checkTextIds();
                           });
-                          _recomputePairings();
                         },
                 ),
               ),
@@ -463,11 +507,17 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
                   const SizedBox(width: 10),
                   PushButton(
                     controlSize: ControlSize.large,
-                    onPressed: _rows.isNotEmpty ? _handleImport : null,
+                    onPressed: (widget.isExistingCollection || _rows.isNotEmpty)
+                        ? _handleImport
+                        : null,
                     child: Text(
-                      _rows.isEmpty
-                          ? 'Import Tracks'
-                          : 'Import ${_rows.length} Tracks',
+                      widget.isExistingCollection
+                          ? (_rows.isEmpty
+                              ? 'Clear All Tracks'
+                              : 'Update Collection')
+                          : (_rows.isEmpty
+                              ? 'Import Tracks'
+                              : 'Import ${_rows.length} Tracks'),
                     ),
                   ),
                 ],

@@ -4,14 +4,66 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isochron_cli/isochron_cli.dart';
+import 'package:isochron_flutter/services/alignment_service.dart';
+import 'package:isochron_flutter/services/audio_service.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/app_manager.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/workspace/components/workspace_toolbar.dart';
 import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
 import 'package:isochron_flutter/ui/workspace/workspace_manager.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:macos_ui/macos_ui.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
+
+class FakeAudioService extends AudioService {
+  @override
+  Stream<Duration> get positionStream => const Stream.empty();
+  @override
+  Stream<PlayerState> get stateStream => const Stream.empty();
+  @override
+  Duration? get duration => Duration.zero;
+  @override
+  Future<Duration> load(String path) async => Duration.zero;
+  @override
+  Future<void> pause() async {}
+  @override
+  Future<void> play() async {}
+  @override
+  Future<void> seek(Duration position) async {}
+  @override
+  void dispose() {}
+}
+
+class FakeAlignmentService extends AlignmentService {
+  FakeAlignmentService() : super.forTesting();
+
+  @override
+  Future<List<Fragment>> align({
+    required String textPath,
+    required String audioPath,
+    String? languageCode,
+    double leadInSeconds = 0.19,
+    double starScore = -2.0,
+    StarPlacement starPlacement = StarPlacement.segment,
+    String? modelPath,
+    ModelVariant modelVariant = ModelVariant.int8,
+    bool snapToPauses = true,
+    bool keepEdits = false,
+    List<Fragment>? existingFragments,
+    bool hasIds = false,
+    bool generateIds = false,
+    String? generatedIdPrefix,
+    int recordingNumber = 1,
+    required void Function(String status, double progress) onProgress,
+  }) async {
+    return [
+      Fragment(index: 0, text: 'Verse 1')..setRealTiming(start: 0.0, end: 2.0),
+      Fragment(index: 1, text: 'Verse 2')..setRealTiming(start: 2.0, end: 4.0),
+    ];
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -231,6 +283,98 @@ void main() {
       expect(track.status, AlignmentStatus.reviewed);
 
       wsManager.dispose();
+    });
+
+    test('runAlignment preserves and auto-generates fragment IDs after auto-align', () async {
+      final appManager = AppManager(
+        audioService: FakeAudioService(),
+        alignmentService: FakeAlignmentService(),
+      );
+      final track = Track(
+        id: 't1',
+        name: 'BSB_40_Mat_001',
+        outputFilename: 't1.json',
+      );
+      final col = Collection(id: 'c1', name: 'NT', tracks: [track]);
+      final project = Project(
+        id: 'p1',
+        name: 'BSB',
+        directoryPath: tempDir.path,
+        collections: [col],
+      );
+
+      final audioFile = File('${tempDir.path}/audio.wav');
+      await audioFile.writeAsString('RIFF dummy');
+      final textFile = File('${tempDir.path}/text.txt');
+      await textFile.writeAsString('Line 1\nLine 2');
+      final jsonFile = File('${tempDir.path}/t1.json');
+
+      appManager.currentTrack = track;
+      appManager.currentProject = project;
+
+      // Existing fragments had IDs generated or user-provided
+      appManager.value = appManager.value.copyWith(
+        audioPath: audioFile.path,
+        textPath: textFile.path,
+        autoSavePath: jsonFile.path,
+        fragments: [
+          Fragment(index: 0, id: '40001001', text: 'Line 1'),
+          Fragment(index: 1, id: '40001002', text: 'Line 2'),
+        ],
+      );
+
+      await appManager.runAlignment(trackId: 't1');
+
+      expect(appManager.value.fragments.length, 2);
+      expect(appManager.value.fragments[0].id, '40001001');
+      expect(appManager.value.fragments[1].id, '40001002');
+
+      appManager.dispose();
+    });
+
+    test('loadTrack auto-populates missing IDs for existing alignment JSON', () async {
+      final appManager = AppManager(
+        audioService: FakeAudioService(),
+        alignmentService: FakeAlignmentService(),
+      );
+      final col = Collection(id: 'c1', name: 'NT');
+      final track = Track(
+        id: 't1',
+        collectionId: 'c1',
+        name: 'BSB_40_Mat_001',
+        audioPath: 'audio.wav',
+        textPath: 'text.txt',
+        outputFilename: 't1.json',
+      );
+      col.tracks.add(track);
+      final project = Project(
+        id: 'p1',
+        name: 'BSB',
+        directoryPath: tempDir.path,
+        collections: [col],
+      );
+
+      final audioDir = Directory(p.join(tempDir.path, 'collections', 'NT', 'audio'))..createSync(recursive: true);
+      final textDir = Directory(p.join(tempDir.path, 'collections', 'NT', 'text'))..createSync(recursive: true);
+      final alignDir = Directory(p.join(tempDir.path, 'collections', 'NT', 'alignments'))..createSync(recursive: true);
+
+      File(p.join(audioDir.path, 'audio.wav')).writeAsStringSync('RIFF');
+      File(p.join(textDir.path, 'text.txt')).writeAsStringSync('Verse 1\nVerse 2');
+
+      // Write an alignment JSON where ID was null
+      final jsonFile = File(p.join(alignDir.path, 't1.json'));
+      jsonFile.writeAsStringSync(jsonEncode([
+        {'index': 0, 'text': 'Verse 1', 'start': 0.0, 'end': 1.0, 'id': null},
+        {'index': 1, 'text': 'Verse 2', 'start': 1.0, 'end': 2.0, 'id': null},
+      ]));
+
+      await appManager.loadTrack(track, project);
+
+      expect(appManager.value.fragments.length, 2);
+      expect(appManager.value.fragments[0].id, '40001001');
+      expect(appManager.value.fragments[1].id, '40001002');
+
+      appManager.dispose();
     });
 
     testWidgets('Toolbar has Auto-Align and no Save button', (tester) async {

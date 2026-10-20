@@ -3,17 +3,19 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/services/alignment_service.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/app_manager.dart';
+import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/workspace/components/track_pairing_wizard.dart';
 import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
 import 'package:isochron_flutter/utils/id_extraction.dart';
 import 'package:isochron_flutter/utils/media_pairing_engine.dart';
 import 'package:isochron_flutter/utils/natural_sort.dart';
+import 'package:macos_ui/macos_ui.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 import '../../utils/file_sync_tracker.dart';
@@ -390,17 +392,329 @@ class WorkspaceManager extends ChangeNotifier {
     BuildContext context,
     Collection col,
   ) async {
+    final projectDir = project?.directoryPath;
+    final isExisting = col.tracks.isNotEmpty;
+
+    List<PairedRow>? initialRows;
+    List<String>? initialAudio;
+    List<String>? initialText;
+
+    if (isExisting && projectDir != null) {
+      initialRows = col.tracks.map((t) {
+        return PairedRow(
+          name: t.name,
+          audioPath: t.getResolvedAudioPath(projectDir, col.folderName),
+          textPath: t.getResolvedTextPath(projectDir, col.folderName),
+        );
+      }).toList();
+
+      initialAudio = [];
+      initialText = [];
+      for (final r in initialRows) {
+        if (r.audioPath != null && !initialAudio.contains(r.audioPath!)) {
+          initialAudio.add(r.audioPath!);
+        }
+        if (r.textPath != null && !initialText.contains(r.textPath!)) {
+          initialText.add(r.textPath!);
+        }
+      }
+    }
+
     final result = await TrackPairingWizard.show(
       context,
       collectionName: col.name,
+      initialAudioFiles: initialAudio,
+      initialTextFiles: initialText,
+      initialRows: initialRows,
+      isExistingCollection: isExisting,
     );
-    if (result != null && result.rows.isNotEmpty) {
-      if (result.idStyle != null && project != null) {
-        project!.defaultIdStyle = result.idStyle!;
-        await project!.save();
+    if (result == null) return;
+
+    if (!isExisting) {
+      if (result.rows.isNotEmpty) {
+        if (result.idStyle != null && project != null) {
+          project!.defaultIdStyle = result.idStyle!;
+          await project!.save();
+        }
+        await importPairedRowsIntoCollection(col, result.rows);
       }
-      await importPairedRowsIntoCollection(col, result.rows);
+    } else {
+      if (!context.mounted) return;
+      await updateCollectionTracks(
+        context,
+        col,
+        result.rows,
+        idStyle: result.idStyle,
+      );
     }
+  }
+
+  /// Reconciles and updates existing collection tracks based on the pairing wizard result.
+  Future<void> updateCollectionTracks(
+    BuildContext? context,
+    Collection col,
+    List<PairedRow> newRows, {
+    IdGenerationStyle? idStyle,
+    bool skipConfirmation = false,
+  }) async {
+    if (project == null) return;
+    final projectDir = project!.directoryPath;
+    final copyMedia = project!.copyMediaIntoProject;
+
+    if (idStyle != null) {
+      project!.defaultIdStyle = idStyle;
+      await project!.save();
+    }
+
+    // Check which tracks have existing completed/reviewed alignments that would be invalidated or deleted
+    final List<Track> tracksToReset = [];
+    final List<Track> tracksToDelete = [];
+
+    final Set<PairedRow> matchedRows = {};
+    final Map<Track, PairedRow> trackToRow = {};
+
+    for (final track in col.tracks) {
+      final resolvedAudio =
+          track.getResolvedAudioPath(projectDir, col.folderName);
+      final resolvedText =
+          track.getResolvedTextPath(projectDir, col.folderName);
+
+      PairedRow? match = newRows
+          .where((r) =>
+              !matchedRows.contains(r) &&
+              r.name.trim().toLowerCase() == track.name.trim().toLowerCase())
+          .firstOrNull;
+      if (match == null && resolvedAudio != null) {
+        match = newRows
+            .where((r) =>
+                !matchedRows.contains(r) &&
+                (r.audioPath == resolvedAudio ||
+                    (r.audioPath != null &&
+                        p.basename(r.audioPath!) == p.basename(resolvedAudio))))
+            .firstOrNull;
+      }
+
+      if (match != null) {
+        matchedRows.add(match);
+        trackToRow[track] = match;
+
+        final audioChanged = match.audioPath != resolvedAudio;
+        final textChanged = match.textPath != resolvedText;
+        if (audioChanged || textChanged) {
+          if (track.status == AlignmentStatus.done ||
+              track.status == AlignmentStatus.reviewed) {
+            tracksToReset.add(track);
+          }
+        }
+      } else {
+        tracksToDelete.add(track);
+      }
+    }
+
+    final deletedAlignedCount = tracksToDelete
+        .where((t) =>
+            t.status == AlignmentStatus.done ||
+            t.status == AlignmentStatus.reviewed)
+        .length;
+
+    // Show confirmation dialog if any aligned/reviewed tracks will be reset or deleted
+    if (!skipConfirmation &&
+        context != null &&
+        (tracksToReset.isNotEmpty || deletedAlignedCount > 0)) {
+      if (!context.mounted) return;
+      final confirmed = await showAppAlertDialog<bool>(
+        context: context,
+        builder: (dialogContext) => MacosAlertDialog(
+          appIcon: const MacosIcon(
+            CupertinoIcons.exclamationmark_triangle_fill,
+            color: CupertinoColors.systemYellow,
+            size: 48,
+          ),
+          title: const Text('Reset Existing Alignments?'),
+          message: Text(
+            'Updating these track pairings will reset alignments for '
+            '${tracksToReset.length} modified track(s) and delete '
+            '${tracksToDelete.length} track(s).\n\n'
+            'Are you sure you want to proceed?',
+          ),
+          primaryButton: PushButton(
+            controlSize: ControlSize.large,
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Update Tracks'),
+          ),
+          secondaryButton: PushButton(
+            controlSize: ControlSize.large,
+            secondary: true,
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+        ),
+      );
+      if (confirmed != true) return;
+    }
+    Future<String?> processAudio(String audioPath) async {
+      if (!copyMedia) return audioPath;
+      final audioDir = Directory(
+        p.join(projectDir, 'collections', col.folderName, 'audio'),
+      );
+      if (!audioDir.existsSync()) audioDir.createSync(recursive: true);
+      final dest = p.join(audioDir.path, p.basename(audioPath));
+      if (File(audioPath).path != File(dest).path) {
+        File(audioPath).copySync(dest);
+      }
+      return p.basename(audioPath);
+    }
+
+    Future<String?> processText(String textPath) async {
+      if (!copyMedia) return textPath;
+      final textDir = Directory(
+        p.join(projectDir, 'collections', col.folderName, 'text'),
+      );
+      if (!textDir.existsSync()) textDir.createSync(recursive: true);
+      final dest = p.join(textDir.path, p.basename(textPath));
+      if (File(textPath).path != File(dest).path) {
+        File(textPath).copySync(dest);
+      }
+      return p.basename(textPath);
+    }
+
+    // Delete alignment files of deleted tracks
+    for (final track in tracksToDelete) {
+      final jsonPath = track.getAbsoluteOutputPath(projectDir, col.folderName);
+      final f = File(jsonPath);
+      if (f.existsSync()) {
+        f.deleteSync();
+      }
+    }
+
+    final Map<PairedRow, Track> rowToTrack = {
+      for (final entry in trackToRow.entries) entry.value: entry.key,
+    };
+
+    final List<Track> updatedTracks = [];
+
+    for (final row in newRows) {
+      final existingTrack = rowToTrack[row];
+      if (existingTrack != null) {
+        final resolvedAudio =
+            existingTrack.getResolvedAudioPath(projectDir, col.folderName);
+        final resolvedText =
+            existingTrack.getResolvedTextPath(projectDir, col.folderName);
+
+        final audioChanged = row.audioPath != resolvedAudio;
+        final textChanged = row.textPath != resolvedText;
+
+        existingTrack.name = row.name;
+
+        if (audioChanged || textChanged) {
+          final jsonPath =
+              existingTrack.getAbsoluteOutputPath(projectDir, col.folderName);
+          final f = File(jsonPath);
+          if (f.existsSync()) {
+            f.deleteSync();
+          }
+          existingTrack.audioPath = row.audioPath != null
+              ? await processAudio(row.audioPath!)
+              : null;
+          existingTrack.textPath = row.textPath != null
+              ? await processText(row.textPath!)
+              : null;
+          existingTrack.status = AlignmentStatus.pending;
+        }
+
+        updatedTracks.add(existingTrack);
+      } else {
+        final processedAudio = row.audioPath != null
+            ? await processAudio(row.audioPath!)
+            : null;
+        final processedText =
+            row.textPath != null ? await processText(row.textPath!) : null;
+        final trackName = row.name.isNotEmpty
+            ? row.name
+            : MediaPairingEngine.deriveTrackName(
+                audioPath: row.audioPath,
+                textPath: row.textPath,
+              );
+        final newTrack = Track(
+          id: uuid.v4(),
+          collectionId: col.id,
+          name: trackName,
+          audioPath: processedAudio,
+          textPath: processedText,
+          outputFilename: '${trackName}_timing.json',
+          status: AlignmentStatus.pending,
+        );
+        updatedTracks.add(newTrack);
+      }
+    }
+
+    col.tracks = updatedTracks;
+
+    // If currently selected track was removed, switch selection to collection
+    if (selectedNode?.track != null &&
+        !col.tracks.contains(selectedNode!.track)) {
+      selectNode(TreeSelection(type: NodeType.collection, collection: col));
+    }
+
+    await col.saveTracks(projectDir);
+    await project!.save();
+    notifyListeners();
+  }
+
+  /// Confirms and wipes all tracks and their alignment files from a collection.
+  Future<void> clearAllTracksInCollection(
+    BuildContext? context,
+    Collection col, {
+    bool skipConfirmation = false,
+  }) async {
+    if (project == null || col.tracks.isEmpty) return;
+    final projectDir = project!.directoryPath;
+
+    if (!skipConfirmation && context != null) {
+      if (!context.mounted) return;
+      final confirmed = await showAppAlertDialog<bool>(
+        context: context,
+        builder: (dialogContext) => MacosAlertDialog(
+          appIcon: const MacosIcon(
+            CupertinoIcons.trash,
+            color: CupertinoColors.destructiveRed,
+            size: 48,
+          ),
+          title: const Text('Delete All Tracks?'),
+          message: Text(
+            'Are you sure you want to delete all ${col.tracks.length} track(s) in "${col.name}"? This will delete all alignments in this collection and cannot be undone.',
+          ),
+          primaryButton: PushButton(
+            controlSize: ControlSize.large,
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete All Tracks'),
+          ),
+          secondaryButton: PushButton(
+            controlSize: ControlSize.large,
+            secondary: true,
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+        ),
+      );
+      if (confirmed != true) return;
+    }
+
+    for (final track in col.tracks) {
+      final jsonPath = track.getAbsoluteOutputPath(projectDir, col.folderName);
+      final f = File(jsonPath);
+      if (f.existsSync()) {
+        f.deleteSync();
+      }
+    }
+    col.tracks.clear();
+
+    if (selectedNode?.collection == col && selectedNode?.track != null) {
+      selectNode(TreeSelection(type: NodeType.collection, collection: col));
+    }
+    await col.saveTracks(projectDir);
+    await project!.save();
+    notifyListeners();
   }
 
   /// Imports a list of paired rows into the given collection, processing
