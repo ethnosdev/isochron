@@ -48,6 +48,8 @@ class IsochronWaveformPainter extends CustomPainter {
 
   static const double rulerHeight = 22.0;
 
+  static String formatBadgeLabel(int index) => '#${index + 1}';
+
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
@@ -312,10 +314,7 @@ class IsochronWaveformPainter extends CustomPainter {
 
       // Label Badge
       if (xEnd - xStart > 24) {
-        final labelText =
-            (xEnd - xStart > 65 && frag.id != null && frag.id!.isNotEmpty)
-                ? "#${frag.index + 1} • ${frag.id}"
-                : "#${frag.index + 1}";
+        final labelText = formatBadgeLabel(frag.index);
 
         textPainter.text = TextSpan(
           text: labelText,
