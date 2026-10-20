@@ -19,6 +19,7 @@ import 'models/app_state.dart';
 import '../services/alignment_service.dart';
 import '../services/audio_service.dart';
 import '../utils/file_sync_tracker.dart';
+import '../utils/id_generator.dart';
 
 class AppManager extends ValueNotifier<AppState> {
   final AudioService _audioService = AudioService();
@@ -301,19 +302,7 @@ class AppManager extends ValueNotifier<AppState> {
     if (File(validText).existsSync()) {
       try {
         final sample = File(validText).readAsStringSync();
-        if (detectTabDelimitedIds(sample)) {
-          effectiveHasIds = true;
-        } else {
-          final lines = File(validText).readAsLinesSync();
-          for (final line in lines) {
-            if (line.trim().isEmpty) continue;
-            final parsed = extractIdFromLine(line);
-            if (parsed.hasId) {
-              effectiveHasIds = true;
-              break;
-            }
-          }
-        }
+        effectiveHasIds = detectEmbeddedIds(sample);
       } catch (_) {}
     }
 
@@ -900,28 +889,13 @@ class AppManager extends ValueNotifier<AppState> {
     final frags = <Fragment>[];
     int idx = 0;
 
-    bool hasLeadingIds = false;
-    for (final line in lines) {
-      if (line.trim().isEmpty) continue;
-      final parsed = extractIdFromLine(line);
-      if (parsed.hasId) {
-        hasLeadingIds = true;
-        break;
-      }
-    }
+    final fullText = lines.join('\n');
+    final hasLeadingIds = detectEmbeddedIds(fullText);
 
-    final prefix = currentProject?.defaultIdPrefix ?? "";
-    String recStr = "001";
-    if (currentTrack != null && currentProject != null) {
-      final col = currentProject!.collections.firstWhere(
-        (c) => c.id == currentTrack!.collectionId,
-        orElse: () => currentProject!.collections.first,
-      );
-      final trackIndex = col.tracks.indexOf(currentTrack!) + 1;
-      if (trackIndex > 0) {
-        recStr = trackIndex.toString().padLeft(3, '0');
-      }
-    }
+    final trackName = currentTrack?.name ?? 'Track';
+    final idStyle = currentProject?.defaultIdStyle ??
+        IdGenerator.detectDefaultStyle(trackName);
+    final prefix = currentProject?.defaultIdPrefix;
 
     for (var line in lines) {
       if (line.trim().isEmpty) continue;
@@ -932,9 +906,14 @@ class AppManager extends ValueNotifier<AppState> {
         final parsed = extractIdFromLine(line);
         id = parsed.hasId ? parsed.id : null;
         content = parsed.content;
-      } else if (prefix.isNotEmpty) {
-        final verseStr = (idx + 1).toString().padLeft(3, '0');
-        id = '$prefix$recStr$verseStr';
+      } else {
+        id = IdGenerator.generateId(
+          style: idStyle,
+          trackName: trackName,
+          lineIndex: idx,
+          customPrefix: prefix,
+        );
+        content = line.trim();
       }
 
       frags.add(

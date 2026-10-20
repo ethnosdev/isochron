@@ -6,6 +6,7 @@ import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
 import 'package:isochron_flutter/ui/workspace/components/track_pairing_wizard.dart';
+import 'package:isochron_flutter/utils/id_generator.dart';
 import 'package:isochron_flutter/utils/media_pairing_engine.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:path/path.dart' as p;
@@ -16,12 +17,14 @@ class NewProjectResult {
   final String projectName;
   final String collectionName;
   final List<PairedRow>? initialTracks;
+  final IdGenerationStyle? idStyle;
 
   const NewProjectResult({
     required this.projectPath,
     required this.projectName,
     required this.collectionName,
     this.initialTracks,
+    this.idStyle,
   });
 }
 
@@ -54,6 +57,7 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
   String _parentDirectory = '';
   bool _isLoadingDir = true;
   List<PairedRow>? _stagedTracks;
+  IdGenerationStyle? _stagedIdStyle;
 
   @override
   void initState() {
@@ -124,6 +128,7 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
         projectName: _projectName,
         collectionName: _collectionName,
         initialTracks: _stagedTracks,
+        idStyle: _stagedIdStyle,
       ),
     );
   }
@@ -146,6 +151,7 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
     if (result != null && mounted) {
       setState(() {
         _stagedTracks = result.rows;
+        _stagedIdStyle = result.idStyle;
       });
       // Automatically proceed to create project with these staged tracks
       _handleCreate();

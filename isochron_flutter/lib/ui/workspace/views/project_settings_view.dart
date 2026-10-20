@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/settings/model_panel.dart';
+import 'package:isochron_flutter/utils/id_generator.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
 
@@ -22,6 +23,7 @@ class ProjectSettingsView extends StatefulWidget {
 
 class _ProjectSettingsViewState extends State<ProjectSettingsView> {
   late String _prefix;
+  late IdGenerationStyle _idStyle;
   late TextEditingController _projectNameController;
   late TextEditingController _prefixController;
   late TextEditingController _langController;
@@ -32,6 +34,7 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
   void initState() {
     super.initState();
     _prefix = widget.project.defaultIdPrefix ?? "";
+    _idStyle = widget.project.defaultIdStyle;
 
     _projectNameController = TextEditingController(text: widget.project.name);
     _prefixController = TextEditingController(text: _prefix);
@@ -63,6 +66,7 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
     }
     widget.project.defaultIdPrefix =
         _prefix.trim().isEmpty ? null : _prefix.trim();
+    widget.project.defaultIdStyle = _idStyle;
     final lang = _langController.text.trim();
     widget.project.languageCode = lang.isEmpty ? null : lang.toLowerCase();
     final leadIn = int.tryParse(_leadInController.text.trim());
@@ -254,35 +258,134 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                   const Text("Copy imported media into project folder"),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
+              Container(height: 1, color: theme.dividerColor),
+              const SizedBox(height: 20),
+
+              // --- FRAGMENT ID SYSTEM ---
+              Text("Fragment ID System", style: theme.typography.headline),
+              const SizedBox(height: 6),
               Text(
-                "Default ID Prefix (Optional)",
+                "Configure how fragment IDs are generated when transcript files do not contain embedded IDs.",
                 style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
+                  color: theme.typography.body.color?.withValues(alpha: 0.7),
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    "ID Style:",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: theme.typography.body.color,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  SizedBox(
+                    width: 320,
+                    child: MacosPopupButton<IdGenerationStyle>(
+                      value: _idStyle,
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() => _idStyle = val);
+                          _triggerSave();
+                        }
+                      },
+                      items: const [
+                        MacosPopupMenuItem(
+                          value: IdGenerationStyle.usfm8Digit,
+                          child: Text('USFM 8-Digit (Scripture: 40001001)'),
+                        ),
+                        MacosPopupMenuItem(
+                          value: IdGenerationStyle.trackScoped,
+                          child: Text('Track Name + Number (Track_001)'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              Text(
+                "Book Number / Custom Prefix (Optional):",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
                   color: theme.typography.body.color,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
-                "Used to auto-generate sequential IDs when transcript files do not contain embedded IDs.",
+                "Overrides the book number (for USFM) or track prefix. If empty, values are auto-detected from filenames.",
                 style: TextStyle(
                   fontSize: 12,
                   color: AppTheme.grey(context),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               SizedBox(
-                width: 300,
+                width: 280,
                 child: MacosTextField(
                   controller: _prefixController,
-                  placeholder: 'e.g. 40, MRK, MAT',
+                  placeholder: 'e.g. 40, MRK, Lesson1',
                   decoration: textFieldDecoration,
                   onChanged: (val) {
                     setState(() => _prefix = val);
                     _triggerSave();
                   },
                 ),
+              ),
+              const SizedBox(height: 12),
+
+              // Live preview box
+              Builder(
+                builder: (context) {
+                  final preview = IdGenerator.generatePreview(
+                    style: _idStyle,
+                    trackName: widget.project.collections.isNotEmpty &&
+                            widget.project.collections.first.tracks.isNotEmpty
+                        ? widget.project.collections.first.tracks.first.name
+                        : 'BSB_40_Mat_001',
+                    customPrefix: _prefix.isEmpty ? null : _prefix,
+                  );
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.brightness == Brightness.dark
+                          ? const Color(0xFF222222)
+                          : const Color(0xFFF5F5F5),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: theme.dividerColor),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          "Preview: ",
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          preview.join(', '),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontFamily: 'monospace',
+                            color: AppTheme.accent(context),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
 
               const SizedBox(height: 32),

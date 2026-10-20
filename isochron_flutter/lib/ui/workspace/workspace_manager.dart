@@ -17,6 +17,7 @@ import 'package:isochron_flutter/utils/natural_sort.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 import '../../utils/file_sync_tracker.dart';
+import '../../utils/id_generator.dart';
 
 class ImportResult {
   final int collectionsCount;
@@ -120,6 +121,7 @@ class WorkspaceManager extends ChangeNotifier {
     String projectName, {
     String firstCollectionName = "Main",
     List<PairedRow>? initialTracks,
+    IdGenerationStyle? idStyle,
   }) async {
     final projectDir = Directory(projectPath);
     await projectDir.create(recursive: true);
@@ -129,6 +131,7 @@ class WorkspaceManager extends ChangeNotifier {
       id: uuid.v4(),
       name: projectName,
       directoryPath: projectDir.path,
+      defaultIdStyle: idStyle ?? IdGenerationStyle.usfm8Digit,
     );
 
     final defaultCollection = Collection(
@@ -392,6 +395,10 @@ class WorkspaceManager extends ChangeNotifier {
       collectionName: col.name,
     );
     if (result != null && result.rows.isNotEmpty) {
+      if (result.idStyle != null && project != null) {
+        project!.defaultIdStyle = result.idStyle!;
+        await project!.save();
+      }
       await importPairedRowsIntoCollection(col, result.rows);
     }
   }
@@ -842,19 +849,7 @@ class WorkspaceManager extends ChangeNotifier {
         bool shouldExtractIds = false;
         try {
           final sample = await File(resolvedText).readAsString();
-          if (detectTabDelimitedIds(sample)) {
-            shouldExtractIds = true;
-          } else {
-            final lines = await File(resolvedText).readAsLines();
-            for (final line in lines) {
-              if (line.trim().isEmpty) continue;
-              final parsed = extractIdFromLine(line);
-              if (parsed.hasId) {
-                shouldExtractIds = true;
-                break;
-              }
-            }
-          }
+          shouldExtractIds = detectEmbeddedIds(sample);
         } catch (_) {}
 
         if (shouldExtractIds) {
@@ -906,15 +901,16 @@ class WorkspaceManager extends ChangeNotifier {
               fragments[i] = fragments[i].copyWith(id: extractedIds[i]);
             }
           }
-        } else if (project!.defaultIdPrefix != null &&
-            project!.defaultIdPrefix!.isNotEmpty) {
-          final prefix = project!.defaultIdPrefix!;
-          int trackIdx = collection.tracks.indexOf(canonicalTrack) + 1;
-          if (trackIdx <= 0) trackIdx = collection.tracks.indexOf(track) + 1;
-          final recStr = trackIdx.toString().padLeft(3, '0');
+        } else {
+          final idStyle = project!.defaultIdStyle;
           for (int j = 0; j < fragments.length; j++) {
-            final verseStr = (j + 1).toString().padLeft(3, '0');
-            fragments[j] = fragments[j].copyWith(id: '$prefix$recStr$verseStr');
+            final genId = IdGenerator.generateId(
+              style: idStyle,
+              trackName: canonicalTrack.name,
+              lineIndex: j,
+              customPrefix: project!.defaultIdPrefix,
+            );
+            fragments[j] = fragments[j].copyWith(id: genId);
           }
         }
 

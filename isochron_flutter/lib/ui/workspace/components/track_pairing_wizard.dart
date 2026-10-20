@@ -2,9 +2,11 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
+import 'package:isochron_flutter/utils/id_generator.dart';
 import 'package:isochron_flutter/utils/media_pairing_engine.dart';
 import 'package:isochron_flutter/utils/natural_sort.dart';
 import 'package:macos_ui/macos_ui.dart';
@@ -12,8 +14,12 @@ import 'package:path/path.dart' as p;
 
 class TrackPairingResult {
   final List<PairedRow> rows;
+  final IdGenerationStyle? idStyle;
 
-  const TrackPairingResult({required this.rows});
+  const TrackPairingResult({
+    required this.rows,
+    this.idStyle,
+  });
 }
 
 class TrackPairingWizard extends StatefulWidget {
@@ -63,6 +69,9 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
   PairingStrategy _strategy = PairingStrategy.smartAuto;
   TrackNameRule _nameRule = TrackNameRule.audioStem;
 
+  bool _hasEmbeddedIds = true;
+  IdGenerationStyle _idStyle = IdGenerationStyle.usfm8Digit;
+
   String? _audioSourceLabel;
   String? _textSourceLabel;
 
@@ -77,6 +86,29 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
     }
     if (_audioFiles.isNotEmpty || _textFiles.isNotEmpty) {
       _recomputePairings();
+      _checkTextIds();
+    }
+  }
+
+  void _checkTextIds() {
+    if (_textFiles.isEmpty) {
+      _hasEmbeddedIds = true;
+      return;
+    }
+    try {
+      final sample = File(_textFiles.first).readAsStringSync();
+      final hasIds = detectEmbeddedIds(sample);
+      _hasEmbeddedIds = hasIds;
+      if (!_hasEmbeddedIds) {
+        final sampleName = _rows.isNotEmpty
+            ? _rows.first.name
+            : (_audioFiles.isNotEmpty
+                ? p.basenameWithoutExtension(_audioFiles.first)
+                : 'BSB_40_Mat_001');
+        _idStyle = IdGenerator.detectDefaultStyle(sampleName);
+      }
+    } catch (_) {
+      _hasEmbeddedIds = true;
     }
   }
 
@@ -125,6 +157,7 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
       _audioSourceLabel = p.basename(picked);
     });
     _recomputePairings();
+    _checkTextIds();
   }
 
   Future<void> _pickAudioFiles() async {
@@ -173,6 +206,7 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
       _textSourceLabel = p.basename(picked);
     });
     _recomputePairings();
+    _checkTextIds();
   }
 
   Future<void> _pickTextFiles() async {
@@ -200,6 +234,7 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
       _textSourceLabel = '${pickedPaths.length} selected';
     });
     _recomputePairings();
+    _checkTextIds();
   }
 
   Future<List<String>> _scanDirectory(
@@ -231,7 +266,12 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
 
   void _handleImport() {
     if (_rows.isEmpty) return;
-    Navigator.of(context).pop(TrackPairingResult(rows: _rows));
+    Navigator.of(context).pop(
+      TrackPairingResult(
+        rows: _rows,
+        idStyle: !_hasEmbeddedIds ? _idStyle : null,
+      ),
+    );
   }
 
   @override
@@ -316,7 +356,13 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
+
+          // ID Configuration Card (when plain text without IDs is detected)
+          if (_textFiles.isNotEmpty && !_hasEmbeddedIds) ...[
+            _buildIdConfigCard(theme, isDark),
+            const SizedBox(height: 10),
+          ],
 
           // Toolbar / Controls Bar
           if (_rows.isNotEmpty || _audioFiles.isNotEmpty || _textFiles.isNotEmpty)
@@ -525,6 +571,90 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
                 child: const Text('Select Files...'),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIdConfigCard(MacosThemeData theme, bool isDark) {
+    final sampleName = _rows.isNotEmpty
+        ? _rows.first.name
+        : (_audioFiles.isNotEmpty
+            ? p.basenameWithoutExtension(_audioFiles.first)
+            : 'BSB_40_Mat_001');
+    final preview = IdGenerator.generatePreview(
+      style: _idStyle,
+      trackName: sampleName,
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+      decoration: BoxDecoration(
+        color: AppTheme.accent(context).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6.0),
+        border: Border.all(
+          color: AppTheme.accent(context).withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            CupertinoIcons.number_circle_fill,
+            color: AppTheme.accent(context),
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'No embedded IDs in transcripts — Auto-generating IDs: ',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      height: 26,
+                      child: MacosPopupButton<IdGenerationStyle>(
+                        value: _idStyle,
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _idStyle = val);
+                          }
+                        },
+                        items: const [
+                          MacosPopupMenuItem(
+                            value: IdGenerationStyle.usfm8Digit,
+                            child: Text('USFM 8-Digit (40001001)'),
+                          ),
+                          MacosPopupMenuItem(
+                            value: IdGenerationStyle.trackScoped,
+                            child: Text('Track Name + Number (Track_001)'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Preview for first track: ${preview.join(", ")}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontFamily: 'monospace',
+                    color: AppTheme.accent(context),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

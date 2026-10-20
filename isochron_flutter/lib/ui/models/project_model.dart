@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 import '../../utils/file_sync_tracker.dart';
+import '../../utils/id_generator.dart';
 
 enum AlignmentStatus { pending, processing, done, reviewed, error }
 
@@ -167,6 +168,7 @@ class Project {
   bool defaultHasIds;
   bool defaultGenerateIds;
   String? defaultIdPrefix;
+  IdGenerationStyle defaultIdStyle;
   bool copyMediaIntoProject;
   bool hasPromptedForMediaStorage;
 
@@ -182,6 +184,7 @@ class Project {
     this.defaultHasIds = false,
     this.defaultGenerateIds = false,
     this.defaultIdPrefix,
+    this.defaultIdStyle = IdGenerationStyle.usfm8Digit,
     this.copyMediaIntoProject = false,
     this.hasPromptedForMediaStorage = false,
   }) : collections = collections ?? [];
@@ -198,6 +201,7 @@ class Project {
     'defaultHasIds': defaultHasIds,
     'defaultGenerateIds': defaultGenerateIds,
     'defaultIdPrefix': defaultIdPrefix,
+    'defaultIdStyle': defaultIdStyle.name,
     'copyMediaIntoProject': copyMediaIntoProject,
     'hasPromptedForMediaStorage': hasPromptedForMediaStorage,
   };
@@ -312,6 +316,9 @@ class Project {
       defaultIdPrefix:
           json['defaultIdPrefix']?.toString() ??
           json['generatedIdPrefix']?.toString(),
+      defaultIdStyle: json['defaultIdStyle'] == 'trackScoped'
+          ? IdGenerationStyle.trackScoped
+          : IdGenerationStyle.usfm8Digit,
       copyMediaIntoProject: json['copyMediaIntoProject'] ?? false,
       hasPromptedForMediaStorage: json['hasPromptedForMediaStorage'] ?? false,
     );

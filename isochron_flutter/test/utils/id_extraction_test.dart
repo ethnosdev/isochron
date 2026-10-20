@@ -37,5 +37,16 @@ void main() {
       expect(parsed.id, '');
       expect(parsed.content, 'InTheBeginning');
     });
+
+    test('does not treat ordinary sentence words as IDs', () {
+      final parsed = extractIdFromLine('In the beginning was the Word');
+      expect(parsed.hasId, isFalse);
+      expect(parsed.id, '');
+      expect(parsed.content, 'In the beginning was the Word');
+
+      final p2 = extractIdFromLine('The book of the generation');
+      expect(p2.hasId, isFalse);
+      expect(p2.content, 'The book of the generation');
+    });
   });
 }

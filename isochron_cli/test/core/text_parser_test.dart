@@ -38,6 +38,28 @@ void main() {
       final result = splitIdAndText('40001001 In the beginning');
       expect(result.id, '40001001');
       expect(result.text, 'In the beginning');
+
+      final verseResult = splitIdAndText('1:1 In the beginning');
+      expect(verseResult.id, '1:1');
+      expect(verseResult.text, 'In the beginning');
+
+      final dotResult = splitIdAndText('MAT.1.1 In the beginning');
+      expect(dotResult.id, 'MAT.1.1');
+      expect(dotResult.text, 'In the beginning');
+    });
+
+    test('does not treat natural language words as space-delimited IDs', () {
+      final r1 = splitIdAndText('In the beginning was the Word');
+      expect(r1.id, isNull);
+      expect(r1.text, 'In the beginning was the Word');
+
+      final r2 = splitIdAndText('The book of the generation');
+      expect(r2.id, isNull);
+      expect(r2.text, 'The book of the generation');
+
+      final r3 = splitIdAndText('Abraham begat Isaac');
+      expect(r3.id, isNull);
+      expect(r3.text, 'Abraham begat Isaac');
     });
 
     test('returns null id for single token lines', () {
@@ -57,21 +79,38 @@ void main() {
     });
   });
 
-  group('detectTabDelimitedIds', () {
-    test('returns true when non-empty line has tab delimiter', () {
-      const text = '''
-s1\tlaa nethantogto be go pezi kor.
-1a\tkon chhog gi ku dunlu nge
-''';
-      expect(detectTabDelimitedIds(text), isTrue);
+  group('detectEmbeddedIds', () {
+    test('returns true for tab-delimited text', () {
+      const text = 's1\tPhrase text here\ns2\tSecond phrase';
+      expect(detectEmbeddedIds(text), isTrue);
     });
 
-    test('returns false when text uses only spaces or has no IDs', () {
+    test('returns true for consistent space-delimited ID text', () {
       const text = '''
-Line one text here.
-Line two text here.
+40001001 The book of generation
+40001002 Abraham begat Isaac
+40001003 Judas begat Phares
 ''';
-      expect(detectTabDelimitedIds(text), isFalse);
+      expect(detectEmbeddedIds(text), isTrue);
+    });
+
+    test('returns false for plain natural language text', () {
+      const text = '''
+The book of the generation of Jesus Christ.
+Abraham begat Isaac; and Isaac begat Jacob.
+And Judas begat Phares and Zara of Thamar.
+''';
+      expect(detectEmbeddedIds(text), isFalse);
+    });
+
+    test('returns false when only an isolated line starts with a number', () {
+      const text = '''
+Once upon a time.
+3 days later they departed.
+And they arrived safely.
+Everyone was glad.
+''';
+      expect(detectEmbeddedIds(text), isFalse);
     });
   });
 
