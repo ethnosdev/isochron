@@ -159,6 +159,7 @@ class WorkspaceManager extends ChangeNotifier {
     if (project != null && clean.isNotEmpty && clean != project!.name) {
       project!.name = clean;
       await project!.save();
+      await UserSettingsService().addRecentProject(project!.projectFilePath);
       notifyListeners();
     }
   }

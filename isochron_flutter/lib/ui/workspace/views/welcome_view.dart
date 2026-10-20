@@ -4,7 +4,6 @@ import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/settings/model_panel.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
 import 'package:macos_ui/macos_ui.dart';
-import 'package:path/path.dart' as p;
 
 class WelcomeView extends StatefulWidget {
   final VoidCallback onCreateNewProject;
@@ -43,7 +42,7 @@ class _WelcomeViewState extends State<WelcomeView> {
   @override
   Widget build(BuildContext context) {
     final theme = MacosTheme.of(context);
-    final recentProjects = UserSettingsService().recentProjectPaths;
+    final recentProjects = UserSettingsService().recentProjects;
     final isModelReady = _modelStatus == ModelStatus.ready;
 
     return MacosWindow(
@@ -234,19 +233,13 @@ class _WelcomeViewState extends State<WelcomeView> {
                                         ),
                                       ),
                                       itemBuilder: (context, index) {
-                                        final path = recentProjects[index];
-                                        final projectName = p.basename(
-                                          p.dirname(path),
-                                        );
-                                        final directory = p.dirname(path);
+                                        final item = recentProjects[index];
 
                                         return _RecentProjectRow(
-                                          name: projectName.isNotEmpty
-                                              ? projectName
-                                              : p.basename(path),
-                                          directory: directory,
+                                          name: item.name,
+                                          directory: item.directory,
                                           onTap: () =>
-                                              widget.onOpenRecentProject(path),
+                                              widget.onOpenRecentProject(item.path),
                                         );
                                       },
                                     ),

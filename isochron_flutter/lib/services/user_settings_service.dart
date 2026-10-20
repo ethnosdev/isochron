@@ -1,8 +1,22 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum AppThemeMode { system, light, dark }
+
+class RecentProjectEntry {
+  final String path;
+  final String name;
+  final String directory;
+
+  const RecentProjectEntry({
+    required this.path,
+    required this.name,
+    required this.directory,
+  });
+}
 
 class UserSettingsService {
   // Singleton Pattern
@@ -87,6 +101,42 @@ class UserSettingsService {
   List<String> get recentProjectPaths {
     final list = _prefs.getStringList(_keyRecentProjects) ?? [];
     return list.where((path) => File(path).existsSync()).toList();
+  }
+
+  /// Returns recent projects parsed with their display names read from project.json
+  /// (falling back to folder name if unreadable).
+  List<RecentProjectEntry> get recentProjects {
+    final paths = recentProjectPaths;
+    return paths.map((path) {
+      String name = '';
+      try {
+        final file = File(path);
+        if (file.existsSync()) {
+          final content = file.readAsStringSync();
+          final data = jsonDecode(content);
+          if (data is Map &&
+              data['name'] != null &&
+              data['name'].toString().trim().isNotEmpty) {
+            name = data['name'].toString().trim();
+          }
+        }
+      } catch (_) {}
+
+      final dir = FileSystemEntity.isDirectorySync(path)
+          ? path
+          : p.dirname(path);
+
+      if (name.isEmpty) {
+        name = p.basename(dir);
+        if (name.isEmpty) name = p.basename(path);
+      }
+
+      return RecentProjectEntry(
+        path: path,
+        name: name,
+        directory: dir,
+      );
+    }).toList();
   }
 
   Future<void> addRecentProject(String projectJsonPath) async {

@@ -32,16 +32,10 @@ void main() {
 
       await tester.pumpWidget(
         _buildTestApp(
-          const TrackPairingWizard(
+          TrackPairingWizard(
             collectionName: 'NT',
-            initialAudioFiles: [
-              '/test/BSB_40_Mat_001.mp3',
-              '/test/BSB_40_Mat_002.mp3',
-            ],
-            initialTextFiles: [
-              '/test/BSB_40_Mat_001.txt',
-              '/test/BSB_40_Mat_002.txt',
-            ],
+            initialAudioFiles: audio,
+            initialTextFiles: text,
           ),
         ),
       );
