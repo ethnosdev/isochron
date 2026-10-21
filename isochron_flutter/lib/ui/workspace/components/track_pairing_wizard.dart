@@ -15,10 +15,12 @@ import 'package:path/path.dart' as p;
 class TrackPairingResult {
   final List<PairedRow> rows;
   final IdGenerationStyle? idStyle;
+  final bool copyMediaIntoProject;
 
   const TrackPairingResult({
     required this.rows,
     this.idStyle,
+    this.copyMediaIntoProject = false,
   });
 }
 
@@ -28,6 +30,7 @@ class TrackPairingWizard extends StatefulWidget {
   final List<String>? initialTextFiles;
   final List<PairedRow>? initialRows;
   final bool isExistingCollection;
+  final bool initialCopyMedia;
 
   const TrackPairingWizard({
     super.key,
@@ -36,6 +39,7 @@ class TrackPairingWizard extends StatefulWidget {
     this.initialTextFiles,
     this.initialRows,
     this.isExistingCollection = false,
+    this.initialCopyMedia = false,
   });
 
   static Future<TrackPairingResult?> show(
@@ -45,6 +49,7 @@ class TrackPairingWizard extends StatefulWidget {
     List<String>? initialTextFiles,
     List<PairedRow>? initialRows,
     bool isExistingCollection = false,
+    bool initialCopyMedia = false,
   }) {
     return showAppSheet<TrackPairingResult>(
       context: context,
@@ -59,6 +64,7 @@ class TrackPairingWizard extends StatefulWidget {
             initialTextFiles: initialTextFiles,
             initialRows: initialRows,
             isExistingCollection: isExistingCollection,
+            initialCopyMedia: initialCopyMedia,
           ),
         ),
       ),
@@ -79,6 +85,7 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
 
   bool _hasEmbeddedIds = true;
   IdGenerationStyle _idStyle = IdGenerationStyle.usfm8Digit;
+  late bool _copyMedia;
 
   String? _audioSourceLabel;
   String? _textSourceLabel;
@@ -86,6 +93,7 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
   @override
   void initState() {
     super.initState();
+    _copyMedia = widget.initialCopyMedia;
     if (widget.initialRows != null && widget.initialRows!.isNotEmpty) {
       _rows.addAll(widget.initialRows!);
       for (final r in _rows) {
@@ -297,6 +305,7 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
       TrackPairingResult(
         rows: _rows,
         idStyle: !_hasEmbeddedIds ? _idStyle : null,
+        copyMediaIntoProject: _copyMedia,
       ),
     );
   }
@@ -463,7 +472,26 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
                     ),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
+
+          // Copy Media Checkbox
+          Row(
+            children: [
+              MacosCheckbox(
+                value: _copyMedia,
+                activeColor: AppTheme.accent(context),
+                onChanged: (val) {
+                  setState(() => _copyMedia = val);
+                },
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Copy media into project folder (for project portability)',
+                style: TextStyle(fontSize: 12.5),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
 
           // Footer
           Row(

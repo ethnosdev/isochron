@@ -111,22 +111,14 @@ class IdGenerator {
     required int lineIndex,
     int? customBookNumber,
     int? customChapterNumber,
-    String? customPrefix,
   }) {
     final verseNum = lineIndex + 1;
 
     switch (style) {
       case IdGenerationStyle.usfm8Digit:
         final parsed = extractBookAndChapter(trackName);
-        int book = customBookNumber ?? parsed.bookNumber ?? 40;
-        int chapter = customChapterNumber ?? parsed.chapterNumber ?? 1;
-
-        if (customPrefix != null && customPrefix.isNotEmpty) {
-          final prefixNum = int.tryParse(customPrefix);
-          if (prefixNum != null) {
-            book = prefixNum;
-          }
-        }
+        final book = customBookNumber ?? parsed.bookNumber ?? 40;
+        final chapter = customChapterNumber ?? parsed.chapterNumber ?? 1;
 
         final bStr = book.toString().padLeft(2, '0');
         final cStr = chapter.toString().padLeft(3, '0');
@@ -134,9 +126,7 @@ class IdGenerator {
         return '$bStr$cStr$vStr';
 
       case IdGenerationStyle.trackScoped:
-        final stem = customPrefix != null && customPrefix.isNotEmpty
-            ? customPrefix
-            : p.basenameWithoutExtension(trackName);
+        final stem = p.basenameWithoutExtension(trackName);
         final vStr = verseNum.toString().padLeft(3, '0');
         return '${stem}_$vStr';
     }
@@ -147,7 +137,6 @@ class IdGenerator {
     required IdGenerationStyle style,
     required String trackName,
     int count = 3,
-    String? customPrefix,
   }) {
     return List.generate(
       count,
@@ -155,7 +144,6 @@ class IdGenerator {
         style: style,
         trackName: trackName,
         lineIndex: i,
-        customPrefix: customPrefix,
       ),
     );
   }

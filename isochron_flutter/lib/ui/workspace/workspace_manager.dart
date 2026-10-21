@@ -124,6 +124,7 @@ class WorkspaceManager extends ChangeNotifier {
     String firstCollectionName = "Main",
     List<PairedRow>? initialTracks,
     IdGenerationStyle? idStyle,
+    bool copyMediaIntoProject = false,
   }) async {
     final projectDir = Directory(projectPath);
     await projectDir.create(recursive: true);
@@ -134,6 +135,7 @@ class WorkspaceManager extends ChangeNotifier {
       name: projectName,
       directoryPath: projectDir.path,
       defaultIdStyle: idStyle ?? IdGenerationStyle.usfm8Digit,
+      copyMediaIntoProject: copyMediaIntoProject,
     );
 
     final defaultCollection = Collection(
@@ -157,6 +159,79 @@ class WorkspaceManager extends ChangeNotifier {
     );
     _startDirectoryWatcher();
     notifyListeners();
+  }
+
+  /// Checks if any tracks currently reference external media files.
+  bool hasExternalMedia() {
+    if (project == null) return false;
+    for (final col in project!.collections) {
+      for (final track in col.tracks) {
+        if (track.audioPath != null && p.isAbsolute(track.audioPath!)) {
+          return true;
+        }
+        if (track.textPath != null && p.isAbsolute(track.textPath!)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /// Copies all external media files into the project directory structure
+  /// and updates track paths to be relative, ensuring full project portability.
+  /// Returns the number of files copied.
+  Future<int> consolidateExternalMedia() async {
+    if (project == null) return 0;
+    final projectDir = project!.directoryPath;
+    int filesCopied = 0;
+
+    for (final col in project!.collections) {
+      bool colChanged = false;
+      final audioDir = Directory(
+        p.join(projectDir, 'collections', col.folderName, 'audio'),
+      );
+      final textDir = Directory(
+        p.join(projectDir, 'collections', col.folderName, 'text'),
+      );
+
+      for (final track in col.tracks) {
+        if (track.audioPath != null && p.isAbsolute(track.audioPath!)) {
+          final src = File(track.audioPath!);
+          if (await src.exists()) {
+            if (!await audioDir.exists()) await audioDir.create(recursive: true);
+            final destPath = p.join(audioDir.path, p.basename(track.audioPath!));
+            if (p.canonicalize(src.path) != p.canonicalize(destPath)) {
+              await src.copy(destPath);
+              filesCopied++;
+            }
+            track.audioPath = p.basename(track.audioPath!);
+            colChanged = true;
+          }
+        }
+
+        if (track.textPath != null && p.isAbsolute(track.textPath!)) {
+          final src = File(track.textPath!);
+          if (await src.exists()) {
+            if (!await textDir.exists()) await textDir.create(recursive: true);
+            final destPath = p.join(textDir.path, p.basename(track.textPath!));
+            if (p.canonicalize(src.path) != p.canonicalize(destPath)) {
+              await src.copy(destPath);
+              filesCopied++;
+            }
+            track.textPath = p.basename(track.textPath!);
+            colChanged = true;
+          }
+        }
+      }
+
+      if (colChanged) {
+        await col.saveTracks(projectDir);
+      }
+    }
+
+    await project!.save();
+    notifyListeners();
+    return filesCopied;
   }
 
   Future<void> renameProject(String newName) async {
@@ -427,8 +502,15 @@ class WorkspaceManager extends ChangeNotifier {
       initialTextFiles: initialText,
       initialRows: initialRows,
       isExistingCollection: isExisting,
+      initialCopyMedia: project?.copyMediaIntoProject ?? false,
     );
     if (result == null) return;
+
+    if (project != null &&
+        project!.copyMediaIntoProject != result.copyMediaIntoProject) {
+      project!.copyMediaIntoProject = result.copyMediaIntoProject;
+      await project!.save();
+    }
 
     if (!isExisting) {
       if (result.rows.isNotEmpty) {
@@ -1222,7 +1304,6 @@ class WorkspaceManager extends ChangeNotifier {
               style: idStyle,
               trackName: canonicalTrack.name,
               lineIndex: j,
-              customPrefix: project!.defaultIdPrefix,
             );
             fragments[j] = fragments[j].copyWith(id: genId);
           }

@@ -239,5 +239,36 @@ And Judas begat Phares and Zara of Thamar.
 
       expect(find.text('Clear All Tracks'), findsOneWidget);
     });
+
+    testWidgets('renders copy media checkbox and reflects initialCopyMedia',
+        (tester) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          const TrackPairingWizard(
+            collectionName: 'NT',
+            initialCopyMedia: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Copy media into project folder (for project portability)'),
+        findsOneWidget,
+      );
+
+      final checkbox = tester.widget<MacosCheckbox>(find.byType(MacosCheckbox));
+      expect(checkbox.value, isTrue);
+
+      await tester.tap(find.byType(MacosCheckbox));
+      await tester.pumpAndSettle();
+
+      final updatedCheckbox = tester.widget<MacosCheckbox>(find.byType(MacosCheckbox));
+      expect(updatedCheckbox.value, isFalse);
+    });
   });
 }

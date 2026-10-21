@@ -125,6 +125,7 @@ class WorkspaceRouter extends StatelessWidget {
       case NodeType.settings:
         return ProjectSettingsView(
           project: manager.project!,
+          manager: manager,
           onSaved: () {
             manager.project!.saveSettingsOnly();
             manager.refreshUi();

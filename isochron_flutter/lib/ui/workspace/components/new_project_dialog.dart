@@ -18,6 +18,7 @@ class NewProjectResult {
   final String collectionName;
   final List<PairedRow>? initialTracks;
   final IdGenerationStyle? idStyle;
+  final bool copyMediaIntoProject;
 
   const NewProjectResult({
     required this.projectPath,
@@ -25,6 +26,7 @@ class NewProjectResult {
     required this.collectionName,
     this.initialTracks,
     this.idStyle,
+    this.copyMediaIntoProject = false,
   });
 }
 
@@ -58,6 +60,7 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
   bool _isLoadingDir = true;
   List<PairedRow>? _stagedTracks;
   IdGenerationStyle? _stagedIdStyle;
+  bool _copyMediaIntoProject = false;
 
   @override
   void initState() {
@@ -129,6 +132,7 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
         collectionName: _collectionName,
         initialTracks: _stagedTracks,
         idStyle: _stagedIdStyle,
+        copyMediaIntoProject: _copyMediaIntoProject,
       ),
     );
   }
@@ -146,12 +150,14 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
           ?.where((r) => r.textPath != null)
           .map((r) => r.textPath!)
           .toList(),
+      initialCopyMedia: _copyMediaIntoProject,
     );
 
     if (result != null && mounted) {
       setState(() {
         _stagedTracks = result.rows;
         _stagedIdStyle = result.idStyle;
+        _copyMediaIntoProject = result.copyMediaIntoProject;
       });
       // Automatically proceed to create project with these staged tracks
       _handleCreate();
@@ -294,7 +300,26 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
                 overflow: TextOverflow.ellipsis,
               ),
             ],
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+
+            // Copy Media Setting
+            Row(
+              children: [
+                MacosCheckbox(
+                  value: _copyMediaIntoProject,
+                  activeColor: AppTheme.accent(context),
+                  onChanged: (val) {
+                    setState(() => _copyMediaIntoProject = val);
+                  },
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Copy media files into project folder',
+                  style: TextStyle(fontSize: 12.5),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
 
             // Actions
             Row(

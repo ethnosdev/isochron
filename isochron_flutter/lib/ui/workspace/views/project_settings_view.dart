@@ -1,19 +1,24 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
+import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/settings/model_panel.dart';
+import 'package:isochron_flutter/ui/workspace/components/language_code_info_dialog.dart';
+import 'package:isochron_flutter/ui/workspace/workspace_manager.dart';
 import 'package:isochron_flutter/utils/id_generator.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
 
 class ProjectSettingsView extends StatefulWidget {
   final Project project;
+  final WorkspaceManager? manager;
   final VoidCallback onSaved;
 
   const ProjectSettingsView({
     super.key,
     required this.project,
+    this.manager,
     required this.onSaved,
   });
 
@@ -22,40 +27,30 @@ class ProjectSettingsView extends StatefulWidget {
 }
 
 class _ProjectSettingsViewState extends State<ProjectSettingsView> {
-  late String _prefix;
   late IdGenerationStyle _idStyle;
   late TextEditingController _projectNameController;
-  late TextEditingController _prefixController;
   late TextEditingController _langController;
   late TextEditingController _leadInController;
-  late TextEditingController _collaboratorNameController;
 
   @override
   void initState() {
     super.initState();
-    _prefix = widget.project.defaultIdPrefix ?? "";
     _idStyle = widget.project.defaultIdStyle;
 
     _projectNameController = TextEditingController(text: widget.project.name);
-    _prefixController = TextEditingController(text: _prefix);
     _langController = TextEditingController(
       text: widget.project.languageCode ?? '',
     );
     _leadInController = TextEditingController(
       text: widget.project.boundaryLeadInMs.toString(),
     );
-    _collaboratorNameController = TextEditingController(
-      text: UserSettingsService().collaboratorName,
-    );
   }
 
   @override
   void dispose() {
     _projectNameController.dispose();
-    _prefixController.dispose();
     _langController.dispose();
     _leadInController.dispose();
-    _collaboratorNameController.dispose();
     super.dispose();
   }
 
@@ -64,8 +59,6 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
     if (newName.isNotEmpty) {
       widget.project.name = newName;
     }
-    widget.project.defaultIdPrefix =
-        _prefix.trim().isEmpty ? null : _prefix.trim();
     widget.project.defaultIdStyle = _idStyle;
     final lang = _langController.text.trim();
     widget.project.languageCode = lang.isEmpty ? null : lang.toLowerCase();
@@ -201,30 +194,6 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Text(
-                    "Collaborator Name:",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: theme.typography.body.color,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  SizedBox(
-                    width: 220,
-                    child: MacosTextField(
-                      controller: _collaboratorNameController,
-                      placeholder: 'e.g. Alice Smith',
-                      decoration: textFieldDecoration,
-                      onChanged: (val) {
-                        UserSettingsService().setCollaboratorName(val);
-                      },
-                    ),
-                  ),
-                ],
-              ),
 
               const SizedBox(height: 32),
               Container(height: 1, color: theme.dividerColor),
@@ -246,7 +215,54 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                   MacosCheckbox(
                     value: widget.project.copyMediaIntoProject,
                     activeColor: AppTheme.accent(context),
-                    onChanged: (val) {
+                    onChanged: (val) async {
+                      if (val && !widget.project.copyMediaIntoProject) {
+                        final hasExternal = widget.manager?.hasExternalMedia() ?? false;
+                        if (hasExternal && context.mounted) {
+                          final shouldConsolidate = await showAppAlertDialog<bool>(
+                            context: context,
+                            builder: (ctx) => MacosAlertDialog(
+                              appIcon: const MacosIcon(CupertinoIcons.folder_badge_plus),
+                              title: const Text("Consolidate Project Media?"),
+                              message: const Text(
+                                "You have existing tracks referencing files outside the project directory. "
+                                "Would you like to copy these files into your project folder now so the project is fully portable?",
+                              ),
+                              primaryButton: PushButton(
+                                controlSize: ControlSize.large,
+                                child: const Text("Copy Existing Files"),
+                                onPressed: () => Navigator.of(ctx).pop(true),
+                              ),
+                              secondaryButton: PushButton(
+                                controlSize: ControlSize.large,
+                                secondary: true,
+                                child: const Text("Only Future Imports"),
+                                onPressed: () => Navigator.of(ctx).pop(false),
+                              ),
+                            ),
+                          );
+
+                          if (shouldConsolidate == true) {
+                            final count = await widget.manager?.consolidateExternalMedia() ?? 0;
+                            if (context.mounted) {
+                              showAppAlertDialog(
+                                context: context,
+                                builder: (ctx) => MacosAlertDialog(
+                                  appIcon: const MacosIcon(CupertinoIcons.checkmark_circle),
+                                  title: const Text("Media Consolidated"),
+                                  message: Text("$count media file(s) were copied into the project folder."),
+                                  primaryButton: PushButton(
+                                    controlSize: ControlSize.large,
+                                    child: const Text("OK"),
+                                    onPressed: () => Navigator.of(ctx).pop(),
+                                  ),
+                                ),
+                              );
+                            }
+                          }
+                        }
+                      }
+
                       setState(() {
                         widget.project.copyMediaIntoProject = val;
                         widget.project.hasPromptedForMediaStorage = true;
@@ -308,37 +324,7 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
-
-              Text(
-                "Book Number / Custom Prefix (Optional):",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: theme.typography.body.color,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                "Overrides the book number (for USFM) or track prefix. If empty, values are auto-detected from filenames.",
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.grey(context),
-                ),
-              ),
-              const SizedBox(height: 6),
-              SizedBox(
-                width: 280,
-                child: MacosTextField(
-                  controller: _prefixController,
-                  placeholder: 'e.g. 40, MRK, Lesson1',
-                  decoration: textFieldDecoration,
-                  onChanged: (val) {
-                    setState(() => _prefix = val);
-                    _triggerSave();
-                  },
-                ),
-              ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
 
               // Live preview box
               Builder(
@@ -349,7 +335,6 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                             widget.project.collections.first.tracks.isNotEmpty
                         ? widget.project.collections.first.tracks.first.name
                         : 'BSB_40_Mat_001',
-                    customPrefix: _prefix.isEmpty ? null : _prefix,
                   );
                   return Container(
                     padding: const EdgeInsets.symmetric(
@@ -403,12 +388,25 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
               ),
               const SizedBox(height: 16),
 
-              Text(
-                "Language Code (ISO 639-3):",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: theme.typography.body.color,
-                ),
+              Row(
+                children: [
+                  Text(
+                    "Language Code (ISO 639-3):",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: theme.typography.body.color,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  MacosIconButton(
+                    icon: MacosIcon(
+                      CupertinoIcons.info_circle,
+                      size: 15,
+                      color: AppTheme.accent(context),
+                    ),
+                    onPressed: () => LanguageCodeInfoDialog.show(context),
+                  ),
+                ],
               ),
               const SizedBox(height: 4),
               Text(

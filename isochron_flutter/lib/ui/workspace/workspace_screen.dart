@@ -58,6 +58,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       firstCollectionName: result.collectionName,
       initialTracks: result.initialTracks,
       idStyle: result.idStyle,
+      copyMediaIntoProject: result.copyMediaIntoProject,
     );
     if (_manager.project != null) {
       await settings.addRecentProject(_manager.project!.projectFilePath);

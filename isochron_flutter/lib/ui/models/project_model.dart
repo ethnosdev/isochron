@@ -167,7 +167,6 @@ class Project {
   int boundaryLeadInMs;
   bool defaultHasIds;
   bool defaultGenerateIds;
-  String? defaultIdPrefix;
   IdGenerationStyle defaultIdStyle;
   bool copyMediaIntoProject;
   bool hasPromptedForMediaStorage;
@@ -183,7 +182,6 @@ class Project {
     this.boundaryLeadInMs = 190,
     this.defaultHasIds = false,
     this.defaultGenerateIds = false,
-    this.defaultIdPrefix,
     this.defaultIdStyle = IdGenerationStyle.usfm8Digit,
     this.copyMediaIntoProject = false,
     this.hasPromptedForMediaStorage = false,
@@ -200,7 +198,6 @@ class Project {
     'boundaryLeadInMs': boundaryLeadInMs,
     'defaultHasIds': defaultHasIds,
     'defaultGenerateIds': defaultGenerateIds,
-    'defaultIdPrefix': defaultIdPrefix,
     'defaultIdStyle': defaultIdStyle.name,
     'copyMediaIntoProject': copyMediaIntoProject,
     'hasPromptedForMediaStorage': hasPromptedForMediaStorage,
@@ -313,9 +310,6 @@ class Project {
       defaultHasIds: json['defaultHasIds'] ?? json['hasIds'] ?? false,
       defaultGenerateIds:
           json['defaultGenerateIds'] ?? json['generateIds'] ?? false,
-      defaultIdPrefix:
-          json['defaultIdPrefix']?.toString() ??
-          json['generatedIdPrefix']?.toString(),
       defaultIdStyle: json['defaultIdStyle'] == 'trackScoped'
           ? IdGenerationStyle.trackScoped
           : IdGenerationStyle.usfm8Digit,

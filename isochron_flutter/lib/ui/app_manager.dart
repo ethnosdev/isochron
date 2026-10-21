@@ -306,7 +306,6 @@ class AppManager extends ValueNotifier<AppState> {
     if (loadedFragments.isNotEmpty) {
       final trackName = track.name;
       final idStyle = project.defaultIdStyle;
-      final prefix = project.defaultIdPrefix;
       bool neededIds = false;
       for (int i = 0; i < loadedFragments.length; i++) {
         if (loadedFragments[i].id == null || loadedFragments[i].id!.isEmpty) {
@@ -314,7 +313,6 @@ class AppManager extends ValueNotifier<AppState> {
             style: idStyle,
             trackName: trackName,
             lineIndex: i,
-            customPrefix: prefix,
           );
           loadedFragments[i] = loadedFragments[i].copyWith(id: genId);
           neededIds = true;
@@ -471,7 +469,6 @@ class AppManager extends ValueNotifier<AppState> {
       final trackName = currentTrack?.name ?? 'Track';
       final idStyle = currentProject?.defaultIdStyle ??
           IdGenerator.detectDefaultStyle(trackName);
-      final prefix = currentProject?.defaultIdPrefix;
 
       for (int i = 0; i < fragments.length; i++) {
         if (fragments[i].id == null || fragments[i].id!.isEmpty) {
@@ -484,7 +481,6 @@ class AppManager extends ValueNotifier<AppState> {
               style: idStyle,
               trackName: trackName,
               lineIndex: i,
-              customPrefix: prefix,
             );
             fragments[i] = fragments[i].copyWith(id: genId);
           }
@@ -951,7 +947,6 @@ class AppManager extends ValueNotifier<AppState> {
     final trackName = currentTrack?.name ?? 'Track';
     final idStyle = currentProject?.defaultIdStyle ??
         IdGenerator.detectDefaultStyle(trackName);
-    final prefix = currentProject?.defaultIdPrefix;
 
     for (var line in lines) {
       if (line.trim().isEmpty) continue;
@@ -967,7 +962,6 @@ class AppManager extends ValueNotifier<AppState> {
           style: idStyle,
           trackName: trackName,
           lineIndex: idx,
-          customPrefix: prefix,
         );
         content = line.trim();
       }

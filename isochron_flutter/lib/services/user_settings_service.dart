@@ -32,7 +32,6 @@ class UserSettingsService {
   static const String _keyLastDictDir = 'last_dict_dir';
   static const String _keyThemeMode = 'theme_mode';
   static const String _keyLastZoom = 'last_zoom_level';
-  static const String _keyCollaboratorName = 'collaborator_name';
 
   ValueNotifier<AppThemeMode>? _themeNotifier;
   ValueNotifier<AppThemeMode> get themeNotifier =>
@@ -80,18 +79,6 @@ class UserSettingsService {
   double get lastZoom => _prefs.getDouble(_keyLastZoom) ?? 10.0;
   Future<void> setLastZoom(double value) async {
     await _prefs.setDouble(_keyLastZoom, value);
-  }
-
-  // --- Collaborator Profile ---
-
-  String get collaboratorName {
-    final saved = _prefs.getString(_keyCollaboratorName);
-    if (saved != null && saved.trim().isNotEmpty) return saved.trim();
-    return Platform.environment['USER'] ?? 'Collaborator';
-  }
-
-  Future<void> setCollaboratorName(String name) async {
-    await _prefs.setString(_keyCollaboratorName, name.trim());
   }
 
   // --- Recent Projects ---
