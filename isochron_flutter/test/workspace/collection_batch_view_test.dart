@@ -112,6 +112,8 @@ void main() {
     bool isRunning = false,
     void Function(Track track, AlignmentStatus newStatus)? onTrackStatusChanged,
     void Function(Track track)? onOpenTrack,
+    VoidCallback? onImportFiles,
+    VoidCallback? onDeleteCollection,
   }) {
     return MacosApp(
       home: MacosWindow(
@@ -124,9 +126,10 @@ void main() {
           onRunBatch: () {},
           onStopBatch: () {},
           onChanged: () {},
-          onImportFiles: () {},
+          onImportFiles: onImportFiles ?? () {},
           onOpenTrack: onOpenTrack ?? (_) {},
           onHealBrokenLinks: () {},
+          onDeleteCollection: onDeleteCollection,
           onTrackStatusChanged: onTrackStatusChanged,
         ),
       ),
@@ -251,6 +254,112 @@ void main() {
 
       expect(find.text('Pending'), findsNothing);
       expect(find.text('Reviewed'), findsNothing);
+    });
+
+    testWidgets('header renders prominent Run button and More menu, but no standalone secondary buttons', (tester) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+
+      // "Run Alignment on All" should be present as prominent button
+      expect(find.text('Run Alignment on All'), findsOneWidget);
+
+      // More menu icon should be present
+      final moreFinder = find.byWidgetPredicate(
+        (w) => w is MacosIcon && w.icon == CupertinoIcons.ellipsis_circle,
+      );
+      expect(moreFinder, findsOneWidget);
+
+      // Standalone secondary buttons should NOT be in the header row
+      expect(find.text('Manage Track Pairings...'), findsNothing);
+      expect(find.text('Clear All Tracks...'), findsNothing);
+      expect(find.text('Export Timings...'), findsNothing);
+    });
+
+    testWidgets('clicking More button opens menu with pairings, export, rename, and delete', (tester) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      bool importFilesCalled = false;
+
+      await tester.pumpWidget(createTestWidget(
+        onImportFiles: () => importFilesCalled = true,
+        onDeleteCollection: () {},
+      ));
+      await tester.pumpAndSettle();
+
+      // Click the More button
+      final moreFinder = find.byWidgetPredicate(
+        (w) => w is MacosIcon && w.icon == CupertinoIcons.ellipsis_circle,
+      );
+      expect(moreFinder, findsOneWidget);
+      await tester.tap(moreFinder);
+      await tester.pumpAndSettle();
+
+      // Verify menu items
+      expect(find.text('Manage Track Pairings...'), findsOneWidget);
+      expect(find.text('Export Timings...'), findsOneWidget);
+      expect(find.text('Rename Collection...'), findsOneWidget);
+      expect(find.text('Delete Collection'), findsOneWidget);
+
+      // Tap Manage Track Pairings...
+      await tester.tap(find.text('Manage Track Pairings...'));
+      await tester.pumpAndSettle();
+      expect(importFilesCalled, isTrue);
+    });
+
+    testWidgets('clicking Delete Collection in More menu prompts confirmation and invokes callback', (tester) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      bool deleteCalled = false;
+
+      await tester.pumpWidget(createTestWidget(
+        onDeleteCollection: () => deleteCalled = true,
+      ));
+      await tester.pumpAndSettle();
+
+      final moreFinder = find.byWidgetPredicate(
+        (w) => w is MacosIcon && w.icon == CupertinoIcons.ellipsis_circle,
+      );
+      await tester.tap(moreFinder);
+      await tester.pumpAndSettle();
+
+      // Tap Delete Collection
+      await tester.tap(find.text('Delete Collection'));
+      await tester.pumpAndSettle();
+
+      // CupertinoAlertDialog should appear
+      expect(find.text('Delete Collection?'), findsOneWidget);
+
+      // Tap Delete in dialog
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      expect(deleteCalled, isTrue);
+    });
+
+    testWidgets('responsive layout renders gracefully on narrow widths without overflowing', (tester) async {
+      // Narrow width < 550
+      tester.view.physicalSize = const Size(480, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+
+      // Verify elements render without throwing RenderFlex overflow
+      expect(find.text('Run Alignment on All'), findsOneWidget);
+      final moreFinder = find.byWidgetPredicate(
+        (w) => w is MacosIcon && w.icon == CupertinoIcons.ellipsis_circle,
+      );
+      expect(moreFinder, findsOneWidget);
+      expect(find.text('ALIGNED'), findsOneWidget);
     });
   });
 

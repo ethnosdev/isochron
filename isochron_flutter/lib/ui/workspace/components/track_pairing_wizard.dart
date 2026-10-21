@@ -812,6 +812,20 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
             onPressed: _recomputePairings,
             child: const Text('Re-Pair'),
           ),
+          const SizedBox(width: 8),
+          PushButton(
+            controlSize: ControlSize.small,
+            secondary: true,
+            onPressed: _rows.isEmpty
+                ? null
+                : () {
+                    setState(() {
+                      _rows.clear();
+                      _checkTextIds();
+                    });
+                  },
+            child: const Text('Clear All'),
+          ),
         ],
       ),
     );

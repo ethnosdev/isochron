@@ -115,6 +115,9 @@ class WorkspaceRouter extends StatelessWidget {
             manager.selectedNode!.collection!,
             newName,
           ),
+          onDeleteCollection: () => manager.deleteCollection(
+            manager.selectedNode!.collection!,
+          ),
           onTrackStatusChanged: (track, newStatus) => manager.updateTrackStatus(
             track,
             manager.selectedNode!.collection!,

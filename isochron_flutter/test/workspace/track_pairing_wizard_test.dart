@@ -270,5 +270,35 @@ And Judas begat Phares and Zara of Thamar.
       final updatedCheckbox = tester.widget<MacosCheckbox>(find.byType(MacosCheckbox));
       expect(updatedCheckbox.value, isFalse);
     });
+
+    testWidgets('Clear All button in toolbar empties paired rows', (tester) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final audio = ['/test/ch1.mp3', '/test/ch2.mp3'];
+      final text = ['/test/ch1.txt', '/test/ch2.txt'];
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          TrackPairingWizard(
+            collectionName: 'NT',
+            initialAudioFiles: audio,
+            initialTextFiles: text,
+            isExistingCollection: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('2 Paired'), findsOneWidget);
+      expect(find.text('Clear All'), findsOneWidget);
+
+      await tester.tap(find.text('Clear All'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('2 Paired'), findsNothing);
+      expect(find.text('Clear All Tracks'), findsOneWidget);
+    });
   });
 }

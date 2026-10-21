@@ -4,7 +4,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:isochron_flutter/services/export_service.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
-import 'package:isochron_flutter/ui/workspace/components/group_export_dialog.dart';
 import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
 import 'package:isochron_flutter/ui/workspace/workspace_manager.dart';
 import 'package:isochron_cli/isochron_cli.dart';
@@ -13,34 +12,6 @@ import 'package:isochron_flutter/ui/theme/app_theme.dart';
 
 ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
   final selectedNode = manager.selectedNode;
-
-  Future<void> requestDeleteCollection(Collection collection) async {
-    final bool? confirm = await showCupertinoDialog<bool>(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('Delete Collection?'),
-        content: Text(
-          'Are you sure you want to delete "${collection.name}" and all of its tracks?\n\nThis will remove them from the project, but your raw audio and text files will remain safe on your hard drive.',
-        ),
-        actions: [
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      await manager.deleteCollection(collection);
-    }
-  }
 
   Future<void> requestDeleteTrack(Track track, Collection collection) async {
     final bool? confirm = await showCupertinoDialog<bool>(
@@ -279,34 +250,6 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
           tooltipMessage: 'Delete Track',
           onPressed: () =>
               requestDeleteTrack(selectedNode.track!, selectedNode.collection!),
-        ),
-      ]
-      // --- COLLECTION ACTIONS ---
-      else if (selectedNode?.type == NodeType.collection) ...[
-        ToolBarIconButton(
-          label: 'Export Timings',
-          icon: MacosIcon(
-            CupertinoIcons.square_arrow_down,
-            color: MacosTheme.of(context).typography.body.color,
-          ),
-          showLabel: true,
-          tooltipMessage: 'Export Collection Timings',
-          onPressed: () => GroupExportDialog.show(
-            context,
-            project: manager.project!,
-            collection: selectedNode!.collection!,
-          ),
-        ),
-        const ToolBarSpacer(),
-        ToolBarIconButton(
-          label: 'Delete Collection',
-          icon: MacosIcon(
-            CupertinoIcons.trash,
-            color: AppTheme.destructive(context),
-          ),
-          showLabel: true,
-          tooltipMessage: 'Delete Collection',
-          onPressed: () => requestDeleteCollection(selectedNode!.collection!),
         ),
       ],
     ],

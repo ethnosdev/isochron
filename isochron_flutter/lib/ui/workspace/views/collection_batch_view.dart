@@ -22,6 +22,7 @@ class CollectionBatchView extends StatefulWidget {
   final void Function(Track track) onOpenTrack;
   final VoidCallback onHealBrokenLinks;
   final ValueChanged<String>? onRenameCollection;
+  final VoidCallback? onDeleteCollection;
   final void Function(Track track, AlignmentStatus newStatus)?
       onTrackStatusChanged;
 
@@ -40,6 +41,7 @@ class CollectionBatchView extends StatefulWidget {
     required this.onOpenTrack,
     required this.onHealBrokenLinks,
     this.onRenameCollection,
+    this.onDeleteCollection,
     this.onTrackStatusChanged,
   });
 
@@ -85,6 +87,132 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
         widget.onRenameCollection?.call(newName.trim());
       }
     });
+  }
+
+  Future<void> _promptDeleteCollection() async {
+    final bool? confirm = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: const Text('Delete Collection?'),
+        content: Text(
+          'Are you sure you want to delete "${widget.collection.name}" and all of its tracks?\n\n'
+          'This will remove them from the project, but your raw audio and text files will remain safe on your hard drive.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      widget.onDeleteCollection?.call();
+    }
+  }
+
+  void _showMoreMenu(BuildContext context, Offset position) {
+    showMacosContextMenu(
+      context: context,
+      position: position,
+      width: 220,
+      items: [
+        MacosContextMenuItem(
+          title: "Manage Track Pairings...",
+          icon: CupertinoIcons.slider_horizontal_3,
+          onTap: widget.onImportFiles,
+        ),
+        MacosContextMenuItem(
+          title: "Export Timings...",
+          icon: CupertinoIcons.square_arrow_down,
+          onTap: () => GroupExportDialog.show(
+            context,
+            project: widget.project,
+            collection: widget.collection,
+          ),
+        ),
+        MacosContextMenuItem(
+          title: "Rename Collection...",
+          icon: CupertinoIcons.pencil,
+          onTap: _promptRenameCollection,
+        ),
+        if (widget.onDeleteCollection != null) ...[
+          const MacosContextMenuDivider(),
+          MacosContextMenuItem(
+            title: "Delete Collection",
+            icon: CupertinoIcons.trash,
+            isDestructive: true,
+            onTap: _promptDeleteCollection,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildActionButtons(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        PushButton(
+          controlSize: ControlSize.large,
+          secondary: widget.isRunning,
+          onPressed: widget.isRunning ? widget.onStopBatch : widget.onRunBatch,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              MacosIcon(
+                widget.isRunning
+                    ? CupertinoIcons.stop_fill
+                    : CupertinoIcons.play_arrow_solid,
+                size: 14,
+                color: widget.isRunning
+                    ? AppTheme.destructive(context)
+                    : CupertinoColors.white,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                widget.isRunning ? "Stop Batch" : "Run Alignment on All",
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Builder(
+          builder: (btnContext) {
+            return MacosTooltip(
+              message: "More Actions",
+              child: MacosIconButton(
+                icon: MacosIcon(
+                  CupertinoIcons.ellipsis_circle,
+                  size: 20,
+                  color: MacosTheme.of(context).typography.body.color,
+                ),
+                boxConstraints: const BoxConstraints(
+                  minHeight: 28,
+                  minWidth: 28,
+                ),
+                onPressed: () {
+                  final box = btnContext.findRenderObject() as RenderBox?;
+                  if (box != null) {
+                    final pos = box.localToGlobal(
+                      Offset(0, box.size.height + 4),
+                    );
+                    _showMoreMenu(context, pos);
+                  }
+                },
+              ),
+            );
+          },
+        ),
+      ],
+    );
   }
 
   bool _trackHasAlignmentData(Track track) {
@@ -353,17 +481,22 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Column(
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isNarrow = constraints.maxWidth < 550;
+
+                  final headerDetails = Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          Text(
-                            widget.collection.name,
-                            style: theme.typography.title1.copyWith(
-                              fontWeight: FontWeight.bold,
+                          Flexible(
+                            child: Text(
+                              widget.collection.name,
+                              style: theme.typography.title1.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -391,86 +524,35 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                           fontSize: 12.5,
                           color: AppTheme.grey(context),
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
-                  ),
-                  const Spacer(),
-                  PushButton(
-                    controlSize: ControlSize.large,
-                    secondary: widget.isRunning,
-                    onPressed: widget.isRunning
-                        ? widget.onStopBatch
-                        : widget.onRunBatch,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                  );
+
+                  if (isNarrow) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        MacosIcon(
-                          widget.isRunning
-                              ? CupertinoIcons.stop_fill
-                              : CupertinoIcons.play_arrow_solid,
-                          size: 14,
-                          color: widget.isRunning
-                              ? AppTheme.destructive(context)
-                              : CupertinoColors.white,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          widget.isRunning
-                              ? "Stop Batch"
-                              : "Run Alignment on All",
+                        headerDetails,
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            _buildActionButtons(context),
+                          ],
                         ),
                       ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  PushButton(
-                    controlSize: ControlSize.large,
-                    secondary: true,
-                    onPressed: widget.onImportFiles,
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        MacosIcon(CupertinoIcons.slider_horizontal_3, size: 14),
-                        SizedBox(width: 6),
-                        Text("Manage Track Pairings..."),
-                      ],
-                    ),
-                  ),
-                  if (widget.onClearTracks != null) ...[
-                    const SizedBox(width: 12),
-                    PushButton(
-                      controlSize: ControlSize.large,
-                      secondary: true,
-                      onPressed: widget.onClearTracks,
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          MacosIcon(CupertinoIcons.trash, size: 14),
-                          SizedBox(width: 6),
-                          Text("Clear All Tracks..."),
-                        ],
-                      ),
-                    ),
-                  ],
-                  const SizedBox(width: 12),
-                  PushButton(
-                    controlSize: ControlSize.large,
-                    secondary: true,
-                    onPressed: () => GroupExportDialog.show(
-                      context,
-                      project: widget.project,
-                      collection: widget.collection,
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        MacosIcon(CupertinoIcons.square_arrow_down, size: 14),
-                        SizedBox(width: 6),
-                        Text("Export Timings..."),
-                      ],
-                    ),
-                  ),
-                ],
+                    );
+                  }
+
+                  return Row(
+                    children: [
+                      Expanded(child: headerDetails),
+                      const SizedBox(width: 16),
+                      _buildActionButtons(context),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 14),
 
