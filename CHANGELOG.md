@@ -1,4 +1,4 @@
-## 2.0.0 - 2026.10.15
+## 2.0.0 - 2026.10.21
 
 ### 🚀 Meta MMS-300M Pure-Dart Forced Aligner (Complete Engine Rewrite)
 - **Neural Forced Alignment:** Replaced legacy macOS `say` TTS, acoustic MFCC extraction, and Dynamic Time Warping (DTW) with Meta's **MMS-300M** Wav2Vec2 + CTC acoustic model.
