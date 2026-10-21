@@ -48,7 +48,7 @@ void main() {
       audioPath: '/media/track1.mp3',
       textPath: '/media/track1.txt',
       outputFilename: 'track1_timing.json',
-      status: AlignmentStatus.done,
+      status: AlignmentStatus.aligned,
     );
     final track2 = Track(
       id: 't2',
@@ -57,7 +57,7 @@ void main() {
       audioPath: '/media/track2.mp3',
       textPath: '/media/old_track2.txt',
       outputFilename: 'track2_timing.json',
-      status: AlignmentStatus.done,
+      status: AlignmentStatus.aligned,
     );
 
     final col = Collection(
@@ -110,7 +110,7 @@ void main() {
 
     // Track 1: untouched
     expect(col.tracks[0].id, 't1');
-    expect(col.tracks[0].status, AlignmentStatus.done);
+    expect(col.tracks[0].status, AlignmentStatus.aligned);
     expect(timingFile1.existsSync(), isTrue);
 
     // Track 2: reset to pending, timing JSON deleted
@@ -142,7 +142,7 @@ void main() {
       audioPath: '/media/track1.mp3',
       textPath: '/media/track1.txt',
       outputFilename: 'track1_timing.json',
-      status: AlignmentStatus.done,
+      status: AlignmentStatus.aligned,
     );
     final track2 = Track(
       id: 't2',
@@ -151,7 +151,7 @@ void main() {
       audioPath: '/media/track2.mp3',
       textPath: '/media/track2.txt',
       outputFilename: 'track2_timing.json',
-      status: AlignmentStatus.done,
+      status: AlignmentStatus.aligned,
     );
 
     final col = Collection(
@@ -209,7 +209,7 @@ void main() {
       audioPath: '/media/track1.mp3',
       textPath: '/media/track1.txt',
       outputFilename: 'track1_timing.json',
-      status: AlignmentStatus.done,
+      status: AlignmentStatus.aligned,
     );
 
     final col = Collection(

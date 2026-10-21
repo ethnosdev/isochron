@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/cupertino.dart';
+import 'package:isochron_flutter/ui/components/macos_context_menu.dart';
 import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
@@ -21,6 +22,8 @@ class CollectionBatchView extends StatefulWidget {
   final void Function(Track track) onOpenTrack;
   final VoidCallback onHealBrokenLinks;
   final ValueChanged<String>? onRenameCollection;
+  final void Function(Track track, AlignmentStatus newStatus)?
+      onTrackStatusChanged;
 
   const CollectionBatchView({
     super.key,
@@ -37,6 +40,7 @@ class CollectionBatchView extends StatefulWidget {
     required this.onOpenTrack,
     required this.onHealBrokenLinks,
     this.onRenameCollection,
+    this.onTrackStatusChanged,
   });
 
   @override
@@ -81,6 +85,125 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
         widget.onRenameCollection?.call(newName.trim());
       }
     });
+  }
+
+  bool _trackHasAlignmentData(Track track) {
+    final outputPath = track.getAbsoluteOutputPath(
+      widget.project.directoryPath,
+      widget.collection.folderName,
+    );
+    return File(outputPath).existsSync();
+  }
+
+  Future<void> _updateTrackStatus(Track track, AlignmentStatus newStatus) async {
+    if (track.status == newStatus) return;
+    setState(() {
+      track.status = newStatus;
+    });
+    if (widget.onTrackStatusChanged != null) {
+      widget.onTrackStatusChanged!(track, newStatus);
+    } else {
+      await widget.collection.saveTracks(widget.project.directoryPath);
+      widget.onChanged();
+    }
+  }
+
+  void _showStatusMenu(BuildContext context, Track track, Offset position) {
+    if (widget.isRunning || track.status == AlignmentStatus.processing) {
+      return;
+    }
+
+    final hasAlignmentData = _trackHasAlignmentData(track);
+
+    showMacosContextMenu(
+      context: context,
+      position: position,
+      width: 170,
+      items: [
+        MacosContextMenuItem(
+          title: 'Pending',
+          icon: CupertinoIcons.clock,
+          shortcut: track.status == AlignmentStatus.pending ? '✓' : null,
+          onTap: () => _updateTrackStatus(track, AlignmentStatus.pending),
+        ),
+        MacosContextMenuItem(
+          title: 'Aligned',
+          icon: CupertinoIcons.checkmark_circle,
+          shortcut: track.status == AlignmentStatus.aligned ? '✓' : null,
+          enabled: hasAlignmentData,
+          onTap: () => _updateTrackStatus(track, AlignmentStatus.aligned),
+        ),
+        MacosContextMenuItem(
+          title: 'Reviewed',
+          icon: CupertinoIcons.checkmark_seal_fill,
+          shortcut: track.status == AlignmentStatus.reviewed ? '✓' : null,
+          enabled: hasAlignmentData,
+          onTap: () => _updateTrackStatus(track, AlignmentStatus.reviewed),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatusBadge(
+    BuildContext context,
+    Track track,
+    Color badgeColor,
+  ) {
+    final isInteractive = !widget.isRunning &&
+        track.status != AlignmentStatus.processing;
+
+    Widget badgeContent = Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 3,
+      ),
+      decoration: BoxDecoration(
+        color: badgeColor.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            track.status.name.toUpperCase(),
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.bold,
+              color: badgeColor,
+            ),
+          ),
+          if (isInteractive) ...[
+            const SizedBox(width: 3),
+            Icon(
+              CupertinoIcons.chevron_down,
+              size: 8.5,
+              color: badgeColor.withValues(alpha: 0.8),
+            ),
+          ],
+        ],
+      ),
+    );
+
+    if (!isInteractive) {
+      return badgeContent;
+    }
+
+    Offset? tapPosition;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (details) {
+          tapPosition = details.globalPosition;
+        },
+        onTap: () {
+          if (tapPosition != null) {
+            _showStatusMenu(context, track, tapPosition!);
+          }
+        },
+        child: badgeContent,
+      ),
+    );
   }
 
   Widget _buildEmptyState(BuildContext context) {
@@ -151,8 +274,8 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
     final totalTracks = tracks.length;
     final reviewedCount =
         tracks.where((t) => t.status == AlignmentStatus.reviewed).length;
-    final doneCount =
-        tracks.where((t) => t.status == AlignmentStatus.done).length;
+    final alignedCount =
+        tracks.where((t) => t.status == AlignmentStatus.aligned).length;
     final errorCount =
         tracks.where((t) => t.status == AlignmentStatus.error).length;
     final pendingCount =
@@ -263,7 +386,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        "$totalTracks tracks • $reviewedCount reviewed, $doneCount done, $pendingCount pending${errorCount > 0 ? ', $errorCount errors' : ''}",
+                        "$totalTracks tracks • $reviewedCount reviewed, $alignedCount aligned, $pendingCount pending${errorCount > 0 ? ', $errorCount errors' : ''}",
                         style: TextStyle(
                           fontSize: 12.5,
                           color: AppTheme.grey(context),
@@ -365,9 +488,9 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                             flex: reviewedCount,
                             child: Container(color: AppTheme.success(context)),
                           ),
-                        if (doneCount > 0)
+                        if (alignedCount > 0)
                           Expanded(
-                            flex: doneCount,
+                            flex: alignedCount,
                             child: Container(color: AppTheme.accent(context)),
                           ),
                         if (processingCount > 0)
@@ -447,7 +570,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                   size: 18,
                   color: AppTheme.success(context),
                 );
-              } else if (track.status == AlignmentStatus.done) {
+              } else if (track.status == AlignmentStatus.aligned) {
                 statusIcon = Icon(
                   CupertinoIcons.checkmark_circle,
                   size: 18,
@@ -471,8 +594,10 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
               Color badgeColor;
               switch (track.status) {
                 case AlignmentStatus.reviewed:
-                case AlignmentStatus.done:
                   badgeColor = AppTheme.success(context);
+                  break;
+                case AlignmentStatus.aligned:
+                  badgeColor = AppTheme.accent(context);
                   break;
                 case AlignmentStatus.processing:
                   badgeColor = AppTheme.accent(context);
@@ -542,24 +667,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: badgeColor.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              track.status.name.toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.bold,
-                                color: badgeColor,
-                              ),
-                            ),
-                          ),
+                          _buildStatusBadge(context, track, badgeColor),
                           const SizedBox(width: 8),
                           MacosIconButton(
                             icon: MacosIcon(

@@ -91,14 +91,14 @@ void main() {
         audioPath: 'track_0$i.wav',
         textPath: 'track_0$i.txt',
         outputFilename: 'track_0${i}_timing.json',
-        status: (i <= 2) ? AlignmentStatus.done : AlignmentStatus.pending,
+        status: (i <= 2) ? AlignmentStatus.aligned : AlignmentStatus.pending,
       );
       col.tracks.add(track);
     }
     await col.saveTracks(projectDir);
 
-    expect(col.tracks[0].status, AlignmentStatus.done);
-    expect(col.tracks[1].status, AlignmentStatus.done);
+    expect(col.tracks[0].status, AlignmentStatus.aligned);
+    expect(col.tracks[1].status, AlignmentStatus.aligned);
     expect(col.tracks[2].status, AlignmentStatus.pending);
     expect(col.tracks[3].status, AlignmentStatus.pending);
 
@@ -117,22 +117,22 @@ void main() {
     // Verify both Track 3 and Track 4 were aligned
     expect(fakeAligner.alignedAudios.length, 2);
 
-    // Verify Track 4 transitioned through processing to done
+    // Verify Track 4 transitioned through processing to aligned
     expect(track4Statuses, contains(AlignmentStatus.processing));
-    expect(track4Statuses.last, AlignmentStatus.done);
+    expect(track4Statuses.last, AlignmentStatus.aligned);
 
-    // Verify all 4 tracks in in-memory collection are done
-    expect(col.tracks[0].status, AlignmentStatus.done);
-    expect(col.tracks[1].status, AlignmentStatus.done);
-    expect(col.tracks[2].status, AlignmentStatus.done);
-    expect(col.tracks[3].status, AlignmentStatus.done);
+    // Verify all 4 tracks in in-memory collection are aligned
+    expect(col.tracks[0].status, AlignmentStatus.aligned);
+    expect(col.tracks[1].status, AlignmentStatus.aligned);
+    expect(col.tracks[2].status, AlignmentStatus.aligned);
+    expect(col.tracks[3].status, AlignmentStatus.aligned);
 
-    // Verify collection.json on disk was saved with Track 4 as done
+    // Verify collection.json on disk was saved with Track 4 as aligned
     final colFile = File(p.join(projectDir, 'collections', col.folderName, 'collection.json'));
     final colContent = jsonDecode(await colFile.readAsString());
     final tracksJson = (colContent['tracks'] as List);
-    expect(tracksJson[2]['status'], AlignmentStatus.done.index);
-    expect(tracksJson[3]['status'], AlignmentStatus.done.index);
+    expect(tracksJson[2]['status'], AlignmentStatus.aligned.index);
+    expect(tracksJson[3]['status'], AlignmentStatus.aligned.index);
 
     // Verify alignment json files exist on disk
     final t3Out = File(p.join(projectDir, 'collections', col.folderName, 'alignments', 'track_03_timing.json'));

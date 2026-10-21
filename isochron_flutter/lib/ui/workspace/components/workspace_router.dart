@@ -115,6 +115,11 @@ class WorkspaceRouter extends StatelessWidget {
             manager.selectedNode!.collection!,
             newName,
           ),
+          onTrackStatusChanged: (track, newStatus) => manager.updateTrackStatus(
+            track,
+            manager.selectedNode!.collection!,
+            newStatus,
+          ),
         );
 
       case NodeType.track:

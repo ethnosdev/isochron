@@ -207,7 +207,7 @@ List<SidebarNode> _getFlatNodes(WorkspaceManager manager) {
 
 Color _getTrackColor(BuildContext context, AlignmentStatus status) {
   switch (status) {
-    case AlignmentStatus.done:
+    case AlignmentStatus.aligned:
     case AlignmentStatus.reviewed:
       return AppTheme.success(context);
     case AlignmentStatus.processing:

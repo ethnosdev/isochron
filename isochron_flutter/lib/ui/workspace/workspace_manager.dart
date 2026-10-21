@@ -72,8 +72,10 @@ class WorkspaceManager extends ChangeNotifier {
         );
         if (hasEdits) {
           track.status = AlignmentStatus.reviewed;
-        } else if (frags.isNotEmpty && frags.any((f) => f.realStart >= 0)) {
-          track.status = AlignmentStatus.done;
+        } else if (track.status != AlignmentStatus.reviewed &&
+            frags.isNotEmpty &&
+            frags.any((f) => f.realStart >= 0)) {
+          track.status = AlignmentStatus.aligned;
         }
         final col = project!.collections.firstWhere(
           (c) => c.id == track.collectionId,
@@ -89,7 +91,7 @@ class WorkspaceManager extends ChangeNotifier {
         for (var col in project!.collections) {
           for (var track in col.tracks) {
             if (track.id == trackId) {
-              track.status = AlignmentStatus.done;
+              track.status = AlignmentStatus.aligned;
               col.saveTracks(project!.directoryPath);
               notifyListeners();
               return;
@@ -583,7 +585,7 @@ class WorkspaceManager extends ChangeNotifier {
         final audioChanged = match.audioPath != resolvedAudio;
         final textChanged = match.textPath != resolvedText;
         if (audioChanged || textChanged) {
-          if (track.status == AlignmentStatus.done ||
+          if (track.status == AlignmentStatus.aligned ||
               track.status == AlignmentStatus.reviewed) {
             tracksToReset.add(track);
           }
@@ -595,7 +597,7 @@ class WorkspaceManager extends ChangeNotifier {
 
     final deletedAlignedCount = tracksToDelete
         .where((t) =>
-            t.status == AlignmentStatus.done ||
+            t.status == AlignmentStatus.aligned ||
             t.status == AlignmentStatus.reviewed)
         .length;
 
@@ -1135,6 +1137,18 @@ class WorkspaceManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Manually updates a track's lifecycle status and persists to collection metadata.
+  Future<void> updateTrackStatus(
+    Track track,
+    Collection col,
+    AlignmentStatus newStatus,
+  ) async {
+    if (project == null || track.status == newStatus) return;
+    track.status = newStatus;
+    await col.saveTracks(project!.directoryPath);
+    notifyListeners();
+  }
+
   Future<void> replaceTrackAudio(Track track, Collection col, String newSourcePath) async {
     if (project == null) return;
     if (project!.copyMediaIntoProject) {
@@ -1323,8 +1337,8 @@ class WorkspaceManager extends ChangeNotifier {
         await File(
           absPath,
         ).writeAsString(const JsonEncoder.withIndent('  ').convert(jsonList));
-        track.status = AlignmentStatus.done;
-        canonicalTrack.status = AlignmentStatus.done;
+        track.status = AlignmentStatus.aligned;
+        canonicalTrack.status = AlignmentStatus.aligned;
       } catch (e) {
         if (!isBatchRunning) {
           track.status = AlignmentStatus.pending;
@@ -1569,7 +1583,7 @@ class WorkspaceManager extends ChangeNotifier {
               if (track.outputFilename == filename) {
                 if (File(normalizedPath).existsSync() &&
                     track.status == AlignmentStatus.pending) {
-                  track.status = AlignmentStatus.done;
+                  track.status = AlignmentStatus.aligned;
                   needsNotify = true;
                 }
               }

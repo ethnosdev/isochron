@@ -6,7 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../utils/file_sync_tracker.dart';
 import '../../utils/id_generator.dart';
 
-enum AlignmentStatus { pending, processing, done, reviewed, error }
+enum AlignmentStatus { pending, processing, aligned, reviewed, error }
 
 class Track {
   final String id;
@@ -84,9 +84,16 @@ class Track {
     if (json['status'] is int) {
       statusIdx = json['status'] as int;
     } else if (json['status'] is String) {
-      final match = AlignmentStatus.values.where((s) => s.name == json['status']);
-      if (match.isNotEmpty) {
-        statusIdx = match.first.index;
+      final statusStr = (json['status'] as String).toLowerCase();
+      if (statusStr == 'done') {
+        statusIdx = AlignmentStatus.aligned.index;
+      } else {
+        final match = AlignmentStatus.values.where(
+          (s) => s.name.toLowerCase() == statusStr,
+        );
+        if (match.isNotEmpty) {
+          statusIdx = match.first.index;
+        }
       }
     }
     if (statusIdx < 0 || statusIdx >= AlignmentStatus.values.length) {
@@ -208,11 +215,21 @@ class Project {
     bool migrationNeeded = false;
 
     AlignmentStatus parseStatus(dynamic statusVal) {
-      int idx = statusVal is int ? statusVal : 0;
-      if (idx < 0 || idx >= AlignmentStatus.values.length) {
-        idx = 0;
+      if (statusVal is int) {
+        if (statusVal >= 0 && statusVal < AlignmentStatus.values.length) {
+          return AlignmentStatus.values[statusVal];
+        }
+      } else if (statusVal is String) {
+        final str = statusVal.toLowerCase();
+        if (str == 'done') {
+          return AlignmentStatus.aligned;
+        }
+        final match = AlignmentStatus.values.where(
+          (s) => s.name.toLowerCase() == str,
+        );
+        if (match.isNotEmpty) return match.first;
       }
-      return AlignmentStatus.values[idx];
+      return AlignmentStatus.pending;
     }
 
     if (json.containsKey('collections') && json['collections'] is List) {
@@ -383,7 +400,7 @@ class Project {
                     );
                     if (t.status == AlignmentStatus.pending &&
                         File(outPath).existsSync()) {
-                      t.status = AlignmentStatus.done;
+                      t.status = AlignmentStatus.aligned;
                     }
                     return t;
                   })
@@ -474,7 +491,7 @@ class Project {
           );
           if (existing.status == AlignmentStatus.pending &&
               File(outputPath).existsSync()) {
-            existing.status = AlignmentStatus.done;
+            existing.status = AlignmentStatus.aligned;
           }
           updatedTracks.add(existing);
         } else {
@@ -486,7 +503,7 @@ class Project {
           );
           if (t.status == AlignmentStatus.pending &&
               File(outputPath).existsSync()) {
-            t.status = AlignmentStatus.done;
+            t.status = AlignmentStatus.aligned;
           }
           updatedTracks.add(t);
         }

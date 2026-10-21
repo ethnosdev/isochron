@@ -236,7 +236,7 @@ class ExportService {
   }
 
   static bool isPhraseExportableStatus(AlignmentStatus status) {
-    return status == AlignmentStatus.done || status == AlignmentStatus.reviewed;
+    return status == AlignmentStatus.aligned || status == AlignmentStatus.reviewed;
   }
 
   /// Phrase export is enabled when alignment status is finalized.
@@ -246,7 +246,7 @@ class ExportService {
 
   static String phraseExportTooltip(Track track) {
     if (!isPhraseExportableStatus(track.status)) {
-      return 'Export is available only for Done/Reviewed alignments';
+      return 'Export is available only for Aligned/Reviewed alignments';
     }
     return 'Export phrase timing';
   }

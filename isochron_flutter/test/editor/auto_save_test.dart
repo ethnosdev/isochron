@@ -266,7 +266,7 @@ void main() {
       );
 
       await wsManager.homeManager.saveProject();
-      expect(track.status, AlignmentStatus.done);
+      expect(track.status, AlignmentStatus.aligned);
 
       // 2. User edits verse
       wsManager.homeManager.value = wsManager.homeManager.value.copyWith(
@@ -279,6 +279,19 @@ void main() {
         ],
       );
 
+      await wsManager.homeManager.saveProject();
+      expect(track.status, AlignmentStatus.reviewed);
+
+      // 3. User saves again with unedited/auto verses while track is reviewed: status remains reviewed
+      wsManager.homeManager.value = wsManager.homeManager.value.copyWith(
+        fragments: [
+          Fragment(
+            index: 0,
+            text: 'V1',
+            status: FragmentStatus.auto,
+          )..setRealTiming(start: 0.5, end: 2.5),
+        ],
+      );
       await wsManager.homeManager.saveProject();
       expect(track.status, AlignmentStatus.reviewed);
 

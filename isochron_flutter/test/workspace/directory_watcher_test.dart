@@ -86,7 +86,7 @@ void main() {
       expect(col.tracks[0].id, 't1');
       expect(col.tracks[0].status, AlignmentStatus.reviewed);
       expect(col.tracks[1].id, 't2');
-      expect(col.tracks[1].status, AlignmentStatus.done);
+      expect(col.tracks[1].status, AlignmentStatus.aligned);
     });
 
     test('preserves track object reference and processing status when reloading collection', () async {
@@ -167,7 +167,7 @@ void main() {
 
       await project.reloadCollection(col);
 
-      expect(track.status, AlignmentStatus.done);
+      expect(track.status, AlignmentStatus.aligned);
     });
   });
 
@@ -234,7 +234,7 @@ void main() {
       expect(notified, isTrue);
       expect(col.tracks.length, 1);
       expect(col.tracks.first.id, 'remote_t1');
-      expect(col.tracks.first.status, AlignmentStatus.done);
+      expect(col.tracks.first.status, AlignmentStatus.aligned);
 
       wm.dispose();
     });
@@ -272,7 +272,7 @@ void main() {
       await wm.handleRemoteSyncForTest(alignmentFile.path);
 
       expect(notified, isTrue);
-      expect(track.status, AlignmentStatus.done);
+      expect(track.status, AlignmentStatus.aligned);
 
       wm.dispose();
     });

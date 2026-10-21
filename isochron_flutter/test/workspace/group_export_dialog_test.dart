@@ -41,7 +41,7 @@ void main() {
       audioPath: '/audio/track1.wav',
       textPath: '/text/TH-01-GEN-01.txt',
       outputFilename: 'track_1.json',
-      status: AlignmentStatus.done,
+      status: AlignmentStatus.aligned,
     );
 
     track2 = Track(

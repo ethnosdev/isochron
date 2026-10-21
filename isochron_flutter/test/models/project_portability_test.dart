@@ -185,5 +185,34 @@ void main() {
       expect(projectJsonFile.lastModifiedSync(), projectModTimeBefore);
       expect(exodusJsonFile.lastModifiedSync(), exoModTimeBefore);
     });
+
+    test('Track.fromJson parses legacy done string and aligned string/index', () {
+      final legacyTrackJson = {
+        'id': 't_legacy',
+        'name': 'Legacy Done Track',
+        'outputFilename': 'out.json',
+        'status': 'done',
+      };
+      final trackFromDone = Track.fromJson(legacyTrackJson);
+      expect(trackFromDone.status, AlignmentStatus.aligned);
+
+      final alignedTrackJson = {
+        'id': 't_aligned',
+        'name': 'Aligned Track',
+        'outputFilename': 'out.json',
+        'status': 'aligned',
+      };
+      final trackFromAligned = Track.fromJson(alignedTrackJson);
+      expect(trackFromAligned.status, AlignmentStatus.aligned);
+
+      final indexTrackJson = {
+        'id': 't_idx',
+        'name': 'Index Track',
+        'outputFilename': 'out.json',
+        'status': 2,
+      };
+      final trackFromIndex = Track.fromJson(indexTrackJson);
+      expect(trackFromIndex.status, AlignmentStatus.aligned);
+    });
   });
 }

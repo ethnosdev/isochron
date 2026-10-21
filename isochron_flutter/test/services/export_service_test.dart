@@ -150,9 +150,9 @@ void main() {
   });
 
   group('ExportService helpers', () {
-    test('status gating only allows done/reviewed', () {
+    test('status gating only allows aligned/reviewed', () {
       expect(
-        ExportService.isPhraseExportableStatus(AlignmentStatus.done),
+        ExportService.isPhraseExportableStatus(AlignmentStatus.aligned),
         isTrue,
       );
       expect(
@@ -178,7 +178,7 @@ void main() {
         id: 'done',
         name: 'Done Track',
         outputFilename: 'x.json',
-        status: AlignmentStatus.done,
+        status: AlignmentStatus.aligned,
       );
       final pendingTrack = Track(
         id: 'pending',
@@ -196,7 +196,7 @@ void main() {
         id: 'ok',
         name: 'Done Track',
         outputFilename: 'x.json',
-        status: AlignmentStatus.done,
+        status: AlignmentStatus.aligned,
       );
       final pendingTrack = Track(
         id: 'bad_status',
@@ -211,7 +211,7 @@ void main() {
       );
       expect(
         ExportService.phraseExportTooltip(pendingTrack),
-        'Export is available only for Done/Reviewed alignments',
+        'Export is available only for Aligned/Reviewed alignments',
       );
     });
   });
@@ -245,7 +245,7 @@ void main() {
         audioPath: '/audio/rec01.wav',
         textPath: '/text/TH-01-GEN-01.txt',
         outputFilename: 'done.json',
-        status: AlignmentStatus.done,
+        status: AlignmentStatus.aligned,
       );
       pendingTrack = Track(
         id: 'track_pending',
@@ -319,7 +319,7 @@ void main() {
 
     test('buildPhraseTiming still works for done non-.phrase input', () async {
       doneTrack.textPath = '/text/grctr_071_MRK_01_read.txt';
-      doneTrack.status = AlignmentStatus.done;
+      doneTrack.status = AlignmentStatus.aligned;
 
       final payload = await ExportService.buildPhraseTiming(project, doneTrack);
       expect(payload, isNotNull);
@@ -332,7 +332,7 @@ void main() {
         name: 'Underscore',
         textPath: '/text/grctr_071_MRK_01_read.txt',
         outputFilename: 'u.json',
-        status: AlignmentStatus.done,
+        status: AlignmentStatus.aligned,
       );
 
       final name = ExportService.defaultPhraseTimingFilenameForTrack(track);
@@ -347,7 +347,7 @@ void main() {
           name: 'Phrase Ext',
           textPath: '/text/TH-01-GEN-01.phrase',
           outputFilename: 'p.json',
-          status: AlignmentStatus.done,
+          status: AlignmentStatus.aligned,
         );
 
         final name = ExportService.defaultPhraseTimingFilenameForTrack(track);
@@ -361,7 +361,7 @@ void main() {
         name: 'Space Name',
         textPath: '/text/grctr 071 MRK 01 read.txt',
         outputFilename: 's.json',
-        status: AlignmentStatus.done,
+        status: AlignmentStatus.aligned,
       );
 
       final name = ExportService.defaultPhraseTimingFilenameForTrack(track);
@@ -376,7 +376,7 @@ void main() {
         audioPath: '/audio/rec01.wav',
         textPath: '/text/dz-56-TIT-01.txt',
         outputFilename: 'tab.json',
-        status: AlignmentStatus.done,
+        status: AlignmentStatus.aligned,
       );
       collection.tracks.add(tabTrack);
 
@@ -423,7 +423,7 @@ is1\tIntroductory section
         audioPath: '/audio/rec01.wav',
         textPath: '/text/TH-01-GEN-01.txt',
         outputFilename: 'missing_id.json',
-        status: AlignmentStatus.done,
+        status: AlignmentStatus.aligned,
       );
       collection.tracks.add(missingIdTrack);
 
@@ -447,7 +447,7 @@ is1\tIntroductory section
         audioPath: '/audio/rec02.wav',
         textPath: '/text/TH-01-GEN-02.txt',
         outputFilename: 'done2.json',
-        status: AlignmentStatus.done,
+        status: AlignmentStatus.aligned,
       );
       collection.tracks.add(doneTrack2);
       await writeTrackOutput(doneTrack2, [
@@ -512,7 +512,7 @@ is1\tIntroductory section
         audioPath: '/audio/rec02.wav',
         textPath: '/text/TH-01-GEN-02.txt',
         outputFilename: 'done2.json',
-        status: AlignmentStatus.done,
+        status: AlignmentStatus.aligned,
       );
       collection.tracks.add(doneTrack2);
       await writeTrackOutput(doneTrack2, [
@@ -550,7 +550,7 @@ is1\tIntroductory section
         audioPath: '/audio/exo1.wav',
         textPath: '/text/TH-02-EXO-01.txt',
         outputFilename: 'exo1.json',
-        status: AlignmentStatus.done,
+        status: AlignmentStatus.aligned,
       );
       col2.tracks.add(exoTrack);
       project.collections.add(col2);
