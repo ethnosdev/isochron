@@ -23,7 +23,7 @@ class LanguageCodeInfoDialog extends StatelessWidget {
   }
 
   void _openUromanDocs() {
-    const url = 'https://github.com/isi-nlp/uroman';
+    const url = 'https://github.com/ethnosdev/uroman';
     if (Platform.isMacOS) {
       Process.run('open', [url]);
     } else if (Platform.isWindows) {
@@ -54,7 +54,9 @@ class LanguageCodeInfoDialog extends StatelessWidget {
               Expanded(
                 child: Text(
                   'Language Support in Forced Alignment',
-                  style: theme.typography.title2.copyWith(fontWeight: FontWeight.bold),
+                  style: theme.typography.title2.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
@@ -85,61 +87,47 @@ class LanguageCodeInfoDialog extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF7F7F7),
+                color: isDark
+                    ? const Color(0xFF1E1E1E)
+                    : const Color(0xFFF7F7F7),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: theme.dividerColor),
               ),
               child: ListView(
                 children: [
-                  _buildCategory(
-                    'Greek Script',
-                    [
-                      ('ell', 'Modern Greek'),
-                      ('grc', 'Ancient / Biblical Greek'),
-                      ('pnt', 'Pontic Greek'),
-                    ],
-                    context,
-                  ),
+                  _buildCategory('Greek Script', [
+                    ('ell', 'Modern Greek'),
+                    ('grc', 'Ancient / Biblical Greek'),
+                    ('pnt', 'Pontic Greek'),
+                  ], context),
                   const SizedBox(height: 12),
-                  _buildCategory(
-                    'Middle Eastern & Perso-Arabic Scripts',
-                    [
-                      ('ara', 'Arabic'),
-                      ('fas', 'Persian / Farsi'),
-                      ('pus', 'Pashto'),
-                      ('uig', 'Uyghur'),
-                      ('yid', 'Yiddish'),
-                    ],
-                    context,
-                  ),
+                  _buildCategory('Middle Eastern & Perso-Arabic Scripts', [
+                    ('ara', 'Arabic'),
+                    ('fas', 'Persian / Farsi'),
+                    ('pus', 'Pashto'),
+                    ('uig', 'Uyghur'),
+                    ('yid', 'Yiddish'),
+                  ], context),
                   const SizedBox(height: 12),
-                  _buildCategory(
-                    'Cyrillic Script',
-                    [
-                      ('rus', 'Russian'),
-                      ('ukr', 'Ukrainian'),
-                      ('bel', 'Belarusian'),
-                      ('bul', 'Bulgarian'),
-                      ('mkd', 'Macedonian (mkd / mkd2)'),
-                      ('srp', 'Serbian (srp / srp2)'),
-                      ('kaz', 'Kazakh'),
-                      ('kir', 'Kyrgyz'),
-                      ('oss', 'Ossetic'),
-                    ],
-                    context,
-                  ),
+                  _buildCategory('Cyrillic Script', [
+                    ('rus', 'Russian'),
+                    ('ukr', 'Ukrainian'),
+                    ('bel', 'Belarusian'),
+                    ('bul', 'Bulgarian'),
+                    ('mkd', 'Macedonian (mkd / mkd2)'),
+                    ('srp', 'Serbian (srp / srp2)'),
+                    ('kaz', 'Kazakh'),
+                    ('kir', 'Kyrgyz'),
+                    ('oss', 'Ossetic'),
+                  ], context),
                   const SizedBox(height: 12),
-                  _buildCategory(
-                    'European & Turkic Exceptions',
-                    [
-                      ('deu', 'German (umlauts / ß expansion)'),
-                      ('tur', 'Turkish (dotted / dotless i)'),
-                      ('lav', 'Latvian (macron vowels)'),
-                      ('lit', 'Lithuanian (nasal / ogonek letters)'),
-                      ('eng', 'English (Braille Grade 2 contractions)'),
-                    ],
-                    context,
-                  ),
+                  _buildCategory('European & Turkic Exceptions', [
+                    ('deu', 'German (umlauts / ß expansion)'),
+                    ('tur', 'Turkish (dotted / dotless i)'),
+                    ('lav', 'Latvian (macron vowels)'),
+                    ('lit', 'Lithuanian (nasal / ogonek letters)'),
+                    ('eng', 'English (Braille Grade 2 contractions)'),
+                  ], context),
                   const SizedBox(height: 12),
                   _buildCategory(
                     'South Asian (Schwa / Inherent Vowel Handling)',
@@ -196,10 +184,7 @@ class LanguageCodeInfoDialog extends StatelessWidget {
       children: [
         Text(
           title,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 4),
         Wrap(
