@@ -230,17 +230,21 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                               ),
                               primaryButton: PushButton(
                                 controlSize: ControlSize.large,
-                                child: const Text("Copy Existing Files"),
+                                child: const Text("Copy Files", textAlign: TextAlign.center),
                                 onPressed: () => Navigator.of(ctx).pop(true),
                               ),
                               secondaryButton: PushButton(
                                 controlSize: ControlSize.large,
                                 secondary: true,
-                                child: const Text("Only Future Imports"),
+                                child: const Text("Don't Copy", textAlign: TextAlign.center),
                                 onPressed: () => Navigator.of(ctx).pop(false),
                               ),
                             ),
                           );
+
+                          if (shouldConsolidate == null) {
+                            return;
+                          }
 
                           if (shouldConsolidate == true) {
                             final count = await widget.manager?.consolidateExternalMedia() ?? 0;
@@ -271,7 +275,9 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                     },
                   ),
                   const SizedBox(width: 8),
-                  const Text("Copy imported media into project folder"),
+                  const Expanded(
+                    child: Text("Copy imported media into project folder"),
+                  ),
                 ],
               ),
               const SizedBox(height: 20),
