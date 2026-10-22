@@ -1,3 +1,8 @@
+## 2.0.1 - 2026.10.22
+
+- Fix dialog button text layout issues.
+- Fix loading dynamic library errors.
+
 ## 2.0.0 - 2026.10.21
 
 ### 🚀 Meta MMS-300M Pure-Dart Forced Aligner (Complete Engine Rewrite)

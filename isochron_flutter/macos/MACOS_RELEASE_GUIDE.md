@@ -6,10 +6,12 @@ This guide explains how to package, sign, and distribute this Flutter macOS app 
 *You only need to do this once on a new development machine.*
 
 ### 1. Verify Entitlements
-Ensure your `macos/Runner/Release.entitlements` has the correct sandbox keys and allows Hardened Runtime:
+Ensure your `macos/Runner/Release.entitlements` has the correct sandbox keys and allows Hardened Runtime to load external dylibs (like ONNX Runtime):
 ```xml
 <dict>
 	<key>com.apple.security.app-sandbox</key>
+	<false/>
+	<key>com.apple.security.cs.disable-library-validation</key>
 	<true/>
 	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>
