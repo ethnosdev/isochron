@@ -75,4 +75,34 @@ void main() {
       expect(settings.recentProjects.first.name, equals('My Special Folder'));
     });
   });
+
+  group('UserSettingsService Low Power Mode', () {
+    test('defaults to full speed (low power mode = false)', () {
+      expect(settings.isLowPowerMode, isFalse);
+      expect(settings.effectiveIntraOpThreads, isNull);
+      expect(settings.interTrackDelayMs, equals(0));
+    });
+
+    test('toggling low power mode enables CPU throttling and delay', () async {
+      await settings.toggleLowPowerMode();
+      expect(settings.isLowPowerMode, isTrue);
+      expect(settings.effectiveIntraOpThreads, equals(1));
+      expect(settings.interTrackDelayMs, equals(5000));
+
+      await settings.toggleLowPowerMode();
+      expect(settings.isLowPowerMode, isFalse);
+      expect(settings.effectiveIntraOpThreads, isNull);
+      expect(settings.interTrackDelayMs, equals(0));
+    });
+
+    test('persists low power mode in SharedPreferences', () async {
+      await settings.setLowPowerMode(true);
+      expect(settings.isLowPowerMode, isTrue);
+
+      // Re-initialize from existing SharedPreferences
+      await settings.init();
+      expect(settings.isLowPowerMode, isTrue);
+      expect(settings.effectiveIntraOpThreads, equals(1));
+    });
+  });
 }

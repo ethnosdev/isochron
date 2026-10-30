@@ -1,3 +1,10 @@
+## Unreleased
+
+### Low Power Alignment Mode & Background Throttling
+- **Silent & Cool Background Batching:** Low Power Mode clamps ONNX Runtime intra-op threads to 1 core and inserts a 5-second cooldown pause between tracks during batch runs, keeping laptop fans quiet and temperatures cool while multitasking.
+- **Settings & Persistence:** Added "Low Power Alignment Mode" checkbox to Project Settings (App Preferences); state is remembered globally across app launches.
+- **CLI Flags:** Added `--low-power` flag and `--threads <n>` (`-j`) option to `isochron_cli` for terminal scripts and automated pipelines.
+
 ## 2.0.1 - 2026.10.22
 
 - Fix dialog button text layout issues.

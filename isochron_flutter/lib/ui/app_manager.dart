@@ -459,6 +459,7 @@ class AppManager extends ValueNotifier<AppState> {
         hasIds: initiatingHasIds,
         keepEdits: keepEdits,
         existingFragments: keepEdits ? value.fragments : null,
+        intraOpThreads: _settings.effectiveIntraOpThreads,
         onProgress: (status, prog) {
           if (value.autoSavePath == initiatingSavePath) {
             value = value.copyWith(statusMessage: status, progress: prog);

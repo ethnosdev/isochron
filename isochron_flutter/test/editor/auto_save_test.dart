@@ -56,6 +56,7 @@ class FakeAlignmentService extends AlignmentService {
     bool generateIds = false,
     String? generatedIdPrefix,
     int recordingNumber = 1,
+    int? intraOpThreads,
     required void Function(String status, double progress) onProgress,
   }) async {
     return [

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -32,10 +33,16 @@ class UserSettingsService {
   static const String _keyLastDictDir = 'last_dict_dir';
   static const String _keyThemeMode = 'theme_mode';
   static const String _keyLastZoom = 'last_zoom_level';
+  static const String _keyLowPowerMode = 'low_power_alignment_mode';
 
   ValueNotifier<AppThemeMode>? _themeNotifier;
   ValueNotifier<AppThemeMode> get themeNotifier =>
       _themeNotifier ??= ValueNotifier(AppThemeMode.system);
+
+  ValueNotifier<bool>? _lowPowerModeNotifier;
+  ValueNotifier<bool> get lowPowerModeNotifier =>
+      _lowPowerModeNotifier ??= ValueNotifier(false);
+  bool get isLowPowerMode => lowPowerModeNotifier.value;
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
@@ -48,7 +55,35 @@ class UserSettingsService {
     } else {
       _themeNotifier!.value = AppThemeMode.values[savedThemeIndex];
     }
+
+    final savedLowPower = _prefs.getBool(_keyLowPowerMode) ?? false;
+    if (_lowPowerModeNotifier == null) {
+      _lowPowerModeNotifier = ValueNotifier(savedLowPower);
+    } else {
+      _lowPowerModeNotifier!.value = savedLowPower;
+    }
   }
+
+  // --- Low Power Alignment Mode ---
+
+  Future<void> setLowPowerMode(bool enabled) async {
+    lowPowerModeNotifier.value = enabled;
+    await _prefs.setBool(_keyLowPowerMode, enabled);
+  }
+
+  Future<void> toggleLowPowerMode() async {
+    await setLowPowerMode(!isLowPowerMode);
+  }
+
+  /// Returns intra-op thread count: null when unthrottled (full speed),
+  /// or 1 single thread when low power mode is active to minimize heat generation.
+  int? get effectiveIntraOpThreads {
+    if (!isLowPowerMode) return null;
+    return 1;
+  }
+
+  /// Milliseconds to wait between batch tracks to cool down laptop heatsink.
+  int get interTrackDelayMs => isLowPowerMode ? 5000 : 0;
 
   // --- Theme ---
 

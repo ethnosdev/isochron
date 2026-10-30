@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class FakeAlignmentService extends AlignmentService {
   final List<String> alignedAudios = [];
+  final List<int?> capturedIntraOpThreads = [];
   void Function(String trackName)? onTrackAlignStarted;
 
   FakeAlignmentService() : super.forTesting();
@@ -34,9 +35,11 @@ class FakeAlignmentService extends AlignmentService {
     bool generateIds = false,
     String? generatedIdPrefix,
     int recordingNumber = 1,
+    int? intraOpThreads,
     required void Function(String status, double progress) onProgress,
   }) async {
     alignedAudios.add(audioPath);
+    capturedIntraOpThreads.add(intraOpThreads);
     onProgress('Computing embeddings...', 0.5);
     onProgress('Done', 1.0);
     return [
@@ -140,6 +143,51 @@ void main() {
     expect(await t3Out.exists(), isTrue);
     expect(await t4Out.exists(), isTrue);
 
+    // Verify intraOpThreads was null (Full Speed default)
+    expect(fakeAligner.capturedIntraOpThreads, [null, null]);
+
+    wm.dispose();
+  });
+
+  test('Batch alignment in Low Power Mode passes restricted thread count', () async {
+    await UserSettingsService().setLowPowerMode(true);
+
+    final fakeAligner = FakeAlignmentService();
+    final wm = WorkspaceManager(customAlignmentService: fakeAligner);
+
+    final projectDir = p.join(tempDir.path, 'LowPowerBatchProject');
+    await wm.createProject(projectDir, 'LowPowerBatchProject');
+
+    final col = wm.project!.collections.first;
+    final audioDir = Directory(p.join(projectDir, 'collections', col.folderName, 'audio'));
+    final textDir = Directory(p.join(projectDir, 'collections', col.folderName, 'text'));
+    await audioDir.create(recursive: true);
+    await textDir.create(recursive: true);
+
+    final aFile = File(p.join(audioDir.path, 'track_lp.wav'));
+    final tFile = File(p.join(textDir.path, 'track_lp.txt'));
+    await aFile.writeAsString('RIFF dummy audio');
+    await tFile.writeAsString('Verse line');
+
+    final track = Track(
+      id: 'tlp',
+      collectionId: col.id,
+      name: 'Track LP',
+      audioPath: 'track_lp.wav',
+      textPath: 'track_lp.txt',
+      outputFilename: 'track_lp_timing.json',
+      status: AlignmentStatus.pending,
+    );
+    col.tracks.add(track);
+    await col.saveTracks(projectDir);
+
+    await wm.runBatch(col);
+
+    expect(fakeAligner.capturedIntraOpThreads.length, 1);
+    expect(fakeAligner.capturedIntraOpThreads.first, equals(1));
+
+    // Reset setting
+    await UserSettingsService().setLowPowerMode(false);
     wm.dispose();
   });
 }

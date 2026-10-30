@@ -194,6 +194,48 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+              ValueListenableBuilder<bool>(
+                valueListenable: UserSettingsService().lowPowerModeNotifier,
+                builder: (context, isLowPower, _) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          MacosCheckbox(
+                            value: isLowPower,
+                            activeColor: AppTheme.accent(context),
+                            onChanged: (val) {
+                              UserSettingsService().setLowPowerMode(val);
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            "Low Power Alignment Mode",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: theme.typography.body.color,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 24.0),
+                        child: Text(
+                          "Restricts CPU usage to 1 core and adds a 5-second cooldown pause between files in batch runs. "
+                          "Keeps your laptop cool and fans quiet while you work on other tasks.",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: theme.typography.body.color?.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
 
               const SizedBox(height: 32),
               Container(height: 1, color: theme.dividerColor),

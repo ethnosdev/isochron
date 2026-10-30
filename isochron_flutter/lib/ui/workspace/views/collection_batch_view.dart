@@ -535,11 +535,9 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                       children: [
                         headerDetails,
                         const SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            _buildActionButtons(context),
-                          ],
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: _buildActionButtons(context),
                         ),
                       ],
                     );

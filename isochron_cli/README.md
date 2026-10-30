@@ -80,6 +80,8 @@ dart run bin/isochron_cli.dart \
 | `--star-placement` | `segment` | Wildcard placement: `segment` (between verses) or `edges`. |
 | `--snap-pauses` | `true` | Snap boundaries to qualifying acoustic silence pauses. |
 | `--has-ids` | `false` | Extract leading phrase IDs (auto-detected if text has tabs). |
+| `--threads`, `-j` | All cores | Number of intra-op CPU threads for ONNX Runtime inference. |
+| `--low-power` | `false` | Throttle CPU usage to 1 core for cool and quiet background alignment. |
 | `--verbose`, `-v` | `false` | Print detailed progress logs. |
 
 ---

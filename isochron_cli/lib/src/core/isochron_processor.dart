@@ -21,6 +21,7 @@ class IsochronProcessor {
     String? modelPath,
     ModelVariant modelVariant = ModelVariant.int8,
     bool snapToPauses = true,
+    int? intraOpThreads,
   }) async {
     final fragments = TextParser.parse(text, hasIds: hasIds);
     if (fragments.isEmpty) throw Exception("No text found in file.");
@@ -36,6 +37,7 @@ class IsochronProcessor {
         starPlacement: starPlacement,
         modelPath: modelPath,
         modelVariant: modelVariant,
+        intraOpThreads: intraOpThreads,
         snapToPauses: snapToPauses,
       ),
       onProgress: (stage, progress) => onProgress?.call(stage, progress),

@@ -60,6 +60,10 @@ void main() {
     });
 
     testWidgets('shows consolidate dialog with concise "Copy Files" and "Don\'t Copy" buttons', (tester) async {
+      tester.view.physicalSize = const Size(1200, 1000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
       final oldOnError = FlutterError.onError;
       FlutterError.onError = (details) {
         if (details.exceptionAsString().contains('overflowed')) return;
@@ -81,7 +85,14 @@ void main() {
       await tester.pumpAndSettle();
 
       // Find the checkbox for copy imported media
-      final checkboxFinder = find.byType(MacosCheckbox);
+      final copyMediaRow = find.ancestor(
+        of: find.text("Copy imported media into project folder"),
+        matching: find.byType(Row),
+      );
+      final checkboxFinder = find.descendant(
+        of: copyMediaRow,
+        matching: find.byType(MacosCheckbox),
+      );
       expect(checkboxFinder, findsOneWidget);
 
       // Tap checkbox
@@ -115,6 +126,50 @@ void main() {
       expect(manager.project!.copyMediaIntoProject, isTrue);
       // Media remains external
       expect(manager.hasExternalMedia(), isTrue);
+    });
+
+    testWidgets('renders Low Power Alignment Mode checkbox and toggles setting', (tester) async {
+      tester.view.physicalSize = const Size(1200, 1000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final oldOnError = FlutterError.onError;
+      FlutterError.onError = (details) {
+        if (details.exceptionAsString().contains('overflowed')) return;
+        oldOnError?.call(details);
+      };
+      addTearDown(() => FlutterError.onError = oldOnError);
+
+      await UserSettingsService().setLowPowerMode(false);
+
+      await tester.pumpWidget(
+        MacosApp(
+          home: MacosWindow(
+            child: ProjectSettingsView(
+              project: manager.project!,
+              manager: manager,
+              onSaved: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final lowPowerRow = find.ancestor(
+        of: find.text("Low Power Alignment Mode"),
+        matching: find.byType(Row),
+      );
+      final lpCheckboxFinder = find.descendant(
+        of: lowPowerRow,
+        matching: find.byType(MacosCheckbox),
+      );
+      expect(lpCheckboxFinder, findsOneWidget);
+      expect(UserSettingsService().isLowPowerMode, isFalse);
+
+      await tester.tap(lpCheckboxFinder);
+      await tester.pumpAndSettle();
+
+      expect(UserSettingsService().isLowPowerMode, isTrue);
     });
   });
 }

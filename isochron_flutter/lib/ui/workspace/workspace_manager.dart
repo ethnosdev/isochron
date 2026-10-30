@@ -1289,6 +1289,7 @@ class WorkspaceManager extends ChangeNotifier {
           audioPath: resolvedAudio,
           languageCode: project!.languageCode,
           leadInSeconds: project!.boundaryLeadInMs / 1000.0,
+          intraOpThreads: UserSettingsService().effectiveIntraOpThreads,
           onProgress: (status, prog) {
             if (isBatchRunning) {
               batchStatus = status;
@@ -1363,6 +1364,14 @@ class WorkspaceManager extends ChangeNotifier {
       FileSyncTracker.markLocallyWritten(colFile);
       await collection.saveTracks(project!.directoryPath);
       notifyListeners();
+
+      // If low power mode is active and there are more tracks, give the CPU a cooldown pause
+      final delayMs = UserSettingsService().interTrackDelayMs;
+      if (isBatchRunning && delayMs > 0 && track != pendingTracks.last) {
+        batchStatus = "Cooling down (Low Power Mode)...";
+        notifyListeners();
+        await Future.delayed(Duration(milliseconds: delayMs));
+      }
     }
 
     isBatchRunning = false;

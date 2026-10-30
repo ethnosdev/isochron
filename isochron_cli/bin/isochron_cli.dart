@@ -46,6 +46,12 @@ void main(List<String> arguments) async {
         allowed: ['int8', 'fp16', 'fp32'],
         defaultsTo: 'int8',
         help: 'Model variant to load from local cache: int8, fp16, fp32')
+    ..addOption('threads',
+        abbr: 'j',
+        help: 'Number of intra-op CPU threads for neural alignment (default: all cores)')
+    ..addFlag('low-power',
+        help: 'Throttle CPU usage to 1 core for cool and quiet background alignment',
+        defaultsTo: false)
     ..addFlag('snap-pauses',
         help: 'Snap boundaries to qualifying acoustic pauses',
         defaultsTo: true)
@@ -92,6 +98,12 @@ void main(List<String> arguments) async {
       orElse: () => ModelVariant.int8,
     );
     final snapPauses = results['snap-pauses'] as bool;
+    int? intraOpThreads;
+    if (results.wasParsed('threads')) {
+      intraOpThreads = int.tryParse(results['threads'] as String);
+    } else if (results['low-power'] as bool) {
+      intraOpThreads = 1;
+    }
 
     final outputPath = results['output'] as String?;
     final requestedFormat = results['format'] as String?;
@@ -135,6 +147,7 @@ void main(List<String> arguments) async {
         modelPath: modelPath,
         modelVariant: modelVariant,
         snapToPauses: snapPauses,
+        intraOpThreads: intraOpThreads,
         onProgress: (status, pct) {
           if (verbose) {
             stdout.write('\r[${(pct * 100).toStringAsFixed(0)}%] $status');
@@ -171,6 +184,12 @@ Future<void> _handleEval(List<String> args) async {
     ..addOption('star-score', defaultsTo: '-2.0', help: 'Wildcard star token log-probability (default -2.0)')
     ..addOption('star-placement', allowed: ['segment', 'edges'], defaultsTo: 'segment')
     ..addOption('model-variant', allowed: ['int8', 'fp16', 'fp32'], defaultsTo: 'int8')
+    ..addOption('threads',
+        abbr: 'j',
+        help: 'Number of intra-op CPU threads for neural alignment (default: all cores)')
+    ..addFlag('low-power',
+        help: 'Throttle CPU usage to 1 core for cool and quiet background alignment',
+        defaultsTo: false)
     ..addFlag('snap-pauses', help: 'Snap boundaries to qualifying acoustic pauses', defaultsTo: true)
     ..addFlag('help', abbr: 'h', negatable: false);
 
@@ -199,6 +218,12 @@ Future<void> _handleEval(List<String> args) async {
     orElse: () => ModelVariant.int8,
   );
   final snapPauses = results['snap-pauses'] as bool;
+  int? intraOpThreads;
+  if (results.wasParsed('threads')) {
+    intraOpThreads = int.tryParse(results['threads'] as String);
+  } else if (results['low-power'] as bool) {
+    intraOpThreads = 1;
+  }
 
   final evaluator = Evaluator();
   stdout.writeln('Running evaluation on fixtures in: ${fixturesDir.path}');
@@ -211,6 +236,7 @@ Future<void> _handleEval(List<String> args) async {
       starPlacement: starPlacement,
       modelVariant: variant,
       snapToPauses: snapPauses,
+      intraOpThreads: intraOpThreads,
     ),
     onProgress: (fixture, pct) {
       stdout.write('\r[${(pct * 100).toStringAsFixed(0)}%] Evaluating: $fixture...   ');

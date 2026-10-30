@@ -80,7 +80,8 @@ You don't need to manually match individual audio files to text files one by one
 
 ### Configuring Project Settings (Optional)
 Click the **Gear icon** (`Project Settings`) at the bottom-left of the sidebar (or press **`Cmd + ,`**):
-- **Theme & Collaborator Name:** Switch between System Default, Light Mode, and Dark Mode, and optionally set your collaborator name.
+- **Theme & App Preferences:** Switch between System Default, Light Mode, and Dark Mode.
+- **Low Power Alignment Mode:** Restricts neural model execution to 1 CPU core and adds a 5-second cooldown pause between files in batch runs. Ideal for keeping fans quiet and your laptop cool while working on other tasks.
 - **Copy imported media into project folder:** Check this box if you want Isochron to copy imported audio and text files directly into the project folder for portable archiving or cloud sharing.
 - **Default ID Prefix:** Optional prefix (e.g., `40`, `MRK`, `MAT`) used to auto-generate sequential 9-character IDs (like `MRK001001`) when your transcript files do not contain embedded IDs.
 - **Language Code (ISO 639-3):** Specify your 3-letter language code (e.g., `eng` for English, `ell` for Greek, `heb` for Hebrew, `cmn` for Mandarin).
@@ -94,6 +95,9 @@ You can run alignment in two ways:
 
 - **Batch Alignment (Whole Collection):**
   Select a collection in the sidebar to view its **Collection Triage Dashboard**, then click **Run Alignment on All**. Isochron queues all pending/error tracks and processes them sequentially while updating the segmented status bar in real time. Click **Stop Batch** at any time to pause.
+  
+  > ❄️ **Low Power Mode for Quiet Background Runs:** To prevent fan noise and battery drain during long batches, enable **Low Power Alignment Mode** in **Project Settings** (`Cmd + ,`). This limits CPU usage to 1 core and adds a 5-second cooldown pause between tracks so your laptop stays cool and quiet while you work on other tasks.
+
 - **Single Track Alignment:**
   Click any track in the sidebar or collection list to open the **Studio Editor**, then click **Auto-Align** (the wand icon) in the top toolbar (or right-click the track in the sidebar and choose **Run Auto-Align**).
 

@@ -69,6 +69,12 @@ Instead of relying on third-party Flutter plugin wrappers, `isochron_cli` interf
 - Allocates native tensor buffers with zero-copy views.
 - Executes dynamic int8 quantized weights (`model_int8.onnx`, 302.6 MB), optimized for Apple Silicon CPU SIMD execution units.
 
+### Thread Management & Thermal Throttling
+ONNX Runtime's thread pool is controlled via `SetIntraOpNumThreads`:
+- **Full Speed (Default):** Defaults to `Platform.numberOfProcessors`, utilizing all logical cores for peak matrix-multiplication throughput (~2–4s per audio minute).
+- **Low Power Mode:** Clamps intra-op threads to 1 single thread. On modern architectures (such as Apple Silicon M-series or Intel P/E cores), this significantly lowers package power draw ($< 3\text{–}5\text{W}$ vs $25\text{W}+$ peak), prevents multi-core thermal accumulation, and allows unattended batch execution without fan noise or chassis heating.
+- **Batch Pacing:** In Low Power Mode, `WorkspaceManager` additionally inserts a 5,000 ms cooldown pause between consecutive files, allowing heatsinks and chassis to radiate heat back to baseline temperature.
+
 ---
 
 ## 3. Sliding Window Inference & Normalization

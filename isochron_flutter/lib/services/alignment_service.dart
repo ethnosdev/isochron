@@ -102,6 +102,7 @@ class AlignmentService {
     bool generateIds = false,
     String? generatedIdPrefix,
     int recordingNumber = 1,
+    int? intraOpThreads,
     required void Function(String status, double progress) onProgress,
   }) async {
     await _ensureWorkerStarted();
@@ -131,6 +132,7 @@ class AlignmentService {
       'generateIds': generateIds,
       'generatedIdPrefix': generatedIdPrefix,
       'recordingNumber': recordingNumber,
+      'intraOpThreads': intraOpThreads,
     });
 
     return _activeCompleter!.future;
@@ -148,6 +150,7 @@ class AlignmentService {
     bool generateIds = false,
     String? generatedIdPrefix,
     int recordingNumber = 1,
+    int? intraOpThreads,
     required void Function(String status, double progress) onProgress,
     String snapMode = 'onset',
     int snapOffsetMs = 0,
@@ -161,6 +164,7 @@ class AlignmentService {
       generateIds: generateIds,
       generatedIdPrefix: generatedIdPrefix,
       recordingNumber: recordingNumber,
+      intraOpThreads: intraOpThreads,
       onProgress: onProgress,
     );
   }
@@ -216,6 +220,7 @@ class AlignmentService {
           final generateIds = message['generateIds'] as bool? ?? false;
           final generatedIdPrefix = message['generatedIdPrefix'] as String?;
           final recordingNumber = message['recordingNumber'] as int? ?? 1;
+          final intraOpThreads = message['intraOpThreads'] as int?;
 
           List<Fragment> fragments;
           if (keepEdits && existingList != null && existingList.isNotEmpty) {
@@ -242,6 +247,7 @@ class AlignmentService {
               starPlacement: starPlacement,
               modelPath: modelPath,
               modelVariant: modelVariant,
+              intraOpThreads: intraOpThreads,
               snapToPauses: snapToPauses,
               keepEdits: keepEdits,
             ),
