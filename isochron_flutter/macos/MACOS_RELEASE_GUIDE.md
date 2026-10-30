@@ -80,7 +80,7 @@ This ensures the app is signed with the correct Developer ID certificate and Har
 3. Go to the top menu: **Product** -> **Archive**.
 4. When the Organizer window opens, click **Distribute App**.
 5. Select: **Custom** -> **Direct Distribution** -> **Export** -> **Automatically manage signing**.
-6. Save the exported folder (e.g., `Isochron_Release`) to your **Desktop**.
+6. Save the exported folder as `Isochron_Release` to your **Desktop**.
 
 ### 3. Generate the DMG
 Open your terminal and run the following commands to wrap your `.app` into a `.dmg`:
@@ -129,3 +129,7 @@ xcrun stapler staple ~/Desktop/Isochron.dmg
 ```
 
 **Done!** `Isochron.dmg` is now fully signed, notarized, stapled, and ready to be distributed to users on the internet.
+
+### 6. Publish
+
+Create a GitHub release and attach `Isochron.dmg` as an asset. 

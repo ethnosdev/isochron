@@ -230,7 +230,7 @@ packages:
       path: "../isochron_cli"
       relative: true
     source: path
-    version: "0.0.1"
+    version: "2.1.0"
   just_audio:
     dependency: "direct main"
     description:
