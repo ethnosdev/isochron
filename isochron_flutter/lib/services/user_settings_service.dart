@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -153,21 +152,20 @@ class UserSettingsService {
         if (name.isEmpty) name = p.basename(path);
       }
 
-      return RecentProjectEntry(
-        path: path,
-        name: name,
-        directory: dir,
-      );
+      return RecentProjectEntry(path: path, name: name, directory: dir);
     }).toList();
   }
 
   Future<void> addRecentProject(String projectJsonPath) async {
-    final current =
-        List<String>.from(_prefs.getStringList(_keyRecentProjects) ?? []);
+    final current = List<String>.from(
+      _prefs.getStringList(_keyRecentProjects) ?? [],
+    );
     current.remove(projectJsonPath);
     current.insert(0, projectJsonPath);
-    final filtered =
-        current.where((path) => File(path).existsSync()).take(10).toList();
+    final filtered = current
+        .where((path) => File(path).existsSync())
+        .take(10)
+        .toList();
     await _prefs.setStringList(_keyRecentProjects, filtered);
   }
 }
