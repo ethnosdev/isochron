@@ -1,7 +1,6 @@
 name: isochron_cli
 description: A pure-Dart Meta MMS neural forced aligner CLI.
-version: 0.0.1
-# repository: https://github.com/your_username/isochron
+version: 2.1.0
 
 environment:
   sdk: ^3.13.5

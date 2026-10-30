@@ -1,4 +1,4 @@
-## Unreleased
+## 2.1.0 - 2026.10.30
 
 ### Low Power Alignment Mode & Background Throttling
 - **Silent & Cool Background Batching:** Low Power Mode clamps ONNX Runtime intra-op threads to 1 core and inserts a 5-second cooldown pause between tracks during batch runs, keeping laptop fans quiet and temperatures cool while multitasking.
