@@ -867,13 +867,12 @@ class WorkspaceManager extends ChangeNotifier {
     if (project == null) return;
     final settings = UserSettingsService();
     final result = await FilePicker.pickFiles(
-      allowMultiple: true,
       initialDirectory: settings.lastSourceDir,
     );
-    if (result == null || result.files.isEmpty) return;
+    if (result.isEmpty) return;
 
     String? firstValidPath;
-    for (final f in result.files) {
+    for (final f in result) {
       if (f.path != null) {
         firstValidPath = f.path;
         break;
@@ -885,7 +884,7 @@ class WorkspaceManager extends ChangeNotifier {
 
     final audioFiles = <String>[];
     final textFiles = <String>[];
-    for (final f in result.files) {
+    for (final f in result) {
       if (f.path == null) continue;
       final ext = p.extension(f.path!).toLowerCase();
       if (['.mp3', '.wav', '.m4a'].contains(ext)) {

@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
@@ -14,11 +15,10 @@ typedef DirectoryPickerFn = Future<String?> Function({
   String? initialDirectory,
 });
 
-typedef FileSaverFn = Future<String?> Function({
+typedef FileSaverFn = Future<Uri?> Function({
+  required String fileName,
+  required Uint8List bytes,
   String? dialogTitle,
-  String? fileName,
-  FileType type,
-  List<String>? allowedExtensions,
   String? initialDirectory,
 });
 
@@ -155,33 +155,34 @@ class _GroupExportDialogState extends State<GroupExportDialog> {
           );
         }
       } else if (_selectedMode == GroupExportMode.singleFile) {
-        final saver = widget.fileSaver ?? FilePicker.saveFile;
-        final defaultName = widget.collection != null
-            ? '${widget.collection!.folderName}-timing.txt'
-            : '${widget.project.name}-timing.txt';
-        final outputFile = await saver(
-          dialogTitle: 'Save Timing File',
-          fileName: defaultName,
-          type: FileType.custom,
-          allowedExtensions: ['txt'],
-          initialDirectory: widget.project.directoryPath,
-        );
-        if (outputFile == null) {
-          if (mounted) setState(() => _isExporting = false);
-          return;
-        }
-
-        final targetPath =
-            outputFile.endsWith('.txt') ? outputFile : '$outputFile.txt';
         final payload =
             await ExportService.buildDividedChaptersSingleFilePayload(
           widget.project,
           _readyTracks,
         );
 
-        if (payload != null) {
-          await File(targetPath).writeAsString(payload);
+        if (payload == null) {
+          if (mounted) setState(() => _isExporting = false);
+          return;
         }
+
+        final defaultName = widget.collection != null
+            ? '${widget.collection!.folderName}-timing.txt'
+            : '${widget.project.name}-timing.txt';
+        final bytes = Uint8List.fromList(utf8.encode(payload));
+        final saver = widget.fileSaver ?? FilePicker.saveFile;
+        final outputUri = await saver(
+          dialogTitle: 'Save Timing File',
+          fileName: defaultName,
+          bytes: bytes,
+          initialDirectory: widget.project.directoryPath,
+        );
+        if (outputUri == null) {
+          if (mounted) setState(() => _isExporting = false);
+          return;
+        }
+
+        final targetPath = outputUri.toFilePath();
 
         if (mounted) {
           Navigator.of(context).pop(

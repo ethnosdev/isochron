@@ -213,6 +213,7 @@
 				33CC10EB2044A3C60003C045 /* Resources */,
 				33CC110E2044A8840003C045 /* Bundle Framework */,
 				3399D490228B24CF009A79C7 /* ShellScript */,
+				E7A000012CE8000100000001 /* Embed ONNX Runtime */,
 			);
 			buildRules = (
 			);
@@ -318,8 +319,28 @@
 			shellPath = /bin/sh;
 			shellScript = "echo \"$PRODUCT_NAME.app\" > \"$PROJECT_DIR\"/Flutter/ephemeral/.app_filename && \"$FLUTTER_ROOT\"/packages/flutter_tools/bin/macos_assemble.sh embed\n";
 		};
+		E7A000012CE8000100000001 /* Embed ONNX Runtime */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Embed ONNX Runtime";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "ORT_SRC=\"$PROJECT_DIR/../../isochron_cli/native/lib/libonnxruntime.dylib\"\nif [ ! -f \"$ORT_SRC\" ]; then\n  echo \"[Embed ONNX Runtime] libonnxruntime.dylib not found at $ORT_SRC, fetching...\"\n  DART_BIN=\"dart\"\n  if [ -x \"$FLUTTER_ROOT/bin/dart\" ]; then\n    DART_BIN=\"$FLUTTER_ROOT/bin/dart\"\n  fi\n  (cd \"$PROJECT_DIR/../../isochron_cli\" && \"$DART_BIN\" run tool/fetch_onnxruntime.dart)\nfi\nFRAMEWORKS_DIR=\"$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH\"\nmkdir -p \"$FRAMEWORKS_DIR\"\nif [ -f \"$ORT_SRC\" ]; then\n  cp -f \"$ORT_SRC\" \"$FRAMEWORKS_DIR/libonnxruntime.dylib\"\n  if [ -n \"$EXPANDED_CODE_SIGN_IDENTITY\" ]; then\n    codesign --force --sign \"$EXPANDED_CODE_SIGN_IDENTITY\" --timestamp=none \"$FRAMEWORKS_DIR/libonnxruntime.dylib\"\n  else\n    codesign --force --sign - --timestamp=none \"$FRAMEWORKS_DIR/libonnxruntime.dylib\"\n  fi\n  echo \"[Embed ONNX Runtime] Successfully bundled libonnxruntime.dylib into $FRAMEWORKS_DIR\"\nelse\n  echo \"[Embed ONNX Runtime] ERROR: libonnxruntime.dylib could not be found or fetched.\"\n  exit 1\nfi\n";
+		};
 		33CC111E2044C6BF0003C045 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);

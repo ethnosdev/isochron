@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -299,14 +298,14 @@ void main() {
       buildLauncherWidget(tester, 
         targetCollection: collection,
         fileSaver: ({
-          allowedExtensions,
+          required fileName,
+          required bytes,
           dialogTitle,
-          fileName,
           initialDirectory,
-          type = FileType.any,
         }) async {
           capturedFileName = fileName;
-          return saveFileTarget;
+          await File(saveFileTarget).writeAsBytes(bytes);
+          return Uri.file(saveFileTarget);
         },
       ),
     );

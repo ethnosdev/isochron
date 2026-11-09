@@ -56,7 +56,7 @@ ffi.DynamicLibrary loadOrtLibrary({String? customPath}) {
   } catch (_) {
     throw OrtException(
       'Could not find libonnxruntime.dylib.\nChecked paths:\n${candidates.join('\n')}\n'
-      'Run `dart run tool/fetch_onnxruntime.dart` or set ORT_DYLIB_PATH.',
+      'Ensure Isochron is installed correctly, or set the ORT_DYLIB_PATH environment variable.',
     );
   }
 }

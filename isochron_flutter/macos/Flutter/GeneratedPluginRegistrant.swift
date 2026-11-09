@@ -7,7 +7,7 @@ import Foundation
 
 import appkit_ui_element_colors
 import audio_session
-import file_picker
+import file_picker_darwin
 import just_audio
 import just_waveform
 import macos_ui

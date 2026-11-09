@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
@@ -241,25 +243,24 @@ Future<void> _handleExportPhraseTimingForTrack(
     return;
   }
 
-  final defaultName = ExportService.defaultPhraseTimingFilenameForTrack(track);
-  final outputFile = await FilePicker.saveFile(
-    dialogTitle: 'Export Phrase Timing',
-    fileName: defaultName,
-    type: FileType.custom,
-    allowedExtensions: ['txt'],
-    initialDirectory: manager.project!.directoryPath,
-  );
-
-  if (outputFile == null) return;
-
   try {
     final payload = await ExportService.buildPhraseTiming(
       manager.project!,
       track,
     );
-    if (payload != null && payload.isNotEmpty) {
-      await File(outputFile).writeAsString(payload);
-    }
+    if (payload == null || payload.isEmpty) return;
+
+    final defaultName =
+        ExportService.defaultPhraseTimingFilenameForTrack(track);
+    final bytes = Uint8List.fromList(utf8.encode(payload));
+    final outputFile = await FilePicker.saveFile(
+      dialogTitle: 'Export Phrase Timing',
+      fileName: defaultName,
+      bytes: bytes,
+      initialDirectory: manager.project!.directoryPath,
+    );
+
+    if (outputFile == null) return;
   } catch (e) {
     if (context.mounted) {
       showCupertinoDialog(
@@ -484,12 +485,12 @@ Widget _buildTreeRowForNode(
                 icon: CupertinoIcons.speaker_2_fill,
                 onTap: () async {
                   final settings = UserSettingsService();
-                  final picked = await FilePicker.pickFiles(
+                  final picked = await FilePicker.pickFile(
                     type: FileType.audio,
                     initialDirectory: settings.lastSourceDir,
                   );
-                  if (picked != null && picked.files.single.path != null) {
-                    final pickedPath = picked.files.single.path!;
+                  if (picked != null && picked.path != null) {
+                    final pickedPath = picked.path!;
                     settings.setLastSourceDir(p.dirname(pickedPath));
                     await manager.replaceTrackAudio(track, col, pickedPath);
                   }
@@ -500,13 +501,13 @@ Widget _buildTreeRowForNode(
                 icon: CupertinoIcons.doc_text_fill,
                 onTap: () async {
                   final settings = UserSettingsService();
-                  final picked = await FilePicker.pickFiles(
+                  final picked = await FilePicker.pickFile(
                     type: FileType.custom,
                     allowedExtensions: ['txt', 'phrases'],
                     initialDirectory: settings.lastSourceDir,
                   );
-                  if (picked != null && picked.files.single.path != null) {
-                    final pickedPath = picked.files.single.path!;
+                  if (picked != null && picked.path != null) {
+                    final pickedPath = picked.path!;
                     settings.setLastSourceDir(p.dirname(pickedPath));
                     await manager.replaceTrackText(track, col, pickedPath);
                   }

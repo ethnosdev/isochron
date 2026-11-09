@@ -1,3 +1,8 @@
+## 2.1.1 - 2026.11.09
+
+- **Bundle Native ONNX Runtime Library:** Automatically embed and codesign `libonnxruntime.dylib` into the macOS app bundle (`Contents/Frameworks/libonnxruntime.dylib`), resolving alignment errors on clean installations and upgrades.
+- Updated the file picker to a newer version.
+
 ## 2.1.0 - 2026.10.30
 
 ### Low Power Alignment Mode & Background Throttling

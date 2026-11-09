@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart';
 import 'package:file_picker/file_picker.dart';
@@ -47,27 +48,25 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
       return;
     }
 
-    final defaultName = ExportService.defaultPhraseTimingFilenameForTrack(
-      track,
-    );
-    final outputFile = await FilePicker.saveFile(
-      dialogTitle: 'Export Phrase Timing',
-      fileName: defaultName,
-      type: FileType.custom,
-      allowedExtensions: ['txt'],
-      initialDirectory: manager.project!.directoryPath,
-    );
-
-    if (outputFile == null) return;
-
     try {
       final payload = await ExportService.buildPhraseTiming(
         manager.project!,
         track,
       );
-      if (payload != null && payload.isNotEmpty) {
-        await File(outputFile).writeAsString(payload);
-      }
+      if (payload == null || payload.isEmpty) return;
+
+      final defaultName = ExportService.defaultPhraseTimingFilenameForTrack(
+        track,
+      );
+      final bytes = Uint8List.fromList(utf8.encode(payload));
+      final outputFile = await FilePicker.saveFile(
+        dialogTitle: 'Export Phrase Timing',
+        fileName: defaultName,
+        bytes: bytes,
+        initialDirectory: manager.project!.directoryPath,
+      );
+
+      if (outputFile == null) return;
     } catch (e) {
       if (context.mounted) {
         showCupertinoDialog(

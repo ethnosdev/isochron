@@ -68,15 +68,15 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   Future<void> _openProject() async {
     try {
       final settings = UserSettingsService();
-      final result = await FilePicker.pickFiles(
+      final result = await FilePicker.pickFile(
         dialogTitle: 'Open Project',
         type: FileType.custom,
         allowedExtensions: ['json'],
         initialDirectory: settings.lastProjectDir,
       );
 
-      if (result != null && result.files.single.path != null) {
-        final path = result.files.single.path!;
+      if (result != null && result.path != null) {
+        final path = result.path!;
         settings.setLastProjectDir(p.dirname(path));
         await _manager.openProject(path);
         await settings.addRecentProject(path);
@@ -101,17 +101,17 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     if (_manager.project == null) return;
 
     final settings = UserSettingsService();
-    final result = await FilePicker.pickFiles(
+    final result = await FilePicker.pickFile(
       dialogTitle: 'Import Collections from Project',
       type: FileType.custom,
       allowedExtensions: ['json'],
       initialDirectory: settings.lastProjectDir,
     );
 
-    if (result != null && result.files.single.path != null) {
+    if (result != null && result.path != null) {
       try {
         final importResult = await _manager.importCollections(
-          result.files.single.path!,
+          result.path!,
         );
 
         if (mounted) {

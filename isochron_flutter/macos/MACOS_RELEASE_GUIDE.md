@@ -97,7 +97,10 @@ mkdir Isochron_DMG_Source
 # `cp` breaks framework symlinks which invalidates the Apple Code Signature.
 ditto "Isochron_Release/Isochron.app" "Isochron_DMG_Source/Isochron.app"
 
-# 3. Create the DMG
+# 3. Verify native ONNX Runtime library was bundled and signed
+codesign -dv --verbose=4 "Isochron_DMG_Source/Isochron.app/Contents/Frameworks/libonnxruntime.dylib"
+
+# 4. Create the DMG
 # (Delete any existing DMG first)
 rm -f Isochron.dmg
 create-dmg \

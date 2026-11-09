@@ -1,3 +1,7 @@
+## 2.1.1 - 2026.11.09
+
+- **Error Reporting:** Improved error message when `libonnxruntime.dylib` cannot be loaded to avoid developer-only CLI prompts for end users.
+
 ## 2.0.0 - 2026.10.15
 
 ### 🚀 Meta MMS-300M Pure-Dart Engine Rewrite

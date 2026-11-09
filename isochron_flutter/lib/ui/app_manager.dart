@@ -622,30 +622,25 @@ class AppManager extends ValueNotifier<AppState> {
       return;
     }
 
-    final String? outputFile = await FilePicker.saveFile(
-      dialogTitle: 'Export Alignment',
-      fileName: 'alignment.json',
-      type: FileType.custom,
-      allowedExtensions: ['json'],
-      lockParentWindow: true,
-      initialDirectory: value.autoSavePath != null
-          ? p.dirname(value.autoSavePath!)
-          : null,
-    );
-
-    if (outputFile == null) return;
-
     try {
-      value = value.copyWith(statusMessage: "Exporting...");
-
       final jsonList = value.fragments.map((f) => f.toJson()).toList();
       final jsonString = const JsonEncoder.withIndent('  ').convert(jsonList);
+      final bytes = Uint8List.fromList(utf8.encode(jsonString));
 
-      final file = File(outputFile);
-      await file.writeAsString(jsonString);
+      final outputUri = await FilePicker.saveFile(
+        dialogTitle: 'Export Alignment',
+        fileName: 'alignment.json',
+        bytes: bytes,
+        initialDirectory: value.autoSavePath != null
+            ? p.dirname(value.autoSavePath!)
+            : null,
+      );
 
+      if (outputUri == null) return;
+
+      final savedPath = outputUri.toFilePath();
       value = value.copyWith(
-        statusMessage: "Exported successfully to: ${p.basename(outputFile)}",
+        statusMessage: "Exported successfully to: ${p.basename(savedPath)}",
       );
     } catch (e) {
       value = value.copyWith(statusMessage: "Export failed: $e");

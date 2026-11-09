@@ -313,13 +313,12 @@ class _StudioEditorState extends State<StudioEditor> {
                             controlSize: ControlSize.small,
                             onPressed: () async {
                               final settings = UserSettingsService();
-                              final picked = await FilePicker.pickFiles(
+                              final picked = await FilePicker.pickFile(
                                 type: FileType.audio,
                                 initialDirectory: settings.lastSourceDir,
                               );
-                              if (picked != null &&
-                                  picked.files.single.path != null) {
-                                final pth = picked.files.single.path!;
+                              if (picked != null && picked.path != null) {
+                                final pth = picked.path!;
                                 settings.setLastSourceDir(p.dirname(pth));
                                 await widget.homeManager
                                     .replaceCurrentTrackAudio(pth);
@@ -334,14 +333,13 @@ class _StudioEditorState extends State<StudioEditor> {
                             controlSize: ControlSize.small,
                             onPressed: () async {
                               final settings = UserSettingsService();
-                              final picked = await FilePicker.pickFiles(
+                              final picked = await FilePicker.pickFile(
                                 type: FileType.custom,
                                 allowedExtensions: ['txt', 'phrases'],
                                 initialDirectory: settings.lastSourceDir,
                               );
-                              if (picked != null &&
-                                  picked.files.single.path != null) {
-                                final pth = picked.files.single.path!;
+                              if (picked != null && picked.path != null) {
+                                final pth = picked.path!;
                                 settings.setLastSourceDir(p.dirname(pth));
                                 await widget.homeManager
                                     .replaceCurrentTrackText(pth);

@@ -198,15 +198,14 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
   Future<void> _pickAudioFiles() async {
     final settings = UserSettingsService();
     final result = await FilePicker.pickFiles(
-      allowMultiple: true,
       dialogTitle: 'Select Audio Files',
       type: FileType.custom,
       allowedExtensions: ['mp3', 'wav', 'm4a'],
       initialDirectory: settings.lastSourceDir,
     );
-    if (result == null || result.files.isEmpty || !mounted) return;
+    if (result.isEmpty || !mounted) return;
 
-    final pickedPaths = result.files
+    final pickedPaths = result
         .where((f) => f.path != null)
         .map((f) => f.path!)
         .toList();
@@ -247,15 +246,14 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
   Future<void> _pickTextFiles() async {
     final settings = UserSettingsService();
     final result = await FilePicker.pickFiles(
-      allowMultiple: true,
       dialogTitle: 'Select Transcript Files',
       type: FileType.custom,
       allowedExtensions: ['txt', 'phrases'],
       initialDirectory: settings.lastSourceDir,
     );
-    if (result == null || result.files.isEmpty || !mounted) return;
+    if (result.isEmpty || !mounted) return;
 
-    final pickedPaths = result.files
+    final pickedPaths = result
         .where((f) => f.path != null)
         .map((f) => f.path!)
         .toList();
