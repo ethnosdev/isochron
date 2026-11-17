@@ -136,3 +136,7 @@ xcrun stapler staple ~/Desktop/Isochron.dmg
 ### 6. Publish
 
 Create a GitHub release and attach `Isochron.dmg` as an asset. 
+
+### 7. Update website
+
+Use the GitHub link to update the website.
