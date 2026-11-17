@@ -26,6 +26,8 @@ dependencies:
   isochron_cli:
     path: ../isochron_cli
   scrollable_positioned_list: ^0.3.8
+  material_ui: ^1.11.0
+  cupertino_ui: ^1.1.6
 
 dev_dependencies:
   flutter_test:

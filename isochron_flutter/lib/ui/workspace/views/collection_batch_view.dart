@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:flutter/cupertino.dart';
+import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:isochron_flutter/ui/components/macos_context_menu.dart';
 import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
@@ -90,7 +90,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
   }
 
   Future<void> _promptDeleteCollection() async {
-    final bool? confirm = await showCupertinoDialog<bool>(
+    final bool? confirm = await showAppAlertDialog<bool>(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
         title: const Text('Delete Collection?'),

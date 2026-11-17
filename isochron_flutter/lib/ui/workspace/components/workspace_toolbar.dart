@@ -1,5 +1,6 @@
-import 'package:flutter/cupertino.dart';
+import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:isochron_flutter/services/export_service.dart';
+import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/workspace/components/export_prompt_helper.dart';
 import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
@@ -12,7 +13,7 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
   final selectedNode = manager.selectedNode;
 
   Future<void> requestDeleteTrack(Track track, Collection collection) async {
-    final bool? confirm = await showCupertinoDialog<bool>(
+    final bool? confirm = await showAppAlertDialog<bool>(
       context: context,
       builder: (context) => CupertinoAlertDialog(
         title: const Text('Delete Track?'),
@@ -73,7 +74,7 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
 
             bool keepEdits = false;
             if (hasUserEdits && context.mounted) {
-              final choice = await showCupertinoDialog<int>(
+              final choice = await showAppAlertDialog<int>(
                 context: context,
                 builder: (dialogCtx) => CupertinoAlertDialog(
                   title: const Text("Re-align Track?"),
@@ -104,7 +105,7 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
               if (choice == null || choice == 0) return;
               keepEdits = (choice == 1);
             } else if (hasExistingAlignment && context.mounted) {
-              final choice = await showCupertinoDialog<bool>(
+              final choice = await showAppAlertDialog<bool>(
                 context: context,
                 builder: (dialogCtx) => CupertinoAlertDialog(
                   title: const Text("Re-align Track?"),
@@ -136,7 +137,7 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
               );
             } catch (e) {
               if (context.mounted) {
-                showCupertinoDialog(
+                showAppAlertDialog(
                   context: context,
                   builder: (_) => CupertinoAlertDialog(
                     title: const Text("Alignment Error"),

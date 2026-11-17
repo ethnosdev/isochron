@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:flutter/cupertino.dart';
+import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:macos_ui/macos_ui.dart';
 

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/cupertino.dart';
+import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/services/alignment_service.dart';
@@ -491,6 +491,7 @@ class _ToolbarTestHost extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MacosApp(
+      localizationsDelegates: const [DefaultCupertinoLocalizations.delegate],
       home: Builder(
         builder: (innerContext) {
           return MacosWindow(

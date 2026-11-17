@@ -1,4 +1,4 @@
-import 'package:flutter/cupertino.dart';
+import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
 

@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/cupertino.dart';
+import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isochron_flutter/ui/workspace/components/track_pairing_wizard.dart';
 import 'package:isochron_flutter/utils/media_pairing_engine.dart';

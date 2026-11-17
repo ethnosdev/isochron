@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/cupertino.dart';
+import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
@@ -116,6 +116,7 @@ void main() {
     VoidCallback? onDeleteCollection,
   }) {
     return MacosApp(
+      localizationsDelegates: const [DefaultCupertinoLocalizations.delegate],
       home: MacosWindow(
         child: CollectionBatchView(
           collection: collection,
