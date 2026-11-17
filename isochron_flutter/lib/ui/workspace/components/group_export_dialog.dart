@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:isochron_flutter/services/export_service.dart';
 import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
@@ -64,7 +65,7 @@ class GroupExportDialog extends StatefulWidget {
           context: context,
           barrierLabel: 'Dismiss',
           builder: (ctx) => MacosAlertDialog(
-            appIcon: const MacosIcon(CupertinoIcons.checkmark_seal_fill),
+            appIcon: const MacosIcon(AppIcons.checkmark_seal_fill),
             title: const Text('Export Complete'),
             message: Text(result.message, textAlign: TextAlign.center),
             primaryButton: PushButton(
@@ -80,7 +81,7 @@ class GroupExportDialog extends StatefulWidget {
           barrierLabel: 'Dismiss',
           builder: (ctx) => MacosAlertDialog(
             appIcon:
-                const MacosIcon(CupertinoIcons.exclamationmark_triangle_fill),
+                const MacosIcon(AppIcons.exclamationmark_triangle_fill),
             title: const Text('Export Failed'),
             message: Text(result.message, textAlign: TextAlign.center),
             primaryButton: PushButton(
@@ -341,7 +342,7 @@ class _GroupExportDialogState extends State<GroupExportDialog> {
                   style: theme.typography.headline,
                 ),
                 MacosIconButton(
-                  icon: const MacosIcon(CupertinoIcons.xmark_circle),
+                  icon: const MacosIcon(AppIcons.xmark_circle),
                   onPressed:
                       _isExporting ? null : () => Navigator.of(context).pop(),
                 ),
@@ -370,10 +371,10 @@ class _GroupExportDialogState extends State<GroupExportDialog> {
                 children: [
                   Icon(
                     readyCount == 0
-                        ? CupertinoIcons.exclamationmark_triangle_fill
+                        ? AppIcons.exclamationmark_triangle_fill
                         : (unalignedCount > 0
-                            ? CupertinoIcons.info_circle_fill
-                            : CupertinoIcons.checkmark_circle_fill),
+                            ? AppIcons.info_circle_fill
+                            : AppIcons.checkmark_circle_fill),
                     color: readyCount == 0
                         ? AppTheme.destructive(context)
                         : (unalignedCount > 0

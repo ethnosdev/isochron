@@ -1,4 +1,5 @@
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:isochron_cli/isochron_cli.dart';
@@ -481,7 +482,7 @@ class _WaveformViewState extends State<WaveformView>
                               destructiveColor: AppTheme.destructive(context),
                               textColor:
                                   MacosTheme.of(context).typography.body.color ??
-                                      CupertinoColors.black,
+                                      MacosColors.black,
                               selectedFragmentIndex:
                                   widget.state.selectedFragmentIndex,
                               hoveredFragmentIndex: _hoveredFragmentIndex,
@@ -635,7 +636,7 @@ class _WaveformViewState extends State<WaveformView>
       items: [
         MacosContextMenuItem(
           title: 'Play Fragment',
-          icon: CupertinoIcons.play_arrow_solid,
+          icon: AppIcons.play_arrow_solid,
           shortcut: 'P',
           onTap: () {
             widget.controller.selectFragment(f.index);
@@ -646,7 +647,7 @@ class _WaveformViewState extends State<WaveformView>
           title: f.status == FragmentStatus.reviewed
               ? 'Mark Unreviewed'
               : 'Mark Reviewed',
-          icon: CupertinoIcons.checkmark_circle_fill,
+          icon: AppIcons.checkmark_circle_fill,
           shortcut: 'R',
           onTap: () {
             widget.controller.toggleFragmentReviewed(f.index);
@@ -654,7 +655,7 @@ class _WaveformViewState extends State<WaveformView>
         ),
         MacosContextMenuItem(
           title: 'Snap Start to Playhead',
-          icon: CupertinoIcons.arrow_right_to_line,
+          icon: AppIcons.arrow_right_to_line,
           shortcut: 'Enter',
           onTap: () {
             widget.controller.captureFragmentTiming(context, f.index);
@@ -662,7 +663,7 @@ class _WaveformViewState extends State<WaveformView>
         ),
         MacosContextMenuItem(
           title: 'Reset to Auto Boundary',
-          icon: CupertinoIcons.arrow_counterclockwise,
+          icon: AppIcons.arrow_counterclockwise,
           enabled: f.autoStart != null,
           onTap: () {
             widget.controller.resetToAutoBoundary(f.index);
@@ -671,7 +672,7 @@ class _WaveformViewState extends State<WaveformView>
         const MacosContextMenuDivider(),
         MacosContextMenuItem(
           title: 'Clear Timing',
-          icon: CupertinoIcons.clear_circled_solid,
+          icon: AppIcons.clear_circled_solid,
           isDestructive: true,
           onTap: () {
             widget.controller.clearFragmentTiming(f.index);

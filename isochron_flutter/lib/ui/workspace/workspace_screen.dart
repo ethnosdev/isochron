@@ -1,6 +1,7 @@
 
 import 'package:file_picker/file_picker.dart';
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
@@ -118,7 +119,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           showAppAlertDialog(
             context: context,
             builder: (context) => MacosAlertDialog(
-              appIcon: const MacosIcon(CupertinoIcons.check_mark_circled),
+              appIcon: const MacosIcon(AppIcons.check_mark_circled),
               title: const Text('Import Complete'),
               message: Text(
                 'Successfully imported ${importResult.collectionsCount} collection(s) containing ${importResult.tracksCount} tracks.',
@@ -138,7 +139,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           showAppAlertDialog(
             context: context,
             builder: (context) => MacosAlertDialog(
-              appIcon: const MacosIcon(CupertinoIcons.exclamationmark_triangle),
+              appIcon: const MacosIcon(AppIcons.exclamationmark_triangle),
               title: const Text('Import Failed'),
               message: Text(
                 'Could not parse the selected project file.\n\nError: $e',

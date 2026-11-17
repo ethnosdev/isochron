@@ -1,4 +1,5 @@
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:isochron_flutter/services/export_service.dart';
 import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
@@ -15,23 +16,27 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
   Future<void> requestDeleteTrack(Track track, Collection collection) async {
     final bool? confirm = await showAppAlertDialog<bool>(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
+      builder: (dialogContext) => MacosAlertDialog(
+        appIcon: const MacosIcon(
+          AppIcons.trash,
+          color: MacosColors.systemRedColor,
+          size: 48,
+        ),
         title: const Text('Delete Track?'),
-        content: Text(
+        message: Text(
           'Are you sure you want to remove "${track.name}" from this collection?',
         ),
-        actions: [
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
+        primaryButton: PushButton(
+          controlSize: ControlSize.large,
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('Delete'),
+        ),
+        secondaryButton: PushButton(
+          controlSize: ControlSize.large,
+          secondary: true,
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('Cancel'),
+        ),
       ),
     );
 
@@ -58,7 +63,7 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
         ToolBarIconButton(
           label: 'Auto-Align',
           icon: MacosIcon(
-            CupertinoIcons.wand_rays,
+            AppIcons.wand_rays,
             color: MacosTheme.of(context).typography.body.color,
           ),
           showLabel: true,
@@ -74,57 +79,96 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
 
             bool keepEdits = false;
             if (hasUserEdits && context.mounted) {
-              final choice = await showAppAlertDialog<int>(
+              final choice = await showAppSheet<int>(
                 context: context,
-                builder: (dialogCtx) => CupertinoAlertDialog(
-                  title: const Text("Re-align Track?"),
-                  content: const Text(
-                    "This track contains edited or reviewed verse boundaries.\n\n"
-                    "Choose 'Keep My Edits' to lock your reviewed boundaries and only re-align automatic verses, "
-                    "or 'Overwrite All' to recalculate all boundaries.\n\n"
-                    "A backup (.bak) of the current alignment will be saved.",
-                  ),
-                  actions: [
-                    CupertinoDialogAction(
-                      isDefaultAction: true,
-                      onPressed: () => Navigator.pop(dialogCtx, 1),
-                      child: const Text("Keep My Edits"),
+                barrierDismissible: true,
+                builder: (dialogCtx) {
+                  final theme = MacosTheme.of(dialogCtx);
+                  return MacosSheet(
+                    child: SizedBox(
+                      width: 340,
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const MacosIcon(AppIcons.wand_rays, size: 42),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Re-align Track?',
+                              style: theme.typography.headline.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              "This track contains edited or reviewed verse boundaries.\n\n"
+                              "Choose 'Keep My Edits' to lock your reviewed boundaries and only re-align automatic verses, "
+                              "or 'Overwrite All' to recalculate all boundaries.\n\n"
+                              "A backup (.bak) of the current alignment will be saved.",
+                              style: theme.typography.body,
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              width: double.infinity,
+                              child: PushButton(
+                                controlSize: ControlSize.large,
+                                onPressed: () => Navigator.pop(dialogCtx, 1),
+                                child: const Text('Keep My Edits'),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: PushButton(
+                                controlSize: ControlSize.large,
+                                secondary: true,
+                                onPressed: () => Navigator.pop(dialogCtx, 2),
+                                child: const Text('Overwrite All'),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: PushButton(
+                                controlSize: ControlSize.large,
+                                secondary: true,
+                                onPressed: () => Navigator.pop(dialogCtx, 0),
+                                child: const Text('Cancel'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    CupertinoDialogAction(
-                      isDestructiveAction: true,
-                      onPressed: () => Navigator.pop(dialogCtx, 2),
-                      child: const Text("Overwrite All"),
-                    ),
-                    CupertinoDialogAction(
-                      onPressed: () => Navigator.pop(dialogCtx, 0),
-                      child: const Text("Cancel"),
-                    ),
-                  ],
-                ),
+                  );
+                },
               );
               if (choice == null || choice == 0) return;
               keepEdits = (choice == 1);
             } else if (hasExistingAlignment && context.mounted) {
               final choice = await showAppAlertDialog<bool>(
                 context: context,
-                builder: (dialogCtx) => CupertinoAlertDialog(
-                  title: const Text("Re-align Track?"),
-                  content: const Text(
-                    "This track already has alignment data. Recalculating will overwrite the existing alignment.\n\n"
-                    "A backup (.bak) of the current alignment will be saved.",
+                builder: (dialogCtx) => MacosAlertDialog(
+                  appIcon: const MacosIcon(AppIcons.wand_rays, size: 48),
+                  title: const Text('Re-align Track?'),
+                  message: const Text(
+                    'This track already has alignment data. Recalculating will overwrite the existing alignment.\n\n'
+                    'A backup (.bak) of the current alignment will be saved.',
                   ),
-                  actions: [
-                    CupertinoDialogAction(
-                      isDestructiveAction: true,
-                      onPressed: () => Navigator.pop(dialogCtx, true),
-                      child: const Text("Overwrite"),
-                    ),
-                    CupertinoDialogAction(
-                      isDefaultAction: true,
-                      onPressed: () => Navigator.pop(dialogCtx, false),
-                      child: const Text("Cancel"),
-                    ),
-                  ],
+                  primaryButton: PushButton(
+                    controlSize: ControlSize.large,
+                    onPressed: () => Navigator.pop(dialogCtx, true),
+                    child: const Text('Overwrite'),
+                  ),
+                  secondaryButton: PushButton(
+                    controlSize: ControlSize.large,
+                    secondary: true,
+                    onPressed: () => Navigator.pop(dialogCtx, false),
+                    child: const Text('Cancel'),
+                  ),
                 ),
               );
               if (choice != true) return;
@@ -139,16 +183,18 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
               if (context.mounted) {
                 showAppAlertDialog(
                   context: context,
-                  builder: (_) => CupertinoAlertDialog(
-                    title: const Text("Alignment Error"),
-                    content: Text(e.toString()),
-                    actions: [
-                      CupertinoDialogAction(
-                        isDefaultAction: true,
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text("OK"),
-                      ),
-                    ],
+                  builder: (dialogCtx) => MacosAlertDialog(
+                    appIcon: const MacosIcon(
+                      AppIcons.exclamationmark_triangle_fill,
+                      size: 48,
+                    ),
+                    title: const Text('Alignment Error'),
+                    message: Text(e.toString()),
+                    primaryButton: PushButton(
+                      controlSize: ControlSize.large,
+                      onPressed: () => Navigator.pop(dialogCtx),
+                      child: const Text('OK'),
+                    ),
                   ),
                 );
               }
@@ -158,10 +204,10 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
         ToolBarIconButton(
           label: 'Export Timing',
           icon: MacosIcon(
-            CupertinoIcons.square_arrow_down,
+            AppIcons.square_arrow_down,
             color: ExportService.canExportPhraseTiming(selectedNode!.track!)
                 ? MacosTheme.of(context).typography.body.color
-                : CupertinoColors.systemGrey.withValues(alpha: 0.5),
+                : MacosColors.systemGrayColor.withValues(alpha: 0.5),
           ),
           showLabel: true,
           tooltipMessage: ExportService.phraseExportTooltip(
@@ -174,7 +220,7 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
         ToolBarIconButton(
           label: 'Zoom Out',
           icon: MacosIcon(
-            CupertinoIcons.zoom_out,
+            AppIcons.zoom_out,
             color: MacosTheme.of(context).typography.body.color,
           ),
           showLabel: false,
@@ -186,7 +232,7 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
         ToolBarIconButton(
           label: 'Zoom In',
           icon: MacosIcon(
-            CupertinoIcons.zoom_in,
+            AppIcons.zoom_in,
             color: MacosTheme.of(context).typography.body.color,
           ),
           showLabel: false,
@@ -199,7 +245,7 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
         ToolBarIconButton(
           label: 'Delete Track',
           icon: MacosIcon(
-            CupertinoIcons.trash,
+            AppIcons.trash,
             color: AppTheme.destructive(context),
           ),
           showLabel: false,

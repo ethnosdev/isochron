@@ -1,4 +1,4 @@
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
 import 'package:macos_ui/macos_ui.dart';
 
 class InlineTextEditor extends StatefulWidget {

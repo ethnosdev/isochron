@@ -1,4 +1,5 @@
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/editor/studio_editor.dart';
@@ -33,7 +34,7 @@ class WorkspaceRouter extends StatelessWidget {
         showAppAlertDialog(
           context: context,
           builder: (context) => MacosAlertDialog(
-            appIcon: const MacosIcon(CupertinoIcons.checkmark_seal_fill),
+            appIcon: const MacosIcon(AppIcons.checkmark_seal_fill),
             title: const Text('Broken Links Healed'),
             message: Text(
               'Successfully located and updated $healedCount missing files.',
@@ -51,7 +52,7 @@ class WorkspaceRouter extends StatelessWidget {
           context: context,
           builder: (context) => MacosAlertDialog(
             appIcon: const MacosIcon(
-              CupertinoIcons.exclamationmark_triangle_fill,
+              AppIcons.exclamationmark_triangle_fill,
             ),
             title: const Text('No Matches Found'),
             message: const Text(

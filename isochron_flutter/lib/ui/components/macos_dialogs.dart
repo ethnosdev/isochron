@@ -1,4 +1,4 @@
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/widgets.dart';
 import 'package:macos_ui/macos_ui.dart';
 
 /// Displays a [MacosSheet] or modal sheet above the current application

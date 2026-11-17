@@ -1,4 +1,4 @@
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/widgets.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:just_waveform/just_waveform.dart';
 
@@ -268,7 +268,7 @@ class IsochronWaveformPainter extends CustomPainter {
           canvas.drawCircle(
             Offset(xStart, midY),
             2.5,
-            Paint()..color = Colors.white,
+            Paint()..color = const Color(0xFFFFFFFF),
           );
         }
 
@@ -285,7 +285,7 @@ class IsochronWaveformPainter extends CustomPainter {
           canvas.drawCircle(
             Offset(xEnd, midY),
             2.5,
-            Paint()..color = Colors.white,
+            Paint()..color = const Color(0xFFFFFFFF),
           );
         }
       }

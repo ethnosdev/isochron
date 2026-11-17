@@ -1,11 +1,8 @@
-// macos_ui 2.2.2 still expects Flutter's legacy ThemeMode rather than material_ui's.
+// macos_ui 2.2.2 still expects Flutter's legacy ThemeMode on MacosApp.
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart' show ThemeMode;
-import 'package:cupertino_ui/cupertino_ui.dart'
-    show DefaultCupertinoLocalizations;
 import 'package:flutter/widgets.dart';
 import 'package:macos_ui/macos_ui.dart';
-import 'package:material_ui/material_ui.dart' show DefaultMaterialLocalizations;
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'ui/workspace/workspace_screen.dart';
 
@@ -46,10 +43,6 @@ class IsochronApp extends StatelessWidget {
         return MacosApp(
           title: 'Isochron Studio',
           debugShowCheckedModeBanner: false,
-          localizationsDelegates: const [
-            DefaultMaterialLocalizations.delegate,
-            DefaultCupertinoLocalizations.delegate,
-          ],
           themeMode: _mapTheme(currentMode),
           theme: MacosThemeData.light().copyWith(
             canvasColor: AppTheme.lightBg,

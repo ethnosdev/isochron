@@ -1,5 +1,6 @@
 import 'dart:io';
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:isochron_flutter/ui/components/macos_context_menu.dart';
 import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
@@ -55,7 +56,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
     showAppAlertDialog(
       context: context,
       builder: (ctx) => MacosAlertDialog(
-        appIcon: const MacosIcon(CupertinoIcons.pencil_circle),
+        appIcon: const MacosIcon(AppIcons.pencil_circle),
         title: const Text('Rename Collection'),
         message: Column(
           children: [
@@ -92,24 +93,28 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
   Future<void> _promptDeleteCollection() async {
     final bool? confirm = await showAppAlertDialog<bool>(
       context: context,
-      builder: (dialogContext) => CupertinoAlertDialog(
+      builder: (dialogContext) => MacosAlertDialog(
+        appIcon: const MacosIcon(
+          AppIcons.trash,
+          color: MacosColors.systemRedColor,
+          size: 48,
+        ),
         title: const Text('Delete Collection?'),
-        content: Text(
+        message: Text(
           'Are you sure you want to delete "${widget.collection.name}" and all of its tracks?\n\n'
           'This will remove them from the project, but your raw audio and text files will remain safe on your hard drive.',
         ),
-        actions: [
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete'),
-          ),
-        ],
+        primaryButton: PushButton(
+          controlSize: ControlSize.large,
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('Delete'),
+        ),
+        secondaryButton: PushButton(
+          controlSize: ControlSize.large,
+          secondary: true,
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('Cancel'),
+        ),
       ),
     );
 
@@ -126,12 +131,12 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
       items: [
         MacosContextMenuItem(
           title: "Manage Track Pairings...",
-          icon: CupertinoIcons.slider_horizontal_3,
+          icon: AppIcons.slider_horizontal_3,
           onTap: widget.onImportFiles,
         ),
         MacosContextMenuItem(
           title: "Export Timings...",
-          icon: CupertinoIcons.square_arrow_down,
+          icon: AppIcons.square_arrow_down,
           onTap: () => GroupExportDialog.show(
             context,
             project: widget.project,
@@ -140,14 +145,14 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
         ),
         MacosContextMenuItem(
           title: "Rename Collection...",
-          icon: CupertinoIcons.pencil,
+          icon: AppIcons.pencil,
           onTap: _promptRenameCollection,
         ),
         if (widget.onDeleteCollection != null) ...[
           const MacosContextMenuDivider(),
           MacosContextMenuItem(
             title: "Delete Collection",
-            icon: CupertinoIcons.trash,
+            icon: AppIcons.trash,
             isDestructive: true,
             onTap: _promptDeleteCollection,
           ),
@@ -169,12 +174,12 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
             children: [
               MacosIcon(
                 widget.isRunning
-                    ? CupertinoIcons.stop_fill
-                    : CupertinoIcons.play_arrow_solid,
+                    ? AppIcons.stop_fill
+                    : AppIcons.play_arrow_solid,
                 size: 14,
                 color: widget.isRunning
                     ? AppTheme.destructive(context)
-                    : CupertinoColors.white,
+                    : MacosColors.white,
               ),
               const SizedBox(width: 8),
               Text(
@@ -190,7 +195,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
               message: "More Actions",
               child: MacosIconButton(
                 icon: MacosIcon(
-                  CupertinoIcons.ellipsis_circle,
+                  AppIcons.ellipsis_circle,
                   size: 20,
                   color: MacosTheme.of(context).typography.body.color,
                 ),
@@ -250,20 +255,20 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
       items: [
         MacosContextMenuItem(
           title: 'Pending',
-          icon: CupertinoIcons.clock,
+          icon: AppIcons.clock,
           shortcut: track.status == AlignmentStatus.pending ? '✓' : null,
           onTap: () => _updateTrackStatus(track, AlignmentStatus.pending),
         ),
         MacosContextMenuItem(
           title: 'Aligned',
-          icon: CupertinoIcons.checkmark_circle,
+          icon: AppIcons.checkmark_circle,
           shortcut: track.status == AlignmentStatus.aligned ? '✓' : null,
           enabled: hasAlignmentData,
           onTap: () => _updateTrackStatus(track, AlignmentStatus.aligned),
         ),
         MacosContextMenuItem(
           title: 'Reviewed',
-          icon: CupertinoIcons.checkmark_seal_fill,
+          icon: AppIcons.checkmark_seal_fill,
           shortcut: track.status == AlignmentStatus.reviewed ? '✓' : null,
           enabled: hasAlignmentData,
           onTap: () => _updateTrackStatus(track, AlignmentStatus.reviewed),
@@ -303,7 +308,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
           if (isInteractive) ...[
             const SizedBox(width: 3),
             Icon(
-              CupertinoIcons.chevron_down,
+              AppIcons.chevron_down,
               size: 8.5,
               color: badgeColor.withValues(alpha: 0.8),
             ),
@@ -354,7 +359,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
           mainAxisSize: MainAxisSize.min,
           children: [
             MacosIcon(
-              CupertinoIcons.tray_arrow_down,
+              AppIcons.tray_arrow_down,
               size: 56,
               color: AppTheme.accent(context),
             ),
@@ -383,7 +388,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  MacosIcon(CupertinoIcons.plus_circle, size: 16),
+                  MacosIcon(AppIcons.plus_circle, size: 16),
                   SizedBox(width: 8),
                   Text("Add & Pair Tracks..."),
                 ],
@@ -448,7 +453,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
             child: Row(
               children: [
                 Icon(
-                  CupertinoIcons.exclamationmark_triangle_fill,
+                  AppIcons.exclamationmark_triangle_fill,
                   color: AppTheme.destructive(context),
                   size: 18,
                 ),
@@ -504,7 +509,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                             message: "Rename Collection",
                             child: MacosIconButton(
                               icon: MacosIcon(
-                                CupertinoIcons.pencil,
+                                AppIcons.pencil,
                                 size: 16,
                                 color: AppTheme.grey(context),
                               ),
@@ -646,25 +651,25 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                 statusIcon = const ProgressCircle();
               } else if (track.status == AlignmentStatus.reviewed) {
                 statusIcon = Icon(
-                  CupertinoIcons.checkmark_seal_fill,
+                  AppIcons.checkmark_seal_fill,
                   size: 18,
                   color: AppTheme.success(context),
                 );
               } else if (track.status == AlignmentStatus.aligned) {
                 statusIcon = Icon(
-                  CupertinoIcons.checkmark_circle,
+                  AppIcons.checkmark_circle,
                   size: 18,
                   color: AppTheme.accent(context),
                 );
               } else if (track.status == AlignmentStatus.error) {
                 statusIcon = Icon(
-                  CupertinoIcons.exclamationmark_circle,
+                  AppIcons.exclamationmark_circle,
                   size: 18,
                   color: AppTheme.destructive(context),
                 );
               } else {
                 statusIcon = Icon(
-                  CupertinoIcons.clock,
+                  AppIcons.clock,
                   size: 18,
                   color: AppTheme.warning(context),
                 );
@@ -751,7 +756,7 @@ class _CollectionBatchViewState extends State<CollectionBatchView> {
                           const SizedBox(width: 8),
                           MacosIconButton(
                             icon: MacosIcon(
-                              CupertinoIcons.chevron_right,
+                              AppIcons.chevron_right,
                               size: 14,
                               color: AppTheme.grey(context),
                             ),

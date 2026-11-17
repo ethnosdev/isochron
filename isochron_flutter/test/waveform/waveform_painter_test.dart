@@ -1,5 +1,5 @@
 import 'dart:ui' as ui;
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/ui/waveform/waveform_painter.dart';
@@ -43,13 +43,13 @@ void main() {
       playbackPosSeconds: 2.0,
       totalSeconds: 10.0,
       zoomLevel: 1.0,
-      accentColor: Colors.blue,
-      waveColor: Colors.grey,
-      playheadColor: Colors.red,
-      reviewedColor: Colors.green,
-      warningColor: Colors.orange,
-      destructiveColor: Colors.red,
-      textColor: Colors.black,
+      accentColor: const Color(0xFF2196F3),
+      waveColor: const Color(0xFF9E9E9E),
+      playheadColor: const Color(0xFFF44336),
+      reviewedColor: const Color(0xFF4CAF50),
+      warningColor: const Color(0xFFFF9800),
+      destructiveColor: const Color(0xFFF44336),
+      textColor: const Color(0xFF000000),
       contentWidth: 1000.0,
       padding: 40.0,
     );

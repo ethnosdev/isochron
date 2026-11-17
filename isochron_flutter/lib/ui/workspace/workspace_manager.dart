@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/services/alignment_service.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
@@ -610,8 +611,8 @@ class WorkspaceManager extends ChangeNotifier {
         context: context,
         builder: (dialogContext) => MacosAlertDialog(
           appIcon: const MacosIcon(
-            CupertinoIcons.exclamationmark_triangle_fill,
-            color: CupertinoColors.systemYellow,
+            AppIcons.exclamationmark_triangle_fill,
+            color: MacosColors.systemYellowColor,
             size: 48,
           ),
           title: const Text('Reset Existing Alignments?'),
@@ -760,8 +761,8 @@ class WorkspaceManager extends ChangeNotifier {
         context: context,
         builder: (dialogContext) => MacosAlertDialog(
           appIcon: const MacosIcon(
-            CupertinoIcons.trash,
-            color: CupertinoColors.destructiveRed,
+            AppIcons.trash,
+            color: MacosColors.systemRedColor,
             size: 48,
           ),
           title: const Text('Delete All Tracks?'),

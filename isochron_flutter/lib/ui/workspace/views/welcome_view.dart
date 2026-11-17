@@ -1,4 +1,5 @@
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/settings/model_panel.dart';
@@ -65,7 +66,7 @@ class _WelcomeViewState extends State<WelcomeView> {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: CupertinoColors.black.withValues(alpha: 0.12),
+                      color: MacosColors.black.withValues(alpha: 0.12),
                       blurRadius: 24,
                       offset: const Offset(0, 10),
                     ),
@@ -87,7 +88,7 @@ class _WelcomeViewState extends State<WelcomeView> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           MacosIcon(
-                            CupertinoIcons.waveform_path_ecg,
+                            AppIcons.waveform_path_ecg,
                             size: 56,
                             color: AppTheme.accent(context),
                           ),
@@ -183,7 +184,7 @@ class _WelcomeViewState extends State<WelcomeView> {
                                   ),
                                   const SizedBox(width: 4),
                                   Icon(
-                                    CupertinoIcons.chevron_right,
+                                    AppIcons.chevron_right,
                                     size: 11,
                                     color: AppTheme.grey(context),
                                   ),
@@ -293,13 +294,13 @@ class _RecentProjectRowState extends State<_RecentProjectRow> {
           decoration: BoxDecoration(
             color: _isHovered
                 ? AppTheme.selectionBg(context).withValues(alpha: 0.3)
-                : CupertinoColors.transparent,
+                : MacosColors.transparent,
             borderRadius: BorderRadius.circular(6),
           ),
           child: Row(
             children: [
               Icon(
-                CupertinoIcons.folder,
+                AppIcons.folder,
                 size: 16,
                 color: AppTheme.accent(context),
               ),
@@ -332,11 +333,11 @@ class _RecentProjectRowState extends State<_RecentProjectRow> {
               ),
               const SizedBox(width: 8),
               Icon(
-                CupertinoIcons.chevron_right,
+                AppIcons.chevron_right,
                 size: 12,
                 color: _isHovered
                     ? theme.typography.body.color
-                    : CupertinoColors.transparent,
+                    : MacosColors.transparent,
               ),
             ],
           ),

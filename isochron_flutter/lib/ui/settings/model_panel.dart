@@ -1,5 +1,6 @@
 import 'dart:io';
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:macos_ui/macos_ui.dart';
 
@@ -132,17 +133,17 @@ class _ModelPanelState extends State<ModelPanel> {
   }
 
   Color get _statusColor {
-    if (_isDownloading) return CupertinoColors.activeBlue;
+    if (_isDownloading) return MacosColors.systemBlueColor;
     switch (_status) {
       case ModelStatus.ready:
-        return CupertinoColors.systemGreen;
+        return MacosColors.systemGreenColor;
       case ModelStatus.corrupt:
-        return CupertinoColors.systemRed;
+        return MacosColors.systemRedColor;
       case ModelStatus.notDownloaded:
-        return CupertinoColors.systemGrey;
+        return MacosColors.systemGrayColor;
       case ModelStatus.downloading:
       case ModelStatus.verifying:
-        return CupertinoColors.activeBlue;
+        return MacosColors.systemBlueColor;
     }
   }
 
@@ -165,7 +166,7 @@ class _ModelPanelState extends State<ModelPanel> {
                 style: theme.typography.headline,
               ),
               MacosIconButton(
-                icon: const MacosIcon(CupertinoIcons.xmark_circle),
+                icon: const MacosIcon(AppIcons.xmark_circle),
                 onPressed: () => Navigator.of(context).pop(),
               ),
             ],
@@ -210,7 +211,7 @@ class _ModelPanelState extends State<ModelPanel> {
                 ),
                 Text(
                   'Path: ${file.path}',
-                  style: const TextStyle(fontSize: 11, color: CupertinoColors.systemGrey),
+                  style: const TextStyle(fontSize: 11, color: MacosColors.systemGrayColor),
                   overflow: TextOverflow.ellipsis,
                 ),
               ],

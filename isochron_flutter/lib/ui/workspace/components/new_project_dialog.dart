@@ -1,7 +1,8 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
@@ -190,7 +191,7 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
                   style: theme.typography.headline,
                 ),
                 MacosIconButton(
-                  icon: const MacosIcon(CupertinoIcons.xmark_circle),
+                  icon: const MacosIcon(AppIcons.xmark_circle),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ],
@@ -273,7 +274,7 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
-                    CupertinoIcons.exclamationmark_triangle_fill,
+                    AppIcons.exclamationmark_triangle_fill,
                     size: 14,
                     color: AppTheme.destructive(context),
                   ),

@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/services/alignment_service.dart';
@@ -428,7 +429,7 @@ void main() {
 
       await tester.tap(
         find.byWidgetPredicate(
-          (w) => w is MacosIcon && w.icon == CupertinoIcons.wand_rays,
+          (w) => w is MacosIcon && w.icon == AppIcons.wand_rays,
         ),
       );
       await tester.pumpAndSettle();
@@ -465,7 +466,7 @@ void main() {
 
       await tester.tap(
         find.byWidgetPredicate(
-          (w) => w is MacosIcon && w.icon == CupertinoIcons.wand_rays,
+          (w) => w is MacosIcon && w.icon == AppIcons.wand_rays,
         ),
       );
       await tester.pumpAndSettle();
@@ -491,7 +492,6 @@ class _ToolbarTestHost extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MacosApp(
-      localizationsDelegates: const [DefaultCupertinoLocalizations.delegate],
       home: Builder(
         builder: (innerContext) {
           return MacosWindow(

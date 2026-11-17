@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
@@ -290,7 +291,7 @@ class _StudioEditorState extends State<StudioEditor> {
                     child: Row(
                       children: [
                         Icon(
-                          CupertinoIcons.exclamationmark_triangle_fill,
+                          AppIcons.exclamationmark_triangle_fill,
                           size: 16,
                           color: AppTheme.destructive(context),
                         ),
@@ -432,8 +433,8 @@ class _StudioEditorState extends State<StudioEditor> {
                                     child: MacosIconButton(
                                       icon: MacosIcon(
                                         state.isPlaying
-                                            ? CupertinoIcons.pause_fill
-                                            : CupertinoIcons.play_arrow_solid,
+                                            ? AppIcons.pause_fill
+                                            : AppIcons.play_arrow_solid,
                                         color: AppTheme.accent(context),
                                         size: 16,
                                       ),
@@ -448,7 +449,7 @@ class _StudioEditorState extends State<StudioEditor> {
                                     message: "Play Current Fragment (P)",
                                     child: MacosIconButton(
                                       icon: MacosIcon(
-                                        CupertinoIcons.repeat_1,
+                                        AppIcons.repeat_1,
                                         color: theme.typography.body.color,
                                         size: 16,
                                       ),
@@ -463,7 +464,7 @@ class _StudioEditorState extends State<StudioEditor> {
                                     message: "Previous (←)",
                                     child: MacosIconButton(
                                       icon: MacosIcon(
-                                        CupertinoIcons.backward_end_fill,
+                                        AppIcons.backward_end_fill,
                                         color: theme.typography.body.color,
                                         size: 14,
                                       ),
@@ -478,7 +479,7 @@ class _StudioEditorState extends State<StudioEditor> {
                                     message: "Next (→)",
                                     child: MacosIconButton(
                                       icon: MacosIcon(
-                                        CupertinoIcons.forward_end_fill,
+                                        AppIcons.forward_end_fill,
                                         color: theme.typography.body.color,
                                         size: 14,
                                       ),
@@ -572,7 +573,7 @@ class _StudioEditorState extends State<StudioEditor> {
                                     message: "Undo (⌘Z)",
                                     child: MacosIconButton(
                                       icon: MacosIcon(
-                                        CupertinoIcons.arrow_turn_up_left,
+                                        AppIcons.arrow_turn_up_left,
                                         color: widget.homeManager.canUndo
                                             ? theme.typography.body.color
                                             : AppTheme.grey(context).withValues(
@@ -593,7 +594,7 @@ class _StudioEditorState extends State<StudioEditor> {
                                     message: "Redo (⇧⌘Z)",
                                     child: MacosIconButton(
                                       icon: MacosIcon(
-                                        CupertinoIcons.arrow_turn_up_right,
+                                        AppIcons.arrow_turn_up_right,
                                         color: widget.homeManager.canRedo
                                             ? theme.typography.body.color
                                             : AppTheme.grey(context).withValues(

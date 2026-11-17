@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:isochron_flutter/services/export_service.dart';
 import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
@@ -63,7 +64,7 @@ Future<bool> confirmUnalignedExportWarning(
     barrierLabel: 'Cancel',
     builder: (ctx) => MacosAlertDialog(
       appIcon: MacosIcon(
-        CupertinoIcons.exclamationmark_triangle_fill,
+        AppIcons.exclamationmark_triangle_fill,
         color: AppTheme.warning(ctx),
       ),
       title: const Text('Unaligned Verses Found'),
@@ -126,7 +127,7 @@ Future<void> exportSingleTrackWithPrompt(
         barrierLabel: 'Dismiss',
         builder: (ctx) => MacosAlertDialog(
           appIcon:
-              const MacosIcon(CupertinoIcons.exclamationmark_triangle_fill),
+              const MacosIcon(AppIcons.exclamationmark_triangle_fill),
           title: const Text('Export Error'),
           message: Text(e.toString(), textAlign: TextAlign.center),
           primaryButton: PushButton(

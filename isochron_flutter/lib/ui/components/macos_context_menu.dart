@@ -1,4 +1,4 @@
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
 
@@ -38,7 +38,7 @@ Future<void> showMacosContextMenu({
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Dismiss Context Menu',
-    barrierColor: CupertinoColors.transparent,
+    barrierColor: MacosColors.transparent,
     transitionDuration: const Duration(milliseconds: 100),
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
       final mediaQuery = MediaQuery.of(dialogContext);
@@ -92,7 +92,7 @@ Future<void> showMacosContextMenu({
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: CupertinoColors.black.withValues(alpha: 0.22),
+                      color: MacosColors.black.withValues(alpha: 0.22),
                       blurRadius: 18,
                       offset: const Offset(0, 6),
                     ),
@@ -148,11 +148,11 @@ class _ContextMenuItemRowState extends State<_ContextMenuItemRow> {
     if (!enabled) {
       textColor = AppTheme.grey(context).withValues(alpha: 0.5);
     } else if (_isHovered) {
-      textColor = CupertinoColors.white;
+      textColor = MacosColors.white;
     } else if (item.isDestructive) {
       textColor = AppTheme.destructive(context);
     } else {
-      textColor = theme.typography.body.color ?? CupertinoColors.black;
+      textColor = theme.typography.body.color ?? MacosColors.black;
     }
 
     return MouseRegion(
@@ -171,7 +171,7 @@ class _ContextMenuItemRowState extends State<_ContextMenuItemRow> {
           height: 24,
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
-            color: _isHovered && enabled ? accent : CupertinoColors.transparent,
+            color: _isHovered && enabled ? accent : MacosColors.transparent,
             borderRadius: BorderRadius.circular(4),
           ),
           child: Row(
@@ -203,7 +203,7 @@ class _ContextMenuItemRowState extends State<_ContextMenuItemRow> {
                   style: TextStyle(
                     fontSize: 11,
                     color: _isHovered && enabled
-                        ? CupertinoColors.white.withValues(alpha: 0.8)
+                        ? MacosColors.white.withValues(alpha: 0.8)
                         : AppTheme.grey(context),
                   ),
                 ),

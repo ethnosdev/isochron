@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:isochron_cli/isochron_cli.dart';
@@ -1037,7 +1038,7 @@ class AppManager extends ValueNotifier<AppState> {
       showAppAlertDialog(
         context: context,
         builder: (_) => MacosAlertDialog(
-          appIcon: const MacosIcon(CupertinoIcons.exclamationmark_triangle),
+          appIcon: const MacosIcon(AppIcons.exclamationmark_triangle),
           title: const Text("Invalid Timing"),
           message: const Text("Cannot set time before the previous fragment."),
           primaryButton: PushButton(
@@ -1053,7 +1054,7 @@ class AppManager extends ValueNotifier<AppState> {
       showAppAlertDialog(
         context: context,
         builder: (_) => MacosAlertDialog(
-          appIcon: const MacosIcon(CupertinoIcons.exclamationmark_triangle),
+          appIcon: const MacosIcon(AppIcons.exclamationmark_triangle),
           title: const Text("Invalid Timing"),
           message: const Text("Cannot set time after the next fragment."),
           primaryButton: PushButton(

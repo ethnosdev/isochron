@@ -1,6 +1,7 @@
 import 'dart:io';
 
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isochron_flutter/ui/workspace/components/track_pairing_wizard.dart';
 import 'package:isochron_flutter/utils/media_pairing_engine.dart';
@@ -131,7 +132,7 @@ void main() {
 
       // Find first "insert gap" button (arrow_down_to_line)
       final gapButton = find.byWidgetPredicate(
-        (w) => w is MacosIcon && w.icon == CupertinoIcons.arrow_down_to_line,
+        (w) => w is MacosIcon && w.icon == AppIcons.arrow_down_to_line,
       ).first;
       await tester.tap(gapButton);
       await tester.pumpAndSettle();
@@ -219,7 +220,7 @@ And Judas begat Phares and Zara of Thamar.
 
       // Find trash icons (one on Audio card, one on Transcripts card)
       final trashIcons = find.byWidgetPredicate(
-        (w) => w is MacosIcon && w.icon == CupertinoIcons.trash,
+        (w) => w is MacosIcon && w.icon == AppIcons.trash,
       );
       expect(trashIcons, findsNWidgets(2));
 
@@ -232,7 +233,7 @@ And Judas begat Phares and Zara of Thamar.
 
       // Now tap trash icon on Audio (the first one)
       final audioTrash = find.byWidgetPredicate(
-        (w) => w is MacosIcon && w.icon == CupertinoIcons.trash,
+        (w) => w is MacosIcon && w.icon == AppIcons.trash,
       );
       await tester.tap(audioTrash.first);
       await tester.pumpAndSettle();

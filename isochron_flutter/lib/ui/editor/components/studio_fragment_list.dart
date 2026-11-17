@@ -1,4 +1,5 @@
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:flutter/gestures.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/ui/models/app_state.dart';
@@ -337,7 +338,7 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
               } else if (isSelected) {
                 bgColor = AppTheme.selectionBg(context);
               } else {
-                bgColor = CupertinoColors.transparent;
+                bgColor = MacosColors.transparent;
               }
 
               final textColor = theme.typography.body.color;
@@ -364,7 +365,7 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                       left: BorderSide(
                         color: isSelected
                             ? AppTheme.accent(context)
-                            : CupertinoColors.transparent,
+                            : MacosColors.transparent,
                         width: 4,
                       ),
                       bottom: BorderSide(color: theme.dividerColor),
@@ -379,7 +380,7 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                         child: Center(
                           child: isPlaying
                               ? Icon(
-                                  CupertinoIcons.speaker_2_fill,
+                                  AppIcons.speaker_2_fill,
                                   size: 14,
                                   color: AppTheme.accent(context),
                                 )
@@ -453,8 +454,7 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                                     MacosTooltip(
                                       message: f.warnings.join('\n'),
                                       child: Icon(
-                                        CupertinoIcons
-                                            .exclamationmark_triangle_fill,
+                                        AppIcons.exclamationmark_triangle_fill,
                                         size: 12,
                                         color: AppTheme.warning(context),
                                       ),
@@ -559,7 +559,7 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                                     minWidth: 24,
                                   ),
                                   icon: Icon(
-                                    CupertinoIcons.pencil,
+                                    AppIcons.pencil,
                                     color: subTextColor,
                                     size: 14,
                                   ),
@@ -582,7 +582,7 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                                     minWidth: 24,
                                   ),
                                   icon: Icon(
-                                    CupertinoIcons.checkmark_circle_fill,
+                                    AppIcons.checkmark_circle_fill,
                                     color: f.status == FragmentStatus.reviewed
                                         ? AppTheme.success(context)
                                         : AppTheme.grey(context)
@@ -603,7 +603,7 @@ class _StudioFragmentListState extends State<StudioFragmentList> {
                                     minWidth: 24,
                                   ),
                                   icon: Icon(
-                                    CupertinoIcons.clear_circled_solid,
+                                    AppIcons.clear_circled_solid,
                                     color: AppTheme.destructive(context),
                                     size: 15,
                                   ),

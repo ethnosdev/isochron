@@ -1,7 +1,8 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:isochron_cli/isochron_cli.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
@@ -341,7 +342,7 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
                 ],
               ),
               MacosIconButton(
-                icon: const MacosIcon(CupertinoIcons.xmark_circle),
+                icon: const MacosIcon(AppIcons.xmark_circle),
                 onPressed: () => Navigator.of(context).pop(),
               ),
             ],
@@ -354,7 +355,7 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
               Expanded(
                 child: _buildSourceCard(
                   title: 'Audio Files',
-                  icon: CupertinoIcons.waveform,
+                  icon: AppIcons.waveform,
                   count: _audioFiles.length,
                   label: _audioSourceLabel,
                   emptyText: 'No audio selected (.mp3, .wav, .m4a)',
@@ -381,7 +382,7 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
               Expanded(
                 child: _buildSourceCard(
                   title: 'Transcripts',
-                  icon: CupertinoIcons.doc_text,
+                  icon: AppIcons.doc_text,
                   count: _textFiles.length,
                   label: _textSourceLabel,
                   emptyText: 'No transcripts selected (.txt, .phrases)',
@@ -435,7 +436,7 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            CupertinoIcons.arrow_right_arrow_left_square,
+                            AppIcons.arrow_right_arrow_left_square,
                             size: 40,
                             color: AppTheme.grey(context),
                           ),
@@ -501,14 +502,14 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
                   if (_rows.isNotEmpty) ...[
                     _buildStatusChip(
                       '$_completeCount Paired',
-                      CupertinoIcons.checkmark_circle_fill,
+                      AppIcons.checkmark_circle_fill,
                       const Color(0xFF28A745),
                     ),
                     const SizedBox(width: 8),
                     if (_missingTextCount > 0) ...[
                       _buildStatusChip(
                         '$_missingTextCount Missing Transcript',
-                        CupertinoIcons.exclamationmark_circle_fill,
+                        AppIcons.exclamationmark_circle_fill,
                         const Color(0xFFE67E22),
                       ),
                       const SizedBox(width: 8),
@@ -516,7 +517,7 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
                     if (_missingAudioCount > 0)
                       _buildStatusChip(
                         '$_missingAudioCount Missing Audio',
-                        CupertinoIcons.exclamationmark_circle_fill,
+                        AppIcons.exclamationmark_circle_fill,
                         const Color(0xFFE67E22),
                       ),
                   ],
@@ -614,7 +615,7 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
               ),
               if (onClear != null)
                 MacosIconButton(
-                  icon: const MacosIcon(CupertinoIcons.trash, size: 13),
+                  icon: const MacosIcon(AppIcons.trash, size: 13),
                   onPressed: onClear,
                 ),
             ],
@@ -676,7 +677,7 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
       child: Row(
         children: [
           Icon(
-            CupertinoIcons.number_circle_fill,
+            AppIcons.number_circle_fill,
             color: AppTheme.accent(context),
             size: 16,
           ),
@@ -927,7 +928,7 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
             child: row.audioPath != null
                 ? Row(
                     children: [
-                      const Icon(CupertinoIcons.waveform, size: 13),
+                      const Icon(AppIcons.waveform, size: 13),
                       const SizedBox(width: 5),
                       Expanded(
                         child: Text(
@@ -954,8 +955,8 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
             child: Center(
               child: Icon(
                 row.isComplete
-                    ? CupertinoIcons.link
-                    : CupertinoIcons.exclamationmark_triangle,
+                    ? AppIcons.link
+                    : AppIcons.exclamationmark_triangle,
                 size: 14,
                 color: row.isComplete
                     ? const Color(0xFF28A745)
@@ -970,7 +971,7 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
             child: row.textPath != null
                 ? Row(
                     children: [
-                      const Icon(CupertinoIcons.doc_text, size: 13),
+                      const Icon(AppIcons.doc_text, size: 13),
                       const SizedBox(width: 5),
                       Expanded(
                         child: Text(
@@ -1002,7 +1003,7 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
                   message: 'Insert gap in transcript (shift transcripts down)',
                   child: MacosIconButton(
                     icon: const MacosIcon(
-                      CupertinoIcons.arrow_down_to_line,
+                      AppIcons.arrow_down_to_line,
                       size: 13,
                     ),
                     onPressed: () {
@@ -1020,7 +1021,7 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
                 MacosTooltip(
                   message: 'Shift transcript up',
                   child: MacosIconButton(
-                    icon: const MacosIcon(CupertinoIcons.chevron_up, size: 13),
+                    icon: const MacosIcon(AppIcons.chevron_up, size: 13),
                     onPressed: index > 0
                         ? () {
                             setState(() {
@@ -1038,7 +1039,7 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
                 MacosTooltip(
                   message: 'Shift transcript down',
                   child: MacosIconButton(
-                    icon: const MacosIcon(CupertinoIcons.chevron_down, size: 13),
+                    icon: const MacosIcon(AppIcons.chevron_down, size: 13),
                     onPressed: index < _rows.length - 1
                         ? () {
                             setState(() {
@@ -1056,7 +1057,7 @@ class _TrackPairingWizardState extends State<TrackPairingWizard> {
                 MacosTooltip(
                   message: 'Remove row',
                   child: MacosIconButton(
-                    icon: const MacosIcon(CupertinoIcons.xmark, size: 12),
+                    icon: const MacosIcon(AppIcons.xmark, size: 12),
                     onPressed: () {
                       setState(() {
                         _rows.removeAt(index);

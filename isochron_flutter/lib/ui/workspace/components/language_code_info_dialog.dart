@@ -1,6 +1,7 @@
 import 'dart:io';
 
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
 import 'package:macos_ui/macos_ui.dart';
@@ -46,7 +47,7 @@ class LanguageCodeInfoDialog extends StatelessWidget {
           Row(
             children: [
               Icon(
-                CupertinoIcons.globe,
+                AppIcons.globe,
                 size: 28,
                 color: AppTheme.accent(context),
               ),
@@ -158,7 +159,7 @@ class LanguageCodeInfoDialog extends StatelessWidget {
                   children: [
                     Text('View uroman Documentation'),
                     SizedBox(width: 4),
-                    Icon(CupertinoIcons.arrow_up_right, size: 12),
+                    Icon(AppIcons.arrow_up_right, size: 12),
                   ],
                 ),
               ),

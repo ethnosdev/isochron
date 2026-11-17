@@ -1,4 +1,5 @@
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
@@ -264,7 +265,7 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                           final shouldConsolidate = await showAppAlertDialog<bool>(
                             context: context,
                             builder: (ctx) => MacosAlertDialog(
-                              appIcon: const MacosIcon(CupertinoIcons.folder_badge_plus),
+                              appIcon: const MacosIcon(AppIcons.folder_badge_plus),
                               title: const Text("Consolidate Project Media?"),
                               message: const Text(
                                 "You have existing tracks referencing files outside the project directory. "
@@ -294,7 +295,7 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                               showAppAlertDialog(
                                 context: context,
                                 builder: (ctx) => MacosAlertDialog(
-                                  appIcon: const MacosIcon(CupertinoIcons.checkmark_circle),
+                                  appIcon: const MacosIcon(AppIcons.checkmark_circle),
                                   title: const Text("Media Consolidated"),
                                   message: Text("$count media file(s) were copied into the project folder."),
                                   primaryButton: PushButton(
@@ -448,7 +449,7 @@ class _ProjectSettingsViewState extends State<ProjectSettingsView> {
                   const SizedBox(width: 6),
                   MacosIconButton(
                     icon: MacosIcon(
-                      CupertinoIcons.info_circle,
+                      AppIcons.info_circle,
                       size: 15,
                       color: AppTheme.accent(context),
                     ),

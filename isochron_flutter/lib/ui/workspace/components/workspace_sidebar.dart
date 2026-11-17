@@ -1,7 +1,8 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:isochron_flutter/services/export_service.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
 import 'package:isochron_flutter/ui/components/macos_context_menu.dart';
@@ -49,18 +50,18 @@ Sidebar buildWorkspaceSidebar(
                   items: [
                     MacosContextMenuItem(
                       title: "Rename Project...",
-                      icon: CupertinoIcons.pencil,
+                      icon: AppIcons.pencil,
                       onTap: () => _promptRenameProject(context, manager),
                     ),
                     MacosContextMenuItem(
                       title: "Reveal in Finder",
-                      icon: CupertinoIcons.folder,
+                      icon: AppIcons.folder,
                       onTap: () =>
                           _revealInFinder(manager.project!.directoryPath),
                     ),
                     MacosContextMenuItem(
                       title: "Project Settings",
-                      icon: CupertinoIcons.gear_alt,
+                      icon: AppIcons.gear_alt,
                       onTap: () => manager.selectNode(
                         TreeSelection(type: NodeType.settings),
                       ),
@@ -86,7 +87,7 @@ Sidebar buildWorkspaceSidebar(
                     message: "Rename Project",
                     child: MacosIconButton(
                       icon: MacosIcon(
-                        CupertinoIcons.pencil,
+                        AppIcons.pencil,
                         size: 13,
                         color: AppTheme.grey(context),
                       ),
@@ -106,7 +107,7 @@ Sidebar buildWorkspaceSidebar(
             message: "New Collection",
             child: MacosIconButton(
               icon: MacosIcon(
-                CupertinoIcons.folder_badge_plus,
+                AppIcons.folder_badge_plus,
                 size: 18,
                 color: theme.typography.body.color,
               ),
@@ -130,7 +131,7 @@ Sidebar buildWorkspaceSidebar(
             message: "Project Settings",
             child: MacosIconButton(
               icon: MacosIcon(
-                CupertinoIcons.gear_alt,
+                AppIcons.gear_alt,
                 size: 16,
                 color: theme.typography.body.color,
               ),
@@ -145,7 +146,7 @@ Sidebar buildWorkspaceSidebar(
             message: "Acoustic Model",
             child: MacosIconButton(
               icon: MacosIcon(
-                CupertinoIcons.waveform_circle,
+                AppIcons.waveform_circle,
                 size: 16,
                 color: theme.typography.body.color,
               ),
@@ -260,9 +261,9 @@ Widget _buildTreeRowForNode(
         context: context,
         label: col.name,
         icon: isColSelected
-            ? CupertinoIcons.folder_solid
-            : CupertinoIcons.folder,
-        iconColor: theme.typography.body.color ?? CupertinoColors.black,
+            ? AppIcons.folder_solid
+            : AppIcons.folder,
+        iconColor: theme.typography.body.color ?? MacosColors.black,
         isSelected: isColSelected,
         isExpanded: manager.expandedNodes.contains(col.id),
         depth: 0,
@@ -283,7 +284,7 @@ Widget _buildTreeRowForNode(
             items: [
               MacosContextMenuItem(
                 title: "Rename",
-                icon: CupertinoIcons.pencil,
+                icon: AppIcons.pencil,
                 onTap: () => manager.setEditingNode(col.id),
               ),
               MacosContextMenuItem(
@@ -291,24 +292,24 @@ Widget _buildTreeRowForNode(
                     ? "Add & Pair Media..."
                     : "Manage Track Pairings...",
                 icon: col.tracks.isEmpty
-                    ? CupertinoIcons.arrow_down_doc
-                    : CupertinoIcons.slider_horizontal_3,
+                    ? AppIcons.arrow_down_doc
+                    : AppIcons.slider_horizontal_3,
                 onTap: () => manager.openTrackPairingWizard(context, col),
               ),
               if (col.tracks.isNotEmpty)
                 MacosContextMenuItem(
                   title: "Clear All Tracks...",
-                  icon: CupertinoIcons.trash,
+                  icon: AppIcons.trash,
                   onTap: () => manager.clearAllTracksInCollection(context, col),
                 ),
               MacosContextMenuItem(
                 title: "Run Alignment on All",
-                icon: CupertinoIcons.play_arrow_solid,
+                icon: AppIcons.play_arrow_solid,
                 onTap: () => manager.runBatch(col),
               ),
               MacosContextMenuItem(
                 title: "Export Timings...",
-                icon: CupertinoIcons.square_arrow_down,
+                icon: AppIcons.square_arrow_down,
                 onTap: () => GroupExportDialog.show(
                   context,
                   project: manager.project!,
@@ -318,13 +319,13 @@ Widget _buildTreeRowForNode(
               const MacosContextMenuDivider(),
               MacosContextMenuItem(
                 title: "Reveal in Finder",
-                icon: CupertinoIcons.folder,
+                icon: AppIcons.folder,
                 onTap: () => _revealInFinder(colDir),
               ),
               const MacosContextMenuDivider(),
               MacosContextMenuItem(
                 title: "Delete Collection",
-                icon: CupertinoIcons.trash,
+                icon: AppIcons.trash,
                 isDestructive: true,
                 onTap: () => manager.deleteCollection(col),
               ),
@@ -376,7 +377,7 @@ Widget _buildTreeRowForNode(
                   ? "Missing audio file"
                   : "Missing transcript file",
           child: Icon(
-            CupertinoIcons.exclamationmark_triangle_fill,
+            AppIcons.exclamationmark_triangle_fill,
             size: 14,
             color: AppTheme.destructive(context),
           ),
@@ -386,7 +387,7 @@ Widget _buildTreeRowForNode(
       return _buildTreeRow(
         context: context,
         label: track.name,
-        icon: CupertinoIcons.waveform_path,
+        icon: AppIcons.waveform_path,
         iconColor: _getTrackColor(context, track.status),
         isSelected: isTrackSelected,
         isExpanded: false,
@@ -408,12 +409,12 @@ Widget _buildTreeRowForNode(
             items: [
               MacosContextMenuItem(
                 title: "Rename",
-                icon: CupertinoIcons.pencil,
+                icon: AppIcons.pencil,
                 onTap: () => manager.setEditingNode(track.id),
               ),
               MacosContextMenuItem(
                 title: "Run Auto-Align",
-                icon: CupertinoIcons.play_arrow_solid,
+                icon: AppIcons.play_arrow_solid,
                 onTap: () {
                   manager.selectNode(
                     TreeSelection(
@@ -431,7 +432,7 @@ Widget _buildTreeRowForNode(
               ),
               MacosContextMenuItem(
                 title: "Export Timing...",
-                icon: CupertinoIcons.square_arrow_down,
+                icon: AppIcons.square_arrow_down,
                 enabled: ExportService.canExportPhraseTiming(track),
                 onTap: () => _handleExportPhraseTimingForTrack(
                   context,
@@ -442,7 +443,7 @@ Widget _buildTreeRowForNode(
               const MacosContextMenuDivider(),
               MacosContextMenuItem(
                 title: "Replace Audio File...",
-                icon: CupertinoIcons.speaker_2_fill,
+                icon: AppIcons.speaker_2_fill,
                 onTap: () async {
                   final settings = UserSettingsService();
                   final picked = await FilePicker.pickFile(
@@ -458,7 +459,7 @@ Widget _buildTreeRowForNode(
               ),
               MacosContextMenuItem(
                 title: "Replace Transcript File...",
-                icon: CupertinoIcons.doc_text_fill,
+                icon: AppIcons.doc_text_fill,
                 onTap: () async {
                   final settings = UserSettingsService();
                   final picked = await FilePicker.pickFile(
@@ -476,13 +477,13 @@ Widget _buildTreeRowForNode(
               const MacosContextMenuDivider(),
               MacosContextMenuItem(
                 title: "Reveal in Finder",
-                icon: CupertinoIcons.folder,
+                icon: AppIcons.folder,
                 onTap: () => _revealInFinder(targetPath),
               ),
               const MacosContextMenuDivider(),
               MacosContextMenuItem(
                 title: "Delete Track",
-                icon: CupertinoIcons.trash,
+                icon: AppIcons.trash,
                 isDestructive: true,
                 onTap: () => manager.deleteTrack(track, col),
               ),
@@ -536,7 +537,7 @@ Widget _buildTreeRow({
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
       padding: EdgeInsets.only(left: depth * 16.0 + 8.0, right: 8.0),
       decoration: BoxDecoration(
-        color: isSelected ? selectionBg : CupertinoColors.transparent,
+        color: isSelected ? selectionBg : MacosColors.transparent,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
@@ -549,12 +550,12 @@ Widget _buildTreeRow({
                 padding: const EdgeInsets.all(2.0),
                 child: Icon(
                   isExpanded
-                      ? CupertinoIcons.chevron_down
-                      : CupertinoIcons.chevron_right,
+                      ? AppIcons.chevron_down
+                      : AppIcons.chevron_right,
                   size: 12,
                   color: isSelected
                       ? AppTheme.selectionText(context)
-                      : CupertinoColors.systemGrey,
+                      : MacosColors.systemGrayColor,
                 ),
               ),
             )
@@ -603,7 +604,7 @@ void _promptRenameProject(BuildContext context, WorkspaceManager manager) {
   showAppAlertDialog(
     context: context,
     builder: (ctx) => MacosAlertDialog(
-      appIcon: const MacosIcon(CupertinoIcons.pencil_circle),
+      appIcon: const MacosIcon(AppIcons.pencil_circle),
       title: const Text('Rename Project'),
       message: Column(
         children: [

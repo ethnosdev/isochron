@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:isochron_flutter/ui/theme/app_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isochron_flutter/services/user_settings_service.dart';
@@ -116,7 +117,6 @@ void main() {
     VoidCallback? onDeleteCollection,
   }) {
     return MacosApp(
-      localizationsDelegates: const [DefaultCupertinoLocalizations.delegate],
       home: MacosWindow(
         child: CollectionBatchView(
           collection: collection,
@@ -270,7 +270,7 @@ void main() {
 
       // More menu icon should be present
       final moreFinder = find.byWidgetPredicate(
-        (w) => w is MacosIcon && w.icon == CupertinoIcons.ellipsis_circle,
+        (w) => w is MacosIcon && w.icon == AppIcons.ellipsis_circle,
       );
       expect(moreFinder, findsOneWidget);
 
@@ -295,7 +295,7 @@ void main() {
 
       // Click the More button
       final moreFinder = find.byWidgetPredicate(
-        (w) => w is MacosIcon && w.icon == CupertinoIcons.ellipsis_circle,
+        (w) => w is MacosIcon && w.icon == AppIcons.ellipsis_circle,
       );
       expect(moreFinder, findsOneWidget);
       await tester.tap(moreFinder);
@@ -326,7 +326,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final moreFinder = find.byWidgetPredicate(
-        (w) => w is MacosIcon && w.icon == CupertinoIcons.ellipsis_circle,
+        (w) => w is MacosIcon && w.icon == AppIcons.ellipsis_circle,
       );
       await tester.tap(moreFinder);
       await tester.pumpAndSettle();
@@ -335,7 +335,7 @@ void main() {
       await tester.tap(find.text('Delete Collection'));
       await tester.pumpAndSettle();
 
-      // CupertinoAlertDialog should appear
+      // Confirmation dialog should appear
       expect(find.text('Delete Collection?'), findsOneWidget);
 
       // Tap Delete in dialog
@@ -357,7 +357,7 @@ void main() {
       // Verify elements render without throwing RenderFlex overflow
       expect(find.text('Run Alignment on All'), findsOneWidget);
       final moreFinder = find.byWidgetPredicate(
-        (w) => w is MacosIcon && w.icon == CupertinoIcons.ellipsis_circle,
+        (w) => w is MacosIcon && w.icon == AppIcons.ellipsis_circle,
       );
       expect(moreFinder, findsOneWidget);
       expect(find.text('ALIGNED'), findsOneWidget);

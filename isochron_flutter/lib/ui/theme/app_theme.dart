@@ -1,4 +1,4 @@
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/widgets.dart';
 import 'package:macos_ui/macos_ui.dart';
 
 class AppTheme {
@@ -111,7 +111,7 @@ class AppTheme {
     final macosBrightness = MacosTheme.maybeOf(context)?.brightness;
     final isDark = macosBrightness != null
         ? macosBrightness == Brightness.dark
-        : Theme.of(context).brightness == Brightness.dark;
+        : MediaQuery.platformBrightnessOf(context) == Brightness.dark;
     return isDark ? darkRomanized : lightRomanized;
   }
 }
