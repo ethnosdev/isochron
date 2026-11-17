@@ -1,10 +1,7 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:flutter/cupertino.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:isochron_flutter/services/export_service.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
+import 'package:isochron_flutter/ui/workspace/components/export_prompt_helper.dart';
 import 'package:isochron_flutter/ui/workspace/models/workspace_models.dart';
 import 'package:isochron_flutter/ui/workspace/workspace_manager.dart';
 import 'package:isochron_cli/isochron_cli.dart';
@@ -42,49 +39,8 @@ ToolBar buildWorkspaceToolbar(BuildContext context, WorkspaceManager manager) {
     }
   }
 
-  Future<void> handleExportPhraseTimingForTrack(Track track) async {
-    if (manager.project == null ||
-        !ExportService.canExportPhraseTiming(track)) {
-      return;
-    }
-
-    try {
-      final payload = await ExportService.buildPhraseTiming(
-        manager.project!,
-        track,
-      );
-      if (payload == null || payload.isEmpty) return;
-
-      final defaultName = ExportService.defaultPhraseTimingFilenameForTrack(
-        track,
-      );
-      final bytes = Uint8List.fromList(utf8.encode(payload));
-      final outputFile = await FilePicker.saveFile(
-        dialogTitle: 'Export Phrase Timing',
-        fileName: defaultName,
-        bytes: bytes,
-        initialDirectory: manager.project!.directoryPath,
-      );
-
-      if (outputFile == null) return;
-    } catch (e) {
-      if (context.mounted) {
-        showCupertinoDialog(
-          context: context,
-          builder: (_) => CupertinoAlertDialog(
-            title: const Text("Export Error"),
-            content: Text(e.toString()),
-            actions: [
-              CupertinoDialogAction(
-                isDefaultAction: true,
-                child: const Text("OK"),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
-        );
-      }
-    }
+  Future<void> handleExportPhraseTimingForTrack(Track track) {
+    return exportSingleTrackWithPrompt(context, manager.project, track);
   }
 
   return ToolBar(

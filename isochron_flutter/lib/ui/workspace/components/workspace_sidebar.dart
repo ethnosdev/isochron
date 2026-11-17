@@ -1,6 +1,4 @@
-import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
@@ -11,6 +9,7 @@ import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/settings/model_panel.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
+import 'package:isochron_flutter/ui/workspace/components/export_prompt_helper.dart';
 import 'package:isochron_flutter/ui/workspace/components/group_export_dialog.dart';
 import 'package:isochron_flutter/ui/workspace/components/inline_text_editor.dart';
 import 'package:isochron_flutter/ui/workspace/models/sidebar_node.dart';
@@ -238,47 +237,8 @@ Future<void> _handleExportPhraseTimingForTrack(
   BuildContext context,
   WorkspaceManager manager,
   Track track,
-) async {
-  if (manager.project == null || !ExportService.canExportPhraseTiming(track)) {
-    return;
-  }
-
-  try {
-    final payload = await ExportService.buildPhraseTiming(
-      manager.project!,
-      track,
-    );
-    if (payload == null || payload.isEmpty) return;
-
-    final defaultName =
-        ExportService.defaultPhraseTimingFilenameForTrack(track);
-    final bytes = Uint8List.fromList(utf8.encode(payload));
-    final outputFile = await FilePicker.saveFile(
-      dialogTitle: 'Export Phrase Timing',
-      fileName: defaultName,
-      bytes: bytes,
-      initialDirectory: manager.project!.directoryPath,
-    );
-
-    if (outputFile == null) return;
-  } catch (e) {
-    if (context.mounted) {
-      showCupertinoDialog(
-        context: context,
-        builder: (_) => CupertinoAlertDialog(
-          title: const Text("Export Error"),
-          content: Text(e.toString()),
-          actions: [
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              child: const Text("OK"),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ],
-        ),
-      );
-    }
-  }
+) {
+  return exportSingleTrackWithPrompt(context, manager.project, track);
 }
 
 

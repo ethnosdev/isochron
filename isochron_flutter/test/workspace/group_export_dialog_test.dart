@@ -337,4 +337,99 @@ void main() {
     await tester.tap(find.widgetWithText(PushButton, 'OK'));
     await tester.pumpAndSettle();
   });
+
+  testWidgets('warns on unaligned verses, allows canceling or exporting anyway', (
+    tester,
+  ) async {
+    final unalignedTrack = Track(
+      id: 'track_unaligned',
+      collectionId: 'col_warn',
+      name: 'Exodus 16',
+      audioPath: '/audio/exo16.wav',
+      textPath: '/text/BSB_02_Exo_016.txt',
+      outputFilename: 'exo16.json',
+      status: AlignmentStatus.aligned,
+    );
+    final warnCollection = Collection(
+      id: 'col_warn',
+      name: 'Warn Col',
+      tracks: [unalignedTrack],
+    );
+    project = Project(
+      id: 'proj_warn',
+      name: 'Warn Project',
+      directoryPath: tempDir.path,
+      collections: [warnCollection],
+    );
+
+    final colDir = Directory(
+      p.join(tempDir.path, 'collections', warnCollection.folderName, 'alignments'),
+    )..createSync(recursive: true);
+    File(p.join(colDir.path, unalignedTrack.outputFilename)).writeAsStringSync(
+      jsonEncode([
+        {'index': 0, 'id': '02016001', 'start': 4.5, 'end': 19.64},
+        {'index': 1, 'id': '02016002', 'start': -1.0, 'end': -1.0},
+        {'index': 2, 'id': '02016003', 'start': 19.64, 'end': 32.55},
+      ]),
+    );
+
+    final exportDir =
+        Directory(p.join(tempDir.path, 'warn_export'))..createSync();
+    int pickerCalls = 0;
+
+    await tester.pumpWidget(
+      buildLauncherWidget(
+        tester,
+        targetCollection: warnCollection,
+        directoryPicker: ({dialogTitle, initialDirectory}) async {
+          pickerCalls++;
+          return exportDir.path;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Open Export Sheet'));
+    await tester.pumpAndSettle();
+
+    // Tap Export... -> should show warning dialog without opening picker yet
+    await tester.runAsync(() async {
+      await tester.tap(find.widgetWithText(PushButton, 'Export...'));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pumpAndSettle();
+
+    expect(find.text('Unaligned Verses Found'), findsOneWidget);
+    expect(find.textContaining('02016002'), findsOneWidget);
+    expect(pickerCalls, 0);
+
+    // Tap Cancel on warning dialog -> aborts without opening picker
+    await tester.tap(find.widgetWithText(PushButton, 'Cancel').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Unaligned Verses Found'), findsNothing);
+    expect(pickerCalls, 0);
+
+    // Tap Export... again -> then Export Anyway
+    await tester.runAsync(() async {
+      await tester.tap(find.widgetWithText(PushButton, 'Export...'));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pumpAndSettle();
+
+    await tester.runAsync(() async {
+      await tester.tap(find.widgetWithText(PushButton, 'Export Anyway'));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await tester.pumpAndSettle();
+
+    expect(pickerCalls, 1);
+    expect(find.text('Export Complete'), findsOneWidget);
+
+    final exportedFile = File(p.join(exportDir.path, 'BSB_02_Exo_016_timing.txt'));
+    expect(exportedFile.existsSync(), isTrue);
+    final content = exportedFile.readAsStringSync();
+    expect(content, isNot(contains('-1')));
+    expect(content, contains('4.5\t19.64\t02016001\n'));
+    expect(content, contains('19.64\t32.55\t02016003\n'));
+  });
 }

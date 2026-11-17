@@ -167,6 +167,39 @@ is1\tIntroductory Section
       expect(payload.trim().split('\n'), equals(expectedLines));
     });
 
+    test('skips unaligned fragments (start < 0 or end <= start) by default', () {
+      final fragments = [
+        Fragment(index: 0, id: '02016001', text: 'v1')
+          ..setRealTiming(start: 4.5, end: 19.64),
+        Fragment(index: 1, id: '02016002', text: 'v2 omitted')
+          ..setRealTiming(start: -1.0, end: -1.0),
+        Fragment(index: 2, id: '02016003', text: 'v3')
+          ..setRealTiming(start: 19.64, end: 32.55),
+      ];
+
+      final payload = TimingExport.generateTimingPayload(
+        fragments,
+        const TimingExportMetadata(
+          languageCode: 'BSB',
+          bookId: '02',
+          bookCode: 'Exo',
+          chapterId: '016',
+        ),
+        requireIds: true,
+      );
+
+      expect(
+        payload.trim().split('\n'),
+        equals([
+          '\\id Exo',
+          '\\c 016',
+          '\\level phrase',
+          '4.5\t19.64\t02016001',
+          '19.64\t32.55\t02016003',
+        ]),
+      );
+    });
+
     test('exportPayload generates json format correctly', () {
       final fragments = [
         Fragment(index: 0, id: '1', text: 'First verse')

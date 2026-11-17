@@ -18,6 +18,38 @@ void main() {
       expect(nonBible.chapterNumber, equals(5));
     });
 
+    test('extractBookAndChapter parses numbered books without mistaking book prefix digit for chapter', () {
+      final oneSam = IdGenerator.extractBookAndChapter('BSB_09_1Sa_002');
+      expect(oneSam.bookNumber, equals(9));
+      expect(oneSam.chapterNumber, equals(2));
+      expect(oneSam.bookAbbreviation, equals('1SA'));
+
+      final twoSam = IdGenerator.extractBookAndChapter('BSB_10_2Sa_001');
+      expect(twoSam.bookNumber, equals(10));
+      expect(twoSam.chapterNumber, equals(1));
+      expect(twoSam.bookAbbreviation, equals('2SA'));
+
+      final oneCor = IdGenerator.extractBookAndChapter('BSB_46_1Co_012');
+      expect(oneCor.bookNumber, equals(46));
+      expect(oneCor.chapterNumber, equals(12));
+      expect(oneCor.bookAbbreviation, equals('1CO'));
+
+      final twoJn = IdGenerator.extractBookAndChapter('BSB_63_2Jn_001');
+      expect(twoJn.bookNumber, equals(63));
+      expect(twoJn.chapterNumber, equals(1));
+      expect(twoJn.bookAbbreviation, equals('2JN'));
+
+      final threeJn = IdGenerator.extractBookAndChapter('BSB_64_3Jn_001');
+      expect(threeJn.bookNumber, equals(64));
+      expect(threeJn.chapterNumber, equals(1));
+      expect(threeJn.bookAbbreviation, equals('3JN'));
+
+      final shortName = IdGenerator.extractBookAndChapter('1Sa_002');
+      expect(shortName.bookNumber, equals(9));
+      expect(shortName.chapterNumber, equals(2));
+      expect(shortName.bookAbbreviation, equals('1SA'));
+    });
+
     test('detectDefaultStyle selects USFM 8-digit for scripture and trackScoped for general audio', () {
       expect(
         IdGenerator.detectDefaultStyle('BSB_40_Mat_001'),
@@ -50,6 +82,13 @@ void main() {
         lineIndex: 0,
       );
       expect(idCh2, equals('40002001'));
+
+      final id1Sa2 = IdGenerator.generateId(
+        style: IdGenerationStyle.usfm8Digit,
+        trackName: 'BSB_09_1Sa_002',
+        lineIndex: 4,
+      );
+      expect(id1Sa2, equals('09002005'));
     });
 
     test('generateId produces valid Track-Scoped IDs', () {

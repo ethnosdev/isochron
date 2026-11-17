@@ -7,20 +7,12 @@ import 'package:isochron_flutter/services/export_service.dart';
 import 'package:isochron_flutter/ui/components/macos_dialogs.dart';
 import 'package:isochron_flutter/ui/models/project_model.dart';
 import 'package:isochron_flutter/ui/theme/app_theme.dart';
+import 'package:isochron_flutter/ui/workspace/components/export_prompt_helper.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:path/path.dart' as p;
 
-typedef DirectoryPickerFn = Future<String?> Function({
-  String? dialogTitle,
-  String? initialDirectory,
-});
-
-typedef FileSaverFn = Future<Uri?> Function({
-  required String fileName,
-  required Uint8List bytes,
-  String? dialogTitle,
-  String? initialDirectory,
-});
+export 'package:isochron_flutter/ui/workspace/components/export_prompt_helper.dart'
+    show DirectoryPickerFn, FileSaverFn;
 
 class GroupExportResult {
   final bool success;
@@ -120,6 +112,21 @@ class _GroupExportDialogState extends State<GroupExportDialog> {
   Future<void> _handleExport() async {
     setState(() => _isExporting = true);
     try {
+      final issues = await ExportService.findUnalignedIssues(
+        widget.project,
+        _readyTracks,
+      );
+      if (issues.isNotEmpty) {
+        if (!mounted) return;
+        setState(() => _isExporting = false);
+        final shouldContinue =
+            await confirmUnalignedExportWarning(context, issues);
+        if (!shouldContinue || !mounted) {
+          return;
+        }
+        setState(() => _isExporting = true);
+      }
+
       if (_selectedMode == GroupExportMode.separateFiles) {
         final picker = widget.directoryPicker ?? FilePicker.getDirectoryPath;
         final selectedDir = await picker(

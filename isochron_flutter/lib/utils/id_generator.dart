@@ -38,53 +38,70 @@ class IdGenerator {
   static ({int? bookNumber, int? chapterNumber, String? bookAbbreviation})
       extractBookAndChapter(String trackName) {
     final stem = p.basenameWithoutExtension(trackName);
-
-    // Extract all numbers
-    final numberMatches = RegExp(r'\d+').allMatches(stem).map((m) => m.group(0)!).toList();
-
-    // Extract word tokens for 3-letter book abbreviations
-    final wordMatches = RegExp(r'[a-zA-Z]{3,4}').allMatches(stem).map((m) => m.group(0)!.toLowerCase()).toList();
+    final tokens = stem
+        .split(RegExp(r'[\s_\-.]+'))
+        .where((t) => t.isNotEmpty)
+        .toList();
 
     int? detectedBook;
     String? detectedAbbr;
+    int? bookTokenIndex;
 
-    // Check words against Bible abbreviations
-    for (final w in wordMatches) {
-      if (bibleBookNumbers.containsKey(w)) {
-        detectedBook = bibleBookNumbers[w];
-        detectedAbbr = w.toUpperCase();
+    // Match whole tokens against Bible abbreviations (including numbered books like 1Sa, 2Co, 3Jn).
+    for (int i = 0; i < tokens.length; i++) {
+      final lower = tokens[i].toLowerCase();
+      if (bibleBookNumbers.containsKey(lower)) {
+        detectedBook = bibleBookNumbers[lower];
+        detectedAbbr = lower.toUpperCase();
+        bookTokenIndex = i;
         break;
+      }
+    }
+
+    // Only consider purely numeric tokens so leading digits in abbreviations (e.g. "1" in "1Sa")
+    // are never mistaken for book or chapter numbers.
+    final numericTokens = <({int index, int value})>[];
+    for (int i = 0; i < tokens.length; i++) {
+      if (RegExp(r'^\d+$').hasMatch(tokens[i])) {
+        final parsed = int.tryParse(tokens[i]);
+        if (parsed != null) {
+          numericTokens.add((index: i, value: parsed));
+        }
       }
     }
 
     int? bookNum;
     int? chapterNum;
 
-    if (numberMatches.length >= 2) {
-      final firstNum = int.tryParse(numberMatches[0]);
-      final secondNum = int.tryParse(numberMatches[1]);
-
-      // If first number is in standard 1..66 range
-      if (firstNum != null && firstNum >= 1 && firstNum <= 66) {
+    if (bookTokenIndex != null && detectedBook != null) {
+      bookNum = detectedBook;
+      final afterBook =
+          numericTokens.where((n) => n.index > bookTokenIndex!).toList();
+      if (afterBook.isNotEmpty) {
+        chapterNum = afterBook.first.value;
+      } else {
+        final beforeBook =
+            numericTokens.where((n) => n.index < bookTokenIndex!).toList();
+        if (beforeBook.length >= 2) {
+          chapterNum = beforeBook.last.value;
+        } else if (beforeBook.length == 1 &&
+            beforeBook.first.value != detectedBook) {
+          chapterNum = beforeBook.first.value;
+        } else {
+          chapterNum = 1;
+        }
+      }
+    } else if (numericTokens.length >= 2) {
+      final firstNum = numericTokens[0].value;
+      final secondNum = numericTokens[1].value;
+      if (firstNum >= 1 && firstNum <= 66) {
         bookNum = firstNum;
         chapterNum = secondNum;
-      } else if (detectedBook != null) {
-        bookNum = detectedBook;
-        chapterNum = firstNum;
       } else {
         chapterNum = secondNum;
       }
-    } else if (numberMatches.length == 1) {
-      final singleNum = int.tryParse(numberMatches[0]);
-      if (detectedBook != null) {
-        bookNum = detectedBook;
-        chapterNum = singleNum;
-      } else {
-        chapterNum = singleNum;
-      }
-    } else if (detectedBook != null) {
-      bookNum = detectedBook;
-      chapterNum = 1;
+    } else if (numericTokens.length == 1) {
+      chapterNum = numericTokens[0].value;
     }
 
     return (

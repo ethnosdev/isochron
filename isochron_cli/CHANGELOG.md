@@ -1,3 +1,7 @@
+## 2.1.2 - 2026.11.17
+
+- **Timing Export:** Omit unaligned or invalid-duration fragments (`start < 0` or `end <= start`) by default in `TimingExport.generateTimingPayload` instead of writing negative timing rows.
+
 ## 2.1.1 - 2026.11.09
 
 - **Error Reporting:** Improved error message when `libonnxruntime.dylib` cannot be loaded to avoid developer-only CLI prompts for end users.

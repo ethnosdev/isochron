@@ -10,12 +10,51 @@ enum GroupExportMode {
   singleFile,
 }
 
+class UnalignedTrackIssue {
+  final Track track;
+  final List<String> fragmentLabels;
+
+  const UnalignedTrackIssue({
+    required this.track,
+    required this.fragmentLabels,
+  });
+
+  int get count => fragmentLabels.length;
+}
+
 class ExportService {
+  /// Scans exportable [tracks] for fragments with unaligned or invalid timings
+  /// (`start < 0` or `end <= start`).
+  static Future<List<UnalignedTrackIssue>> findUnalignedIssues(
+    Project project,
+    List<Track> tracks,
+  ) async {
+    final issues = <UnalignedTrackIssue>[];
+    for (final track in tracks.where(canExportPhraseTiming)) {
+      final entries = await _loadAlignmentEntries(project, track);
+      if (entries.isEmpty) continue;
+      final fragments = _entriesToFragments(entries);
+      final labels = <String>[];
+      for (int i = 0; i < fragments.length; i++) {
+        final f = fragments[i];
+        if (TimingExport.isUnalignedFragment(f)) {
+          final id = f.id?.trim();
+          labels.add((id != null && id.isNotEmpty) ? id : 'line ${i + 1}');
+        }
+      }
+      if (labels.isNotEmpty) {
+        issues.add(UnalignedTrackIssue(track: track, fragmentLabels: labels));
+      }
+    }
+    return issues;
+  }
+
   /// Builds the phrase-timing payload for a single track.
   static Future<String?> buildPhraseTiming(
     Project project,
     Track track, {
     bool? requireIds,
+    bool skipUnaligned = true,
   }) async {
     if (!canExportPhraseTiming(track)) return null;
 
@@ -28,6 +67,7 @@ class ExportService {
       metadata,
       requireIds: requireIds ??
           (project.defaultHasIds || project.defaultGenerateIds),
+      skipUnaligned: skipUnaligned,
     );
   }
 
@@ -40,6 +80,7 @@ class ExportService {
     String? bookCode,
     String chapterId = '1',
     bool? requireIds,
+    bool skipUnaligned = true,
   }) async {
     final exportableTracks = tracks.where(canExportPhraseTiming).toList();
     if (exportableTracks.isEmpty) return null;
@@ -68,7 +109,12 @@ class ExportService {
 
     for (final track in exportableTracks) {
       final entries = await _loadAlignmentEntries(project, track);
-      final fragments = _entriesToFragments(entries);
+      final allFragments = _entriesToFragments(entries);
+      final fragments = skipUnaligned
+          ? allFragments
+              .where((f) => !TimingExport.isUnalignedFragment(f))
+              .toList()
+          : allFragments;
       if (fragments.isEmpty) continue;
 
       if (effectiveRequireIds) {
@@ -102,6 +148,7 @@ class ExportService {
     Project project,
     List<Track> tracks, {
     bool? requireIds,
+    bool skipUnaligned = true,
   }) async {
     final exportableTracks = tracks.where(canExportPhraseTiming).toList();
     if (exportableTracks.isEmpty) return null;
@@ -112,6 +159,7 @@ class ExportService {
         project,
         track,
         requireIds: requireIds,
+        skipUnaligned: skipUnaligned,
       );
       if (payload != null && payload.isNotEmpty) {
         buffer.write(payload);
@@ -129,6 +177,7 @@ class ExportService {
     List<Track> tracks,
     String destinationDir, {
     bool? requireIds,
+    bool skipUnaligned = true,
     String? subfolderName,
   }) async {
     final exportableTracks = tracks.where(canExportPhraseTiming).toList();
@@ -150,6 +199,7 @@ class ExportService {
         project,
         track,
         requireIds: requireIds,
+        skipUnaligned: skipUnaligned,
       );
       if (payload != null) {
         final baseName = defaultPhraseTimingFilenameForTrack(track);
@@ -170,6 +220,7 @@ class ExportService {
     Project project,
     String destinationDir, {
     bool? requireIds,
+    bool skipUnaligned = true,
   }) async {
     int totalCount = 0;
     final collections = project.collections;
@@ -182,6 +233,7 @@ class ExportService {
         col.tracks,
         destinationDir,
         requireIds: requireIds,
+        skipUnaligned: skipUnaligned,
         subfolderName: subfolder,
       );
       totalCount += count;
@@ -212,11 +264,13 @@ class ExportService {
     List<Map<String, dynamic>> entries,
     TimingExportMetadata metadata, {
     bool requireIds = false,
+    bool skipUnaligned = true,
   }) {
     return TimingExport.generateTimingPayload(
       _entriesToFragments(entries),
       metadata,
       requireIds: requireIds,
+      skipUnaligned: skipUnaligned,
     );
   }
 

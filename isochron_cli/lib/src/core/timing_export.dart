@@ -87,35 +87,49 @@ class TimingExport {
     );
   }
 
-  /// If [requireIds] is true and any fragment is missing an id, throws
+  /// Returns true when a fragment lacks valid positive-duration timings.
+  static bool isUnalignedFragment(Fragment fragment) {
+    return fragment.realStart < 0 || fragment.realEnd <= fragment.realStart;
+  }
+
+  /// If [requireIds] is true and any exported fragment is missing an id, throws
   /// [MissingPhraseIdException] instead of silently numbering it.
+  ///
+  /// When [skipUnaligned] is true (default), fragments with unaligned or
+  /// invalid timings (`start < 0` or `end <= start`) are omitted instead of
+  /// writing negative/zero-length rows.
   static String generateTimingPayload(
     List<Fragment> fragments,
     TimingExportMetadata metadata, {
     bool requireIds = false,
+    bool skipUnaligned = true,
   }) {
     final buffer = StringBuffer();
     buffer.writeln('\\id ${metadata.bookCode}');
     buffer.writeln('\\c ${metadata.chapterId}');
     buffer.writeln('\\level phrase');
 
+    final exportFragments = skipUnaligned
+        ? fragments.where((f) => !isUnalignedFragment(f)).toList()
+        : fragments;
+
     final missing = <int>[];
-    for (int i = 0; i < fragments.length; i++) {
-      final f = fragments[i];
+    for (int i = 0; i < exportFragments.length; i++) {
+      final f = exportFragments[i];
       final id = f.id?.trim();
       if (id == null || id.isEmpty) missing.add(i);
     }
 
     if (requireIds && missing.isNotEmpty) {
       throw MissingPhraseIdException(
-        'Missing phrase ID for ${missing.length} of ${fragments.length} '
+        'Missing phrase ID for ${missing.length} of ${exportFragments.length} '
         'lines (e.g. line ${missing.first + 1}). Export aborted — enable '
         '"Has IDs" or check the source file\'s ID delimiter.',
       );
     }
 
-    for (int i = 0; i < fragments.length; i++) {
-      final f = fragments[i];
+    for (int i = 0; i < exportFragments.length; i++) {
+      final f = exportFragments[i];
       final phraseId = _resolvePhraseId(f, i);
       final start = _formatSeconds(f.realStart);
       final end = _formatSeconds(f.realEnd);
@@ -131,6 +145,7 @@ class TimingExport {
     required CliOutputFormat format,
     required String? sourceTextPath,
     bool requireIds = false,
+    bool skipUnaligned = true,
   }) {
     if (format == CliOutputFormat.json) {
       final jsonOutput = fragments
@@ -149,6 +164,7 @@ class TimingExport {
         fragments,
         metadata,
         requireIds: requireIds,
+        skipUnaligned: skipUnaligned,
       );
     }
   }

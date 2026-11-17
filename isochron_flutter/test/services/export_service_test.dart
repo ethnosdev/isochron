@@ -574,5 +574,40 @@ is1\tIntroductory section
       expect(await col1File.exists(), isTrue);
       expect(await col2File.exists(), isTrue);
     });
+
+    test('findUnalignedIssues detects negative and zero-length timings and omits them from export', () async {
+      final partialTrack = Track(
+        id: 'partial_t',
+        collectionId: 'col_1',
+        name: 'Exodus 16',
+        audioPath: '/audio/exo16.wav',
+        textPath: '/text/BSB_02_Exo_016.txt',
+        outputFilename: 'exo16.json',
+        status: AlignmentStatus.aligned,
+      );
+      collection.tracks.add(partialTrack);
+      await writeTrackOutput(partialTrack, [
+        {'index': 0, 'id': '02016001', 'start': 4.5, 'end': 19.64},
+        {'index': 1, 'id': '02016002', 'start': -1.0, 'end': -1.0},
+        {'index': 2, 'id': '02016003', 'start': 19.64, 'end': 32.55},
+      ]);
+
+      final issues = await ExportService.findUnalignedIssues(
+        project,
+        collection.tracks,
+      );
+      expect(issues.length, 1);
+      expect(issues.first.track.id, 'partial_t');
+      expect(issues.first.fragmentLabels, ['02016002']);
+
+      final payload = await ExportService.buildPhraseTiming(
+        project,
+        partialTrack,
+      );
+      expect(payload, isNotNull);
+      expect(payload, isNot(contains('-1')));
+      expect(payload, contains('4.5\t19.64\t02016001\n'));
+      expect(payload, contains('19.64\t32.55\t02016003\n'));
+    });
   });
 }

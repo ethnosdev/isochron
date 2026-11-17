@@ -1,3 +1,8 @@
+## 2.1.2 - 2026.11.17
+
+- **Fix Numbered-Book ID Generation:** Fixed `IdGenerator.extractBookAndChapter` so numbered Bible book abbreviations (`1Sa`, `2Ki`, `3Jn`, etc.) no longer cause the leading book-name digit to be parsed as the chapter number.
+- **Unaligned Verse Export Warning:** Added an export-time confirmation warning when any track contains unaligned or omitted verses (`start < 0` or `end <= start`), allowing the user to cancel and fix them or export anyway with invalid timing rows omitted.
+
 ## 2.1.1 - 2026.11.09
 
 - **Bundle Native ONNX Runtime Library:** Automatically embed and codesign `libonnxruntime.dylib` into the macOS app bundle (`Contents/Frameworks/libonnxruntime.dylib`), resolving alignment errors on clean installations and upgrades.
