@@ -2,6 +2,7 @@
 
 - **Fix Numbered-Book ID Generation:** Fixed `IdGenerator.extractBookAndChapter` so numbered Bible book abbreviations (`1Sa`, `2Ki`, `3Jn`, etc.) no longer cause the leading book-name digit to be parsed as the chapter number.
 - **Unaligned Verse Export Warning:** Added an export-time confirmation warning when any track contains unaligned or omitted verses (`start < 0` or `end <= start`), allowing the user to cancel and fix them or export anyway with invalid timing rows omitted.
+- **Native macOS UI Cleanup:** Removed `material_ui` and `cupertino_ui` usage in favor of `flutter/widgets.dart` and `macos_ui` dialogs/colors, backed by `AppIcons` using the `cupertino_icons` font directly.
 
 ## 2.1.1 - 2026.11.09
 
